@@ -729,6 +729,51 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns):
             else:
                 nourishment_verified = False
 
+            # Build host_context for this cluster member
+            app_date = sf.get('Host_Application_Date__c', d.get('host_app', ''))
+            journey_days = sf.get('Length_of_OneTable_Journey_in_Days__c')
+            if journey_days is not None:
+                months = int(journey_days) // 30
+                tenure_str = f"{months} months" if months > 0 else f"{int(journey_days)} days"
+            elif app_date:
+                try:
+                    from datetime import datetime
+                    app_dt = datetime.strptime(str(app_date)[:10], '%Y-%m-%d')
+                    delta = REVIEW_DATE - app_dt
+                    tenure_str = f"{delta.days // 30} months" if delta.days >= 30 else f"{delta.days} days"
+                except:
+                    tenure_str = 'unknown'
+            else:
+                tenure_str = 'unknown'
+
+            dinners_hosted = sf.get('Number_of_times_hosted__c')
+            benchmark = sf.get('Had_Benchmark_Checkin__c')
+            prior_cases = sf.get('Number_of_T_S_Cases__c')
+            suspended_sf = bool(sf.get('Suspended_Flag__c'))
+            dnn_sf = bool(sf.get('Do_Not_Nourish__c'))
+            new_host_flag = False
+            if app_date:
+                try:
+                    from datetime import datetime
+                    app_dt = datetime.strptime(str(app_date)[:10], '%Y-%m-%d')
+                    new_host_flag = (REVIEW_DATE - app_dt).days <= 90
+                except:
+                    pass
+
+            host_context = {
+                'tenure': tenure_str,
+                'dinners_hosted': str(int(dinners_hosted)) if dinners_hosted is not None else 'pending',
+                'nourishment_received': n_str,
+                'future_dinners': 'unknown',
+                'dnn': 'Yes · active' if dnn_sf else 'No',
+                'benchmark_call': ('Yes' if benchmark else 'No') if benchmark is not None else 'pending',
+                'prior_ts_cases': str(int(prior_cases)) if prior_cases is not None else 'pending',
+                'suspended': 'Yes · active' if suspended_sf else 'No',
+                'graduated_host': 'pending',
+                'new_host': f"Yes · approved {app_date}" if new_host_flag and app_date else ('No' if not new_host_flag else 'pending'),
+                'unique_guests_12mo': str(int(sf['Unique_Guests_Last_12_Months__c'])) if sf.get('Unique_Guests_Last_12_Months__c') is not None else 'pending',
+            }
+
             cluster_hosts.append({
                 'name': d['host_name'],
                 'sf_url': SF_BASE.format(host_id_18),
@@ -740,6 +785,7 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns):
                     v['name'] for v in sorted(d['signals'].values(),
                     key=lambda x: -x['score_contribution'])[:2] if v['triggered']
                 ),
+                'host_context': host_context,
             })
 
         top_score = max(d['score'] for d in [pass1_output['campaigns'][c] for c in members])
