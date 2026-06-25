@@ -433,8 +433,8 @@ function buildHostContextPanels(c) {
 }
 
 function buildContextGrid(ctx) {
-  const left = [['Tenure',ctx.tenure],['Dinners hosted',ctx.dinners_hosted],['Nourishment received',ctx.nourishment_received],['Future dinners',ctx.future_dinners],['DNN',ctx.dnn]];
-  const right = [['Benchmark call',ctx.benchmark_call],['Prior T&S cases',ctx.prior_ts_cases],['Suspended',ctx.suspended],['Graduated host',ctx.graduated_host],['New host',ctx.new_host]];
+  const left = [['Tenure',ctx.tenure],['Dinners hosted',ctx.dinners_hosted],['Times attended as guest',ctx.times_attended_as_guest],['Nourishment received',ctx.nourishment_received],['Future dinners',ctx.future_dinners],['DNN',ctx.dnn]];
+  const right = [['Guest to host',ctx.guest_to_host],['Benchmark call',ctx.benchmark_call],['Prior T&S cases',ctx.prior_ts_cases],['Suspended',ctx.suspended],['Graduated host',ctx.graduated_host],['New host',ctx.new_host]];
   return `<div class="context-grid">
     <div>${left.map(([l,v])=>`<div class="profile-row"><span class="profile-label">${l}</span><span class="profile-val">${v||'—'}</span></div>`).join('')}</div>
     <div>${right.map(([l,v])=>`<div class="profile-row"><span class="profile-label">${l}</span><span class="profile-val">${v||'—'}</span></div>`).join('')}</div>
