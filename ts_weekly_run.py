@@ -462,7 +462,6 @@ def build_case_json(cid, camp, scored_signals, score, tier, sf_data=None):
     dinners_hosted = sf_data.get('Number_of_times_hosted__c') if sf_data else None
     benchmark = bool(sf_data.get('Had_Benchmark_Checkin__c')) if sf_data else None
     app_date = sf_data.get('Host_Application_Date__c') if sf_data else host.get('Host Application Date', '')
-    journey_days = sf_data.get('Length_of_OneTable_Journey_in_Days__c') if sf_data else None
 
     # New host check
     new_host = False
@@ -473,13 +472,9 @@ def build_case_json(cid, camp, scored_signals, score, tier, sf_data=None):
         except:
             pass
 
-    # Tenure
+    # Tenure -- use Host Application Date only
     tenure_str = 'unknown'
-    if journey_days is not None:
-        months = int(journey_days) // 30
-        days = int(journey_days) % 30
-        tenure_str = f"{months} months" if months > 0 else f"{days} days"
-    elif app_date:
+    if app_date:
         try:
             app_dt = datetime.strptime(str(app_date)[:10], '%Y-%m-%d')
             delta = REVIEW_DATE - app_dt
@@ -775,11 +770,7 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns):
 
             # Build host_context for this cluster member
             app_date = sf.get('Host_Application_Date__c', d.get('host_app', ''))
-            journey_days = sf.get('Length_of_OneTable_Journey_in_Days__c')
-            if journey_days is not None:
-                months = int(journey_days) // 30
-                tenure_str = f"{months} months" if months > 0 else f"{int(journey_days)} days"
-            elif app_date:
+            if app_date:
                 try:
                     from datetime import datetime
                     app_dt = datetime.strptime(str(app_date)[:10], '%Y-%m-%d')
