@@ -517,6 +517,7 @@ def build_case_json(cid, camp, scored_signals, score, tier, sf_data=None):
     return {
         'id': f"case-{cid}",
         'name': host_name,
+        'email': sf.get('Email', host.get('Campaign Member Email', '')),
         'tier': tier,
         'is_cluster': False,
         'score': score,
@@ -821,6 +822,7 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns):
 
             cluster_hosts.append({
                 'name': d['host_name'],
+                'email': sf.get('Email', ''),
                 'sf_url': SF_BASE.format(host_id_18),
                 'score': d['score'],
                 'nourishment_received': n_str,
@@ -869,6 +871,7 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns):
         cases.append({
             'id': f"cluster-{fp[:8]}",
             'name': ' / '.join(d['host_name'].split()[-1] for d in [pass1_output['campaigns'][c] for c in members]),
+            'email': ', '.join(h.get('email','') for h in cluster_hosts if h.get('email','')),
             'tier': tier,
             'is_cluster': True,
             'score': top_score,
