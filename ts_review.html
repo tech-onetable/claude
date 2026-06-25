@@ -188,7 +188,12 @@ function tierLabel(t) { return TIER_LABELS[t] || t; }
 function tierClass(t) { return t || 'warning'; }
 function scoreColor(t) { return TIER_COLORS[t] || 'var(--text-sec)'; }
 function scoreBg(t) { return TIER_BGS[t] || '#F0F0EE'; }
-function md(s) { return (s||'').replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/\n/g,'<br>'); }
+function md(s) {
+  return (s||'')
+    .replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g,'<a href="$2" target="_blank" style="color:var(--purple);text-decoration:underline">$1 ↗</a>')
+    .replace(/\n/g,'<br>');
+}
 function runDate() { return state.current?.run?.run_date || state.current?.run?.week_of || ''; }
 function esc(s) { return (s||'').replace(/'/g,"&#39;").replace(/"/g,'&quot;'); }
 
