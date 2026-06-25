@@ -513,11 +513,11 @@ function buildFlagCard(f) {
       ${f.flags?.length?`<div class="section-label">Flags</div><div class="flag-chips">${f.flags.map(fl=>`<span class="flag-chip ${fl.type}">${fl.label}</span>`).join('')}</div>`:''}
       ${f.hosts?.length?`
         <div class="section-label">Hosts</div>
-        <div style="display:flex;flex-direction:column;gap:6px;margin-top:4px;">
-          ${f.hosts.map(h=>`<div style="display:flex;align-items:center;gap:8px;font-size:13px;">
+        <div style="display:flex;flex-direction:column;gap:8px;margin-top:4px;">
+          ${f.hosts.map(h=>`<div style="font-size:13px;">
             <a class="purple-link" href="${h.sf_url||'#'}" target="_blank">${h.name} ↗</a>
-            ${h.dinner?`<span style="color:var(--text-sec)">·</span><span style="color:var(--text-sec)">${h.dinner}</span>`:''}
-            ${h.eligible?`<span style="color:var(--text-sec)">·</span><span>${h.eligible}</span>`:''}
+            ${h.dinner_url?`<span style="color:var(--border)">·</span><a class="purple-link" href="${h.dinner_url}" target="_blank">${h.dinner||'Dinner'} ↗</a>`:''}
+            ${h.eligible&&h.eligible!=='pending'?`<span style="color:var(--border)">·</span><span style="color:var(--text-sec)">${h.eligible} eligible</span>`:''}
           </div>`).join('')}
         </div>`:''}
       ${actioned?buildActionChecklist(isProgram?'program_team':'confirm_rule',(f.hosts||[]).map(h=>h.name),runDate(),'flag'):''}
