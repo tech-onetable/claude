@@ -699,13 +699,15 @@ def run(csv_path):
 
 def normalize_address(addr):
     """
-    Normalize address for grouping.
-    - Street address present: use street + zip (same building/street)
-    - No street (bare city/state/zip): use prefixed city+zip (event venues, camps)
+    Normalize address for same-address grouping.
+    - Street address (starts with number): match on street + zip
+    - Venue/city-only entry (no street number): match on city + zip
+      These catch retreat centers, camps, and shared venues.
     """
     if not addr:
         return ''
     addr = re.sub(r',?\s*USA$', '', addr.strip(), flags=re.IGNORECASE)
+    addr = re.sub(r',?\s*États-Unis$', '', addr, flags=re.IGNORECASE)
     parts = [p.strip() for p in addr.split(',')]
     has_street = bool(re.match(r'^\d+', parts[0])) if parts else False
     if has_street and len(parts) >= 2:
@@ -716,6 +718,15 @@ def normalize_address(addr):
     elif len(parts) >= 2:
         city = parts[-2].strip().lower()
         state_zip = parts[-1].strip().lower()
+        # Skip bare city matches for large metros -- too coarse to be meaningful
+        LARGE_CITIES = {'new york', 'brooklyn', 'manhattan', 'los angeles', 'chicago',
+                        'houston', 'philadelphia', 'phoenix', 'san antonio', 'san diego',
+                        'dallas', 'san jose', 'austin', 'jacksonville', 'san francisco',
+                        'columbus', 'charlotte', 'indianapolis', 'seattle', 'denver',
+                        'boston', 'miami', 'atlanta', 'washington', 'nashville',
+                        'portland', 'las vegas', 'memphis', 'baltimore', 'milwaukee'}
+        if city in LARGE_CITIES:
+            return ''
         return f"cityzip:{city} {state_zip}"
     return addr.lower()
 
