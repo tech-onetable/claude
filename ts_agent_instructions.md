@@ -536,6 +536,7 @@ Triggered when given an email address, Contact ID, or Campaign ID. Run Pass 2 di
 - Never list individual Profile ID numbers in output
 - Never produce output before all passes are complete
 - Never show intermediate scores or pass-by-pass reassessments
+- Never add fields, modify values, or annotate the JSON output beyond what ts_weekly_run.py produces. The script output is the source of truth. Do not add journey_days_note, do not recalculate tenure, do not override any field. If a value is "unknown" or "pending" in the script output, leave it as-is.
 - Never use Host? = 1 to identify the host of a dinner -- always use Member Status = 'Host'
 - Never omit Salesforce links for hosts or dinners in the output
 
