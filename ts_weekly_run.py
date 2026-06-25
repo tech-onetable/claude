@@ -78,7 +78,8 @@ def parse_csv(path):
         "RSVP IP","Contact ID","Do Not Nourish","Suspended Flag","Problem Flag",
         "Problem Flag Reason","AI Not Pass Summary","Further Review Reason",
         "Dinner Privacy","Host Application Date","Campaign Name","FYI Flag Reason",
-        "Dinner Created Device ID","Total Eligible Nourishment","Grant Application"
+        "Dinner Created Device ID","Total Eligible Nourishment","Grant Application",
+        "Campaign Description","Total Nourishment Received","Requested Nourishment"
     }
     rows = []
     with open(path, encoding='latin1') as f:
@@ -88,7 +89,7 @@ def parse_csv(path):
             rows.append({k: row.get(k, '').strip() for k in keep_headers})
 
     campaigns = collections.defaultdict(lambda: {
-        'host': None, 'guests': [], 'name': '', 'address': ''
+        'host': None, 'guests': [], 'name': '', 'address': '', 'description': ''
     })
     for row in rows:
         cid = row.get('Campaign ID', '')
@@ -100,6 +101,9 @@ def parse_csv(path):
             campaigns[cid]['description'] = row.get('Campaign Description', '')
         elif ms in ('Attended', 'Applied', 'Pending', 'Guest of Guest'):
             campaigns[cid]['guests'].append(row)
+        # Capture description from any row -- it's not always on the host row
+        if not campaigns[cid]['description'] and row.get('Campaign Description', '').strip():
+            campaigns[cid]['description'] = row.get('Campaign Description', '')
 
     return dict(campaigns), len(rows)
 
