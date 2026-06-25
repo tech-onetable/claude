@@ -298,7 +298,7 @@ function buildCaseCard(c) {
           ${actioned?'<span class="badge actioned">✓ Actioned</span>':''}
         </div>
         <div class="case-stats">
-          <span>Score ${c.score}</span><span style="color:var(--border)">·</span>
+          <span>${c.is_cluster?'Top score':'Score'} ${c.score}</span><span style="color:var(--border)">·</span>
           <span>${c.nourishment_received}</span><span style="color:var(--border)">·</span>
           <span>${c.future_dinners} future dinners</span>
           ${c.suspended?'<span style="color:var(--border)">·</span><span style="color:var(--wine);font-weight:500">active suspension</span>':''}
@@ -318,7 +318,8 @@ function buildCaseBody(c, a, actioned, displayTier) {
   const clusterWarn = state.clusterWarning===c.id;
 
   return `<div class="case-body">
-    ${c.is_cluster&&c.cluster_note?`<div class="cluster-banner">🔗 ${c.cluster_note}</div>`:''}
+    ${c.is_cluster&&c.cluster_note?`<div class="cluster-banner">🔗 ${md(c.cluster_note)}</div>`:''}
+    ${c.is_cluster?`<div style="font-size:12px;color:var(--text-sec);margin:4px 0 8px;padding:0 2px">Score shown is the highest individual score — not a combined total.</div>`:''}
     ${c.is_cluster&&c.cluster_hosts?.length?`
       <div class="section-label">Hosts</div>
       <table class="cluster-table">
