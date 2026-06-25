@@ -882,7 +882,8 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns):
             'dnn': False,
             'collapsed_summary': f"{len(members)}-host cluster · top score {top_score} · {combined_n}",
             'bullets': [
-                f"**{len(members)}-host cluster.** Device fingerprint [{fp}]({fp_link}) shared across **{sharing_who}** on {len(members)} dinners.",
+                f"**{len(members)}-host cluster.** These {len(members)} hosts share device fingerprint [{fp}]({fp_link}) across their dinners -- meaning their RSVPs or account activity originated from the same physical device. This may indicate coordination, shared infrastructure, or a relationship between hosts that warrants investigation.",
+                f"**Who is sharing:** The fingerprint appears on **{sharing_who}** across {len(members)} dinners.",
                 f"**Individual scores:** {scores_str}. Score shown is the highest individual score, not a combined total.",
                 f"**Combined Nourishment: {combined_n}.**",
                 "**Consult Amalia before actioning.** Cluster case.",
@@ -902,7 +903,7 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns):
                 'new_host': 'see individual cases below',
                 'unique_guests_12mo': 'see individual cases below',
             },
-            'cluster_note': f"Device [{fp}]({fp_link}) shared across {sharing_who} on {len(members)} dinners",
+            'cluster_note': f"Device [{fp}]({fp_link}) shared across {sharing_who} on {len(members)} dinners — same physical device detected",
             'cluster_hosts': cluster_hosts,
         })
 
