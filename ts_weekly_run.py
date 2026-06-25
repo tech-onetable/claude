@@ -16,7 +16,7 @@ import csv, collections, json, sys, re
 from datetime import datetime, date
 
 # ── config ────────────────────────────────────────────────────────────────────
-REVIEW_DATE = datetime(2026, 6, 23)
+REVIEW_DATE = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)  # Set dynamically at runtime
 SUSPICIOUS_DOMAINS = {
     'atomicmail.io','mailshield.org','tutamail.com','otheremail.org',
     'bumpmail.io','simplelogin.com','membermail.net','freemail.is','ourisp.net',
