@@ -497,8 +497,14 @@ def build_case_json(cid, camp, scored_signals, score, tier, sf_data=None):
     anomaly_notes = []
     if flag and flag_reason:
         anomaly_notes.append(f"Existing flag: {flag_reason}")
-    if dinners_hosted and journey_days and int(journey_days or 0) < 30 and int(dinners_hosted or 0) > 10:
-        anomaly_notes.append(f"Journey {int(journey_days)} days but {int(dinners_hosted)} dinners hosted -- implausible ratio.")
+    if dinners_hosted and app_date:
+        try:
+            _app_dt = datetime.strptime(str(app_date)[:10], '%Y-%m-%d')
+            _days_since_app = (REVIEW_DATE - _app_dt).days
+            if _days_since_app < 30 and int(dinners_hosted or 0) > 10:
+                anomaly_notes.append(f"Host approved {_days_since_app} days ago but has {int(dinners_hosted)} dinners -- very new host with high dinner count.")
+        except:
+            pass
     for note in anomaly_notes:
         bullets.append(f"**Anomaly:** {note}")
 
@@ -1010,7 +1016,7 @@ def run_pass2(pass1_output, sf):
         'Platform_Profile_ID__c', 'Number_of_times_hosted__c',
         'Unique_Guests_Last_12_Months__c', 'Had_Benchmark_Checkin__c',
         'Host_Application_Date__c', 'Length_of_OneTable_Journey_in_Days__c',
-        'Shabbat_Frequency_now__c', 'Guest_to_Host_formula__c', 'Times_Attended_as_Guest__c',
+        'Guest_to_Host_formula__c', 'Times_Attended_as_Guest__c',
     ]
 
     all_ids = list(set(
