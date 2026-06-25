@@ -445,8 +445,9 @@ function buildActionChecklist(tier, hosts, rd, type, note) {
       ${note?`<div class="action-item pending">○ Add note (pending write access)</div>`:''}`).join('')}
   </div>`;
 
+  const TS_RT = '012PO000001F53dYAC';
   const items = [
-    {l:'Create Salesforce case linked to Contact',r:false},
+    {l:`Create Salesforce Case — RecordTypeId: ${TS_RT} · Subject: "Trust and Safety — ${tierLabel(tier)} — ${rd}"`,r:false},
     {l:'Set Flag__c = true on Contact',r:false},
     {l:`Set Flag_Reason__c = "See case from ${rd}"`,r:false},
     {l:'Create Gmail draft with consequence email',r:true},
