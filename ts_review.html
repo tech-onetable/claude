@@ -191,7 +191,7 @@ function scoreBg(t) { return TIER_BGS[t] || '#F0F0EE'; }
 function md(s) {
   return (s||'')
     .replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')
-    .replace(/\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g,'<a href="$2" target="_blank" style="color:var(--purple);text-decoration:underline">$1 ↗</a>')
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^\s\)]+)\)/g,'<a href="$2" target="_blank" style="color:var(--purple);text-decoration:underline">$1 ↗</a>')
     .replace(/\n/g,'<br>');
 }
 function runDate() { return state.current?.run?.run_date || state.current?.run?.week_of || ''; }
@@ -320,7 +320,7 @@ function buildCaseCard(c) {
           <span>${c.is_cluster?'Top score':'Score'} ${c.score}</span><span style="color:var(--border)">·</span>
           <span>${c.nourishment_received}</span><span style="color:var(--border)">·</span>
           <span>${c.future_dinners} future dinners</span>
-          ${c.email?`<span style="color:var(--border)">·</span><span style="color:var(--text-sec)">${c.email}</span>`:''}
+          ${(c.email||(c.is_cluster&&c.cluster_hosts?.length ? c.cluster_hosts.map(h=>h.email).filter(Boolean).join(', ') : ''))?`<span style="color:var(--border)">·</span><span style="color:var(--text-sec)">${c.email||(c.cluster_hosts?.map(h=>h.email).filter(Boolean).join(', '))}</span>`:''}
           ${c.suspended?'<span style="color:var(--border)">·</span><span style="color:var(--wine);font-weight:500">active suspension</span>':''}
           ${c.dnn&&!c.suspended?'<span style="color:var(--border)">·</span><span style="color:var(--amber-dark);font-weight:500">DNN</span>':''}
         </div>
