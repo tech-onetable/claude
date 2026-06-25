@@ -97,6 +97,7 @@ def parse_csv(path):
             campaigns[cid]['host'] = row
             campaigns[cid]['name'] = row.get('Campaign Name', '')
             campaigns[cid]['address'] = row.get('Address', '')
+            campaigns[cid]['description'] = row.get('Campaign Description', '')
         elif ms in ('Attended', 'Applied', 'Pending', 'Guest of Guest'):
             campaigns[cid]['guests'].append(row)
 
@@ -643,6 +644,7 @@ def run(csv_path):
                 'name': (host.get('First Name', '') + ' ' + host.get('Last Name', '')).strip(),
                 'address': camp.get('address', ''),
                 'dinner_name': camp.get('name', ''),
+                'description': camp.get('description', '') or '',  # Campaign Description from CSV
             })
     same_address = {addr: hosts for addr, hosts in addresses.items() if len(hosts) >= 2}
 
@@ -914,13 +916,15 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns):
         for h in hosts:
             sf = sf_results.get(h['contact_id'], {})
             host_id_18 = sf.get('Id', sf_15_to_18(h['contact_id']))
+            eligible = sf.get('Total_Eligible_Nourishment__c')
+            eligible_str = f"${eligible:,.0f}" if eligible is not None else '—'
             flag_hosts.append({
                 'name': h['name'],
                 'sf_url': SF_BASE.format(host_id_18),
-                'dinner': h.get('dinner_name', 'see Salesforce'),
+                'dinner': h.get('dinner_name', ''),
                 'dinner_url': SF_CAMPAIGN_BASE.format(h['cid']),
-                'description': '',
-                'eligible': sf.get('Total_Eligible_Nourishment__c', 'pending'),
+                'description': (h.get('description', '') or '')[:200],
+                'eligible': eligible_str,
                 'status': 'pending',
             })
         cross_host_flags.append({
@@ -1018,8 +1022,9 @@ def run_pass2(pass1_output, sf):
         'Flag__c', 'Flag_Reason__c', 'Total_Misuse_Score__c', 'Number_of_T_S_Cases__c',
         'Platform_Profile_ID__c', 'Number_of_times_hosted__c',
         'Unique_Guests_Last_12_Months__c', 'Had_Benchmark_Checkin__c',
-        'Host_Application_Date__c', 'Length_of_OneTable_Journey_in_Days__c',
+        'Host_Application_Date__c',
         'Guest_to_Host_formula__c', 'Times_Attended_as_Guest__c',
+        'Total_Eligible_Nourishment__c',
     ]
 
     all_ids = list(set(
