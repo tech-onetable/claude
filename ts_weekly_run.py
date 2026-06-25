@@ -820,7 +820,6 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns):
             host_on_device = camp['host'] and camp['host'].get('RSVP Device Fingerprint ID','').strip() == fp
             guests_on_device = sum(1 for g in camp['guests'] if g.get('RSVP Device Fingerprint ID','').strip() == fp)
             guest_pct = round(100 * guests_on_device / n_guests) if n_guests > 0 else 0
-            dinner_date = camp['host'].get('Start Date', '') if camp['host'] else ''
 
             cluster_hosts.append({
                 'name': d['host_name'],
@@ -847,7 +846,6 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns):
                 'prior_ts_cases': str(int(prior_cases)) if prior_cases is not None else 'pending',
                 'dnn': 'Yes' if dnn_sf else 'No',
                 'suspended': 'Yes' if suspended_sf else 'No',
-                'dinner_date': dinner_date,
             })
 
         top_score = max(d['score'] for d in [pass1_output['campaigns'][c] for c in members])
