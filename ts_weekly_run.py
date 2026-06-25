@@ -143,17 +143,17 @@ def score_campaign(cid, camp, cross_dinner, high_volume):
             'triggered': threshold_met,
         }
 
-    # ── Signal 1: Shared FP host+guest (standalone, 25%+) ──────────────────
+    # ── Signal 1: Shared FP host+guest (standalone, 25%+, min 3 guests) ──────
     host_fp = host.get('RSVP Device Fingerprint ID', '') if host else ''
     guest_fps = [g.get('RSVP Device Fingerprint ID', '') for g in guests
                  if g.get('RSVP Device Fingerprint ID', '')]
-    if host_fp and n > 0:
+    if host_fp and n >= 3:  # min 3 guests required for device FP signals
         shared = [fp for fp in guest_fps if fp == host_fp]
         pct = len(shared) / n
         met = pct >= 0.25
         add_sig('sig1',
                 f"Shared device fingerprint host and guest: {len(shared)}/{n} ({round(100*pct)}%) [{host_fp}]",
-                f"{round(100*pct)}% ({len(shared)}/{n} guests)", "25%+", met)
+                f"{round(100*pct)}% ({len(shared)}/{n} guests)", "25%+ (min 3 guests)", met)
 
     # ── Signal 2: Cross-dinner FP match (needs pairing, any, skip high-volume) ──
     dinner_fps = set(guest_fps)
@@ -161,17 +161,17 @@ def score_campaign(cid, camp, cross_dinner, high_volume):
         dinner_fps.add(host_fp)
     cross_hits = [(fp, len(cross_dinner[fp])) for fp in dinner_fps
                   if fp in cross_dinner and fp not in high_volume]
-    if cross_hits:
+    if cross_hits and n >= 3:  # min 3 guests required
         total_weight = SIGNAL_WEIGHTS['sig2'] * len(cross_hits)
         descs = [f"{fp} across {nd} dinners" for fp, nd in cross_hits]
         add_sig('sig2',
                 "Cross-dinner device fingerprint match: " + "; ".join(descs),
                 f"{len(cross_hits)} FP(s) across multiple dinners",
-                "Any (needs pairing)", True,
+                "Any (needs pairing, min 3 guests)", True,
                 contribution=total_weight)
 
-    # ── Signal 3: Same FP across guests (needs pairing, 25%+, skip high-volume) ──
-    if n > 0 and guest_fps:
+    # ── Signal 3: Same FP across guests (needs pairing, 25%+, min 3 guests) ──
+    if n >= 3 and guest_fps:  # min 3 guests required
         fp_counts = collections.Counter(guest_fps)
         top_fp, top_count = fp_counts.most_common(1)[0]
         if top_fp not in high_volume:
@@ -179,7 +179,7 @@ def score_campaign(cid, camp, cross_dinner, high_volume):
             met = pct >= 0.25
             add_sig('sig3',
                     f"Same device fingerprint across guests: {top_count}/{n} ({round(100*pct)}%) [{top_fp}]",
-                    f"{round(100*pct)}% ({top_count}/{n} guests)", "25%+", met)
+                    f"{round(100*pct)}% ({top_count}/{n} guests)", "25%+ (min 3 guests)", met)
 
     # ── Signal 12: Hard bounces (standalone, 50%+) ─────────────────────────
     hard = [g for g in guests if
@@ -615,13 +615,14 @@ def run(csv_path):
     # Same-address cross-host flags
     addresses = collections.defaultdict(list)
     for cid, camp in campaigns.items():
-        addr = camp.get('address', '').strip().lower()
+        addr = normalize_address(camp.get('address', ''))
         host = camp['host']
         if addr and host:
             addresses[addr].append({
                 'cid': cid,
                 'contact_id': host.get('Contact ID', ''),
                 'name': (host.get('First Name', '') + ' ' + host.get('Last Name', '')).strip(),
+                'address': camp.get('address', ''),
             })
     same_address = {addr: hosts for addr, hosts in addresses.items() if len(hosts) >= 2}
 
@@ -666,6 +667,29 @@ def run(csv_path):
         json.dump(output, f, indent=2)
     print(f"[T&S] Pass 1 results saved to {fname}", file=sys.stderr)
     return output
+
+
+def normalize_address(addr):
+    """
+    Normalize address for grouping.
+    - Street address present: use street + zip (same building/street)
+    - No street (bare city/state/zip): use prefixed city+zip (event venues, camps)
+    """
+    if not addr:
+        return ''
+    addr = re.sub(r',?\s*USA$', '', addr.strip(), flags=re.IGNORECASE)
+    parts = [p.strip() for p in addr.split(',')]
+    has_street = bool(re.match(r'^\d+', parts[0])) if parts else False
+    if has_street and len(parts) >= 2:
+        street = parts[0].lower()
+        zip_match = re.search(r'\d{5}', parts[-1])
+        zip_code = zip_match.group() if zip_match else parts[-1].strip().lower()
+        return f"{street} {zip_code}"
+    elif len(parts) >= 2:
+        city = parts[-2].strip().lower()
+        state_zip = parts[-1].strip().lower()
+        return f"cityzip:{city} {state_zip}"
+    return addr.lower()
 
 
 def build_ts_ui_data(pass1_output, sf_results, campaigns):
