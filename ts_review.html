@@ -313,6 +313,7 @@ function buildCaseCard(c) {
           <span>${c.is_cluster?'Top score':'Score'} ${c.score}</span><span style="color:var(--border)">·</span>
           <span>${c.nourishment_received}</span><span style="color:var(--border)">·</span>
           <span>${c.future_dinners} future dinners</span>
+          ${c.email?`<span style="color:var(--border)">·</span><span style="color:var(--text-sec)">${c.email}</span>`:''}
           ${c.suspended?'<span style="color:var(--border)">·</span><span style="color:var(--wine);font-weight:500">active suspension</span>':''}
           ${c.dnn&&!c.suspended?'<span style="color:var(--border)">·</span><span style="color:var(--amber-dark);font-weight:500">DNN</span>':''}
         </div>
@@ -335,9 +336,10 @@ function buildCaseBody(c, a, actioned, displayTier) {
     ${c.is_cluster&&c.cluster_hosts?.length?`
       <div class="section-label">Hosts</div>
       <table class="cluster-table">
-        <thead><tr><th>Host</th><th>Score</th><th>Nourishment</th><th>Address</th><th>Key signals</th></tr></thead>
+        <thead><tr><th>Host</th><th>Email</th><th>Score</th><th>Nourishment</th><th>Address</th><th>Key signals</th></tr></thead>
         <tbody>${c.cluster_hosts.map(h=>`<tr>
           <td><a class="purple-link" href="${h.sf_url}" target="_blank">${h.name}</a></td>
+          <td style="font-size:12px;color:var(--text-sec)">${h.email||'—'}</td>
           <td>${h.score}</td><td>${h.nourishment_received}</td>
           <td style="font-size:12px;color:var(--text-sec)">${h.address||'—'}</td>
           <td style="font-size:12px;color:var(--text-sec)">${h.key_signals||''}</td>
