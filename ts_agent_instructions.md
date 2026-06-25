@@ -16,6 +16,31 @@ You propose consequences. You never apply them. Staff reviews and approves all r
 
 ---
 
+## SLACK NOTIFICATION
+
+After outputting the ts_ui_data JSON block, send a Slack notification via bash using Python. Replace WEEK, SUSP, PAUSE, WARN, CLUST with actual values from the run summary:
+
+```python
+import urllib.request, json, os
+week = "WEEK"
+msg = f"✅ T&S review complete — week of {week}. SUSP suspensions · PAUSE nourishment pauses · WARN warnings · CLUST clusters. Paste the JSON into ts_review.html to begin review."
+payload = json.dumps({"channel": "C0BDAGF6A8Z", "text": msg}).encode()
+req = urllib.request.Request(
+    "https://slack.com/api/chat.postMessage",
+    data=payload,
+    headers={
+        "Authorization": f"Bearer {os.environ.get('SLACK_BOT_TOKEN', '')}",
+        "Content-Type": "application/json"
+    }
+)
+urllib.request.urlopen(req)
+print("Slack notification sent")
+```
+
+If the Slack notification fails, note it but do not block or repeat the JSON output.
+
+---
+
 ## EMAIL SENDING
 
 Consequence emails are sent via the Gmail MCP connector, authenticated as trustandsafety@onetable.org. Always use `htmlBody` (not `body`) so that the signature renders correctly. Plain text body overrides the Gmail default signature -- htmlBody with the signature hardcoded is required.
