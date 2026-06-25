@@ -784,6 +784,8 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns):
                 'graduated_host': 'pending',
                 'new_host': f"Yes · approved {app_date}" if new_host_flag and app_date else ('No' if not new_host_flag else 'pending'),
                 'unique_guests_12mo': str(int(sf['Unique_Guests_Last_12_Months__c'])) if sf.get('Unique_Guests_Last_12_Months__c') is not None else 'pending',
+                'guest_to_host': 'Yes' if sf.get('Guest_to_Host_formula__c') else ('No' if sf.get('Guest_to_Host_formula__c') is not None else 'pending'),
+                'times_attended_as_guest': str(int(sf['Times_Attended_as_Guest__c'])) if sf.get('Times_Attended_as_Guest__c') is not None else 'pending',
             }
 
             cluster_hosts.append({
@@ -1008,7 +1010,7 @@ def run_pass2(pass1_output, sf):
         'Platform_Profile_ID__c', 'Number_of_times_hosted__c',
         'Unique_Guests_Last_12_Months__c', 'Had_Benchmark_Checkin__c',
         'Host_Application_Date__c', 'Length_of_OneTable_Journey_in_Days__c',
-        'Shabbat_Frequency_now__c',
+        'Shabbat_Frequency_now__c', 'Guest_to_Host_formula__c', 'Times_Attended_as_Guest__c',
     ]
 
     all_ids = list(set(
