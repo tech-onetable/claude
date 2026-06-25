@@ -814,6 +814,14 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns):
                 'times_attended_as_guest': str(int(sf['Times_Attended_as_Guest__c'])) if sf.get('Times_Attended_as_Guest__c') is not None else 'pending',
             }
 
+            # Device sharing detail for this host's dinner
+            camp = campaigns[cid]
+            n_guests = len(camp['guests'])
+            host_on_device = camp['host'] and camp['host'].get('RSVP Device Fingerprint ID','').strip() == fp
+            guests_on_device = sum(1 for g in camp['guests'] if g.get('RSVP Device Fingerprint ID','').strip() == fp)
+            guest_pct = round(100 * guests_on_device / n_guests) if n_guests > 0 else 0
+            dinner_date = camp['host'].get('Start Date', '') if camp['host'] else ''
+
             cluster_hosts.append({
                 'name': d['host_name'],
                 'email': sf.get('Email', ''),
@@ -827,6 +835,19 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns):
                     key=lambda x: -x['score_contribution'])[:2] if v['triggered']
                 ),
                 'host_context': host_context,
+                # Device sharing detail
+                'host_on_device': host_on_device,
+                'guests_on_device': guests_on_device,
+                'total_guests': n_guests,
+                'guest_device_pct': guest_pct,
+                # Combined context fields
+                'applied_date': str(app_date)[:10] if app_date else '—',
+                'tenure': tenure_str,
+                'dinners_hosted': str(int(dinners_hosted)) if dinners_hosted is not None else 'pending',
+                'prior_ts_cases': str(int(prior_cases)) if prior_cases is not None else 'pending',
+                'dnn': 'Yes' if dnn_sf else 'No',
+                'suspended': 'Yes' if suspended_sf else 'No',
+                'dinner_date': dinner_date,
             })
 
         top_score = max(d['score'] for d in [pass1_output['campaigns'][c] for c in members])
@@ -862,6 +883,17 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns):
         # Scores per host for display
         scores_str = ' · '.join(f"{h['name'].split()[-1]} {h['score']}" for h in cluster_hosts)
 
+        # Build device sharing detail bullets
+        host_on_device_names = [h['name'].split()[0] for h in cluster_hosts if h['host_on_device']]
+        host_device_str = (
+            f"**Host accounts on device:** {', '.join(host_on_device_names)}" if host_on_device_names
+            else "**Host accounts:** none of the host accounts RSVPed from this device"
+        )
+        guest_breakdown = ' · '.join(
+            f"{h['name'].split()[0]}: {h['guests_on_device']}/{h['total_guests']} guests ({h['guest_device_pct']}%)"
+            for h in cluster_hosts
+        )
+
         cases.append({
             'id': f"cluster-{fp[:8]}",
             'name': ' / '.join(d['host_name'].split()[-1] for d in [pass1_output['campaigns'][c] for c in members]),
@@ -876,8 +908,8 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns):
             'dnn': False,
             'collapsed_summary': f"{len(members)}-host cluster · top score {top_score} · {combined_n}",
             'bullets': [
-                f"**{len(members)}-host cluster.** These {len(members)} hosts share device fingerprint [{fp}]({fp_link}) across their dinners -- meaning their RSVPs or account activity originated from the same physical device. This may indicate coordination, shared infrastructure, or a relationship between hosts that warrants investigation.",
-                f"**Who is sharing:** The fingerprint appears on **{sharing_who}** across {len(members)} dinners.",
+                f"**{len(members)}-host cluster.** Device fingerprint [{fp}]({fp_link}) detected across {len(members)} dinners. {host_device_str}.",
+                f"**Guest device breakdown:** {guest_breakdown}.",
                 f"**Individual scores:** {scores_str}. Score shown is the highest individual score, not a combined total.",
                 f"**Combined Nourishment: {combined_n}.**",
                 "**Consult Amalia before actioning.** Cluster case.",
@@ -897,7 +929,7 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns):
                 'new_host': 'see individual cases below',
                 'unique_guests_12mo': 'see individual cases below',
             },
-            'cluster_note': f"Device [{fp}]({fp_link}) shared across {sharing_who} on {len(members)} dinners — same physical device detected",
+            'cluster_note': f"Device [{fp}]({fp_link}) · {host_device_str.replace('**Host accounts on device:**', 'hosts on device:').replace('**Host accounts:**', '')} · {guest_breakdown}",
             'cluster_hosts': cluster_hosts,
         })
 
