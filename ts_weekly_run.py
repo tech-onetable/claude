@@ -157,30 +157,41 @@ def score_campaign(cid, camp, cross_dinner, high_volume):
                 f"{round(100*pct)}% ({len(shared)}/{n} guests)", "25%+ (min 3 guests)", met)
 
     # ── Signal 2: Cross-dinner FP match (needs pairing, any, skip high-volume) ──
+    # Only score if 2+ guests in this dinner share the cross-dinner FP
     dinner_fps = set(guest_fps)
     if host_fp:
         dinner_fps.add(host_fp)
-    cross_hits = [(fp, len(cross_dinner[fp])) for fp in dinner_fps
-                  if fp in cross_dinner and fp not in high_volume]
+    cross_hits = []
+    for fp, nd in [(fp, len(cross_dinner[fp])) for fp in dinner_fps
+                   if fp in cross_dinner and fp not in high_volume]:
+        # Count how many guests in THIS dinner share this FP
+        guests_with_fp = guest_fps.count(fp) if hasattr(guest_fps, 'count') else sum(1 for g in guest_fps if g == fp)
+        # Also count host if host has it
+        if host_fp == fp:
+            # host+guest case -- sig1 handles this; for sig2 count guests only
+            pass
+        if guests_with_fp >= 3 or (guests_with_fp >= 2 and host_fp == fp):
+            cross_hits.append((fp, nd, guests_with_fp))
     if cross_hits and n >= 3:  # min 3 guests required
         total_weight = SIGNAL_WEIGHTS['sig2'] * len(cross_hits)
-        descs = [f"{fp} across {nd} dinners" for fp, nd in cross_hits]
+        descs = [f"{fp} across {nd} dinners ({gc} guests share it here)" for fp, nd, gc in cross_hits]
         add_sig('sig2',
                 "Cross-dinner device fingerprint match: " + "; ".join(descs),
                 f"{len(cross_hits)} FP(s) across multiple dinners",
-                "Any (needs pairing, min 3 guests)", True,
+                "Any (needs pairing, min 3 guests, ≥2 guests sharing)", True,
                 contribution=total_weight)
 
-    # ── Signal 3: Same FP across guests (needs pairing, 25%+, min 3 guests) ──
+    # ── Signal 3: Same FP across guests (needs pairing, 25%+, min 3 guests, min 2 sharing) ──
     if n >= 3 and guest_fps:  # min 3 guests required
         fp_counts = collections.Counter(guest_fps)
         top_fp, top_count = fp_counts.most_common(1)[0]
         if top_fp not in high_volume:
             pct = top_count / n
-            met = pct >= 0.25
+            # Require at least 2 guests sharing the same FP -- 1 guest is not meaningful
+            met = pct >= 0.40 and top_count >= 3
             add_sig('sig3',
                     f"Same device fingerprint across guests: {top_count}/{n} ({round(100*pct)}%) [{top_fp}]",
-                    f"{round(100*pct)}% ({top_count}/{n} guests)", "25%+ (min 3 guests)", met)
+                    f"{round(100*pct)}% ({top_count}/{n} guests)", "40%+ and ≥3 guests sharing (min 3 guests total)", met)
 
     # ── Signal 12: Hard bounces (standalone, 50%+) ─────────────────────────
     hard = [g for g in guests if
