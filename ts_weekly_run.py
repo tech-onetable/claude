@@ -51,6 +51,7 @@ SIGNAL_WEIGHTS = {
 STANDALONE = {'sig1', 'sig12', 'sig21', 'sig22', 'sig23'}
 GUEST_INTEGRITY_SIGNALS = {'sig12', 'sig13', 'sig14', 'sig9', 'sig8', 'sig10'}
 SF_BASE = "https://onetable.lightning.force.com/lightning/r/Contact/{}/view"
+TS_RECORD_TYPE_ID = '012PO000001F53dYAC'  # Trust and Safety record type for Salesforce Cases
 FP_BASE = "https://api.onetable.org/cp/device_activity/details?fingerprint={}"
 
 
@@ -797,6 +798,30 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns):
         top_d = pass1_output['campaigns'][top_cid]
         cluster_signals = build_signals_array_from_dict(top_d['signals'])
 
+        # Determine who is sharing the device (hosts, guests, or both)
+        fp_link = FP_BASE.format(fp)
+        host_fps_in_cluster = []
+        guest_fps_in_cluster = []
+        for cid in members:
+            camp = campaigns[cid]
+            if camp['host'] and camp['host'].get('RSVP Device Fingerprint ID','').strip() == fp:
+                host_fps_in_cluster.append(pass1_output['campaigns'][cid]['host_name'])
+            for g in camp['guests']:
+                if g.get('RSVP Device Fingerprint ID','').strip() == fp:
+                    guest_fps_in_cluster.append(pass1_output['campaigns'][cid]['host_name'])
+                    break
+        has_host_fp = len(host_fps_in_cluster) > 0
+        has_guest_fp = len(guest_fps_in_cluster) > 0
+        if has_host_fp and has_guest_fp:
+            sharing_who = "hosts and guests"
+        elif has_host_fp:
+            sharing_who = "hosts"
+        else:
+            sharing_who = "guests"
+
+        # Scores per host for display
+        scores_str = ' · '.join(f"{h['name'].split()[-1]} {h['score']}" for h in cluster_hosts)
+
         cases.append({
             'id': f"cluster-{fp[:8]}",
             'name': ' / '.join(d['host_name'].split()[-1] for d in [pass1_output['campaigns'][c] for c in members]),
@@ -808,28 +833,29 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns):
             'future_dinners': 'unknown',
             'suspended': False,
             'dnn': False,
-            'collapsed_summary': f"{len(members)}-host cluster · FP {fp[:16]}... · {combined_n}",
+            'collapsed_summary': f"{len(members)}-host cluster · top score {top_score} · {combined_n}",
             'bullets': [
-                f"**{len(members)}-host cluster** sharing device fingerprint {fp}.",
+                f"**{len(members)}-host cluster.** Device fingerprint [{fp}]({fp_link}) shared across **{sharing_who}** on {len(members)} dinners.",
+                f"**Individual scores:** {scores_str}. Score shown is the highest individual score, not a combined total.",
                 f"**Combined Nourishment: {combined_n}.**",
                 "**Consult Amalia before actioning.** Cluster case.",
             ],
             'signals': cluster_signals,
             'score_breakdown': top_d['score_breakdown'],
             'host_context': {
-                'tenure': 'see individual cases',
-                'dinners_hosted': 'see individual cases',
+                'tenure': 'see individual cases below',
+                'dinners_hosted': 'see individual cases below',
                 'nourishment_received': combined_n,
                 'future_dinners': 'unknown',
-                'dnn': 'see individual cases',
-                'benchmark_call': 'see individual cases',
-                'prior_ts_cases': 'see individual cases',
-                'suspended': 'see individual cases',
-                'graduated_host': 'see individual cases',
-                'new_host': 'see individual cases',
-                'unique_guests_12mo': 'see individual cases',
+                'dnn': 'see individual cases below',
+                'benchmark_call': 'see individual cases below',
+                'prior_ts_cases': 'see individual cases below',
+                'suspended': 'see individual cases below',
+                'graduated_host': 'see individual cases below',
+                'new_host': 'see individual cases below',
+                'unique_guests_12mo': 'see individual cases below',
             },
-            'cluster_note': f"Device fingerprint {fp} shared across {len(members)} dinners",
+            'cluster_note': f"Device [{fp}]({fp_link}) shared across {sharing_who} on {len(members)} dinners",
             'cluster_hosts': cluster_hosts,
         })
 
