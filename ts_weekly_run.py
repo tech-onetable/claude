@@ -51,6 +51,7 @@ SIGNAL_WEIGHTS = {
 STANDALONE = {'sig1', 'sig12', 'sig21', 'sig22', 'sig23'}
 GUEST_INTEGRITY_SIGNALS = {'sig12', 'sig13', 'sig14', 'sig9', 'sig8', 'sig10'}
 SF_BASE = "https://onetable.lightning.force.com/lightning/r/Contact/{}/view"
+SF_CAMPAIGN_BASE = "https://onetable.lightning.force.com/lightning/r/Campaign/{}/view"
 TS_RECORD_TYPE_ID = '012PO000001F53dYAC'  # Trust and Safety record type for Salesforce Cases
 FP_BASE = "https://api.onetable.org/cp/device_activity/details?fingerprint={}"
 
@@ -641,6 +642,7 @@ def run(csv_path):
                 'contact_id': host.get('Contact ID', ''),
                 'name': (host.get('First Name', '') + ' ' + host.get('Last Name', '')).strip(),
                 'address': camp.get('address', ''),
+                'dinner_name': camp.get('name', ''),
             })
     same_address = {addr: hosts for addr, hosts in addresses.items() if len(hosts) >= 2}
 
@@ -915,7 +917,8 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns):
             flag_hosts.append({
                 'name': h['name'],
                 'sf_url': SF_BASE.format(host_id_18),
-                'dinner': 'see Salesforce',
+                'dinner': h.get('dinner_name', 'see Salesforce'),
+                'dinner_url': SF_CAMPAIGN_BASE.format(h['cid']),
                 'description': '',
                 'eligible': sf.get('Total_Eligible_Nourishment__c', 'pending'),
                 'status': 'pending',
