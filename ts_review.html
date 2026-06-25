@@ -188,6 +188,12 @@ function tierLabel(t) { return TIER_LABELS[t] || t; }
 function tierClass(t) { return t || 'warning'; }
 function scoreColor(t) { return TIER_COLORS[t] || 'var(--text-sec)'; }
 function scoreBg(t) { return TIER_BGS[t] || '#F0F0EE'; }
+function caseEmail(c) {
+  if (c.email) return c.email;
+  if (c.is_cluster && c.cluster_hosts?.length)
+    return c.cluster_hosts.map(h => h.email).filter(e => e && e.trim()).join(', ');
+  return '';
+}
 function md(s) {
   return (s||'')
     .replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')
@@ -320,7 +326,7 @@ function buildCaseCard(c) {
           <span>${c.is_cluster?'Top score':'Score'} ${c.score}</span><span style="color:var(--border)">·</span>
           <span>${c.nourishment_received}</span><span style="color:var(--border)">·</span>
           <span>${c.future_dinners} future dinners</span>
-          ${(c.email||(c.is_cluster&&c.cluster_hosts?.length ? c.cluster_hosts.map(h=>h.email).filter(Boolean).join(', ') : ''))?`<span style="color:var(--border)">·</span><span style="color:var(--text-sec)">${c.email||(c.cluster_hosts?.map(h=>h.email).filter(Boolean).join(', '))}</span>`:''}
+          ${caseEmail(c)?`<span style="color:var(--border)">·</span><span style="color:var(--text-sec)">${caseEmail(c)}</span>`:''}
           ${c.suspended?'<span style="color:var(--border)">·</span><span style="color:var(--wine);font-weight:500">active suspension</span>':''}
           ${c.dnn&&!c.suspended?'<span style="color:var(--border)">·</span><span style="color:var(--amber-dark);font-weight:500">DNN</span>':''}
         </div>
