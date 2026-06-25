@@ -7,20 +7,16 @@
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: system-ui, -apple-system, sans-serif; background: #FAFAF8; color: #1A1A1A; min-height: 100vh; }
-
-  /* ── colors ── */
   :root {
-    --wine: #8D1B3D; --wine-light: #FCEBEB; --wine-dark: #5C0F26;
+    --wine: #8D1B3D; --wine-light: #FCEBEB;
     --olive: #75815C; --olive-light: #EAF3DE;
-    --khaki: #D2BCA1; --khaki-light: #F5EFE6;
+    --khaki-light: #F5EFE6;
     --purple: #9BA2FF;
     --amber: #FAC775; --amber-dark: #633806;
     --green: #0F6E56; --green-light: #E1F5EE;
     --text: #1A1A1A; --text-sec: #666; --text-ter: #999;
-    --border: #E8E2D9; --bg: #FAFAF8; --card: #fff;
+    --border: #E8E2D9; --card: #fff;
   }
-
-  /* ── header ── */
   .header { background: var(--wine); padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; }
   .header-left { display: flex; align-items: center; gap: 12px; }
   .header-brand { color: #fff; font-weight: 600; font-size: 16px; }
@@ -28,30 +24,20 @@
   .header-tabs { display: flex; gap: 4px; }
   .tab-btn { padding: 5px 12px; border-radius: 6px; border: none; background: transparent; color: #fff; font-size: 13px; cursor: pointer; }
   .tab-btn.active { background: rgba(255,255,255,0.2); font-weight: 600; }
-
-  /* ── layout ── */
   .main { max-width: 900px; margin: 0 auto; padding: 20px 16px; }
-
-  /* ── summary bar ── */
   .summary-bar { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin-bottom: 20px; }
   .summary-card { background: var(--card); border: 0.5px solid var(--border); border-radius: 8px; padding: 12px 14px; }
   .summary-num { font-size: 22px; font-weight: 500; }
   .summary-label { font-size: 12px; color: var(--text-sec); margin-top: 2px; }
-
-  /* ── filter bar ── */
   .filter-bar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
   .filter-btn { font-size: 13px; padding: 5px 12px; border-radius: 6px; border: 0.5px solid var(--border); background: transparent; color: var(--text-sec); cursor: pointer; }
   .filter-btn.active { border-color: var(--wine); background: var(--wine-light); color: var(--wine); }
-
-  /* ── run info ── */
   .run-info { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
   .run-meta { font-size: 12px; color: var(--text-sec); }
-
-  /* ── case card ── */
   .case-card { background: var(--card); border: 0.5px solid var(--border); border-radius: 12px; margin-bottom: 12px; overflow: hidden; }
+  .case-card.cross-host { border-color: var(--amber); }
   .case-header { padding: 14px 16px; display: flex; align-items: center; gap: 12px; cursor: pointer; user-select: none; }
-  .case-header:hover { background: var(--khaki-light); }
-  .case-header.open { background: var(--khaki-light); }
+  .case-header:hover, .case-header.open { background: var(--khaki-light); }
   .score-circle { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 500; font-size: 15px; flex-shrink: 0; }
   .case-meta { flex: 1; min-width: 0; }
   .case-name-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 3px; }
@@ -61,46 +47,31 @@
   .case-summary { font-size: 13px; color: var(--text-sec); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .chevron { font-size: 16px; color: var(--text-sec); transition: transform 0.2s; flex-shrink: 0; }
   .chevron.open { transform: rotate(180deg); }
-
-  /* ── case body ── */
   .case-body { padding: 0 16px 16px; border-top: 0.5px solid var(--border); }
   .section-label { font-size: 11px; font-weight: 500; color: var(--text-ter); text-transform: uppercase; letter-spacing: 0.05em; margin: 14px 0 6px; }
   .bullets { margin: 10px 0 0; padding-left: 16px; }
   .bullets li { font-size: 13px; color: var(--text); margin-bottom: 5px; line-height: 1.5; }
-
-  /* ── signals ── */
   .signals { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-  .signal-pill { padding: 4px 10px; border-radius: 6px; font-size: 12px; cursor: pointer; position: relative; }
+  .signal-pill { padding: 4px 10px; border-radius: 6px; font-size: 12px; }
   .signal-pill.triggered { background: var(--wine-light); color: var(--wine); }
   .signal-pill.not-triggered { background: #F0F0EE; color: var(--text-ter); }
-
-  /* ── score breakdown ── */
-  .breakdown { margin-top: 4px; }
   .breakdown-row { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 0.5px solid var(--border); font-size: 13px; }
   .breakdown-row.dimmed { opacity: 0.4; }
   .breakdown-contrib { color: var(--wine); font-weight: 500; }
   .breakdown-total { display: flex; justify-content: space-between; padding: 6px 0 2px; font-weight: 600; font-size: 14px; }
-
-  /* ── collapsible ── */
   .collapsible { border: 0.5px solid var(--border); border-radius: 8px; margin-top: 12px; overflow: hidden; }
   .collapsible-header { padding: 10px 12px; display: flex; justify-content: space-between; cursor: pointer; font-size: 13px; font-weight: 500; color: var(--text); }
   .collapsible-header:hover { background: var(--khaki-light); }
   .collapsible-body { padding: 10px 12px; border-top: 0.5px solid var(--border); display: none; }
   .collapsible-body.open { display: block; }
-
-  /* ── host context ── */
   .context-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; }
   .profile-row { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 0.5px solid var(--border); font-size: 13px; }
   .profile-label { color: var(--text-sec); }
   .profile-val { font-weight: 500; color: var(--text); text-align: right; }
-
-  /* ── cluster table ── */
   .cluster-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
   .cluster-table th { text-align: left; font-weight: 500; color: var(--text-sec); padding: 6px 8px; border-bottom: 0.5px solid var(--border); font-size: 12px; }
   .cluster-table td { padding: 8px; border-bottom: 0.5px solid var(--border); vertical-align: top; }
   .cluster-banner { background: #FAEEDA; border-left: 3px solid #BA7517; padding: 8px 12px; font-size: 13px; color: var(--amber-dark); border-radius: 0 6px 6px 0; margin: 12px 0 4px; }
-
-  /* ── badges ── */
   .badge { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 6px; font-size: 12px; font-weight: 500; }
   .badge.suspension { background: var(--wine-light); color: var(--wine); }
   .badge.nourishment_pause { background: #FAEEDA; color: var(--amber-dark); }
@@ -108,12 +79,8 @@
   .badge.dismiss { background: #F0F0EE; color: var(--text-sec); }
   .badge.program_team { background: var(--green-light); color: var(--green); }
   .badge.actioned { background: var(--olive-light); color: var(--green); font-size: 11px; padding: 2px 8px; }
-  .badge.urgent { background: var(--wine-light); color: var(--wine); }
   .badge.flag-confirm { background: var(--amber); color: var(--amber-dark); }
   .badge.flag-program { background: var(--green-light); color: var(--green); }
-  .dot { color: var(--border); }
-
-  /* ── action checklist ── */
   .action-box { margin-top: 10px; padding: 10px 12px; border-radius: 8px; }
   .action-box.ts { background: var(--wine-light); }
   .action-box.dismiss-box { background: #F0F0EE; }
@@ -123,16 +90,10 @@
   .action-item { font-size: 12px; padding-left: 12px; margin-bottom: 2px; }
   .action-item.ready { color: var(--green); }
   .action-item.pending { color: #854F0B; }
-
-  /* ── notes ── */
   .notes-textarea { width: 100%; padding: 8px 10px; border-radius: 6px; border: 0.5px solid var(--border); font-size: 13px; min-height: 72px; resize: vertical; font-family: inherit; color: var(--text); background: var(--card); }
   .notes-textarea:focus { outline: none; border-color: var(--wine); }
-
-  /* ── card footer ── */
   .card-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 14px; padding-top: 12px; border-top: 0.5px solid var(--border); flex-wrap: wrap; gap: 8px; }
   .footer-left { display: flex; gap: 8px; flex-wrap: wrap; }
-
-  /* ── buttons ── */
   .btn { padding: 6px 16px; border-radius: 6px; border: none; font-size: 13px; cursor: pointer; font-weight: 500; }
   .btn-primary { background: var(--wine); color: #fff; }
   .btn-primary:disabled { background: var(--border); color: var(--text-sec); cursor: default; }
@@ -140,55 +101,35 @@
   .btn-discuss { padding: 6px 14px; border-radius: 6px; border: 0.5px solid var(--border); background: transparent; font-size: 13px; cursor: pointer; color: var(--text-sec); }
   .btn-green { background: var(--green); color: #fff; }
   .btn-amber { background: var(--amber); color: var(--amber-dark); }
-
-  /* ── override panel ── */
   .override-panel { margin-top: 12px; padding: 12px; background: var(--khaki-light); border-radius: 8px; border: 0.5px solid var(--border); }
   .override-panel select, .override-panel textarea { width: 100%; padding: 6px 10px; border-radius: 6px; border: 0.5px solid var(--border); font-size: 13px; margin-bottom: 8px; font-family: inherit; }
   .override-panel label { font-size: 13px; color: var(--text-sec); margin-bottom: 6px; display: block; }
-
-  /* ── cluster warning ── */
   .cluster-warning { margin-top: 12px; padding: 10px 12px; background: #FAEEDA; border-radius: 8px; font-size: 13px; color: var(--amber-dark); }
-
-  /* ── flag card ── */
   .flag-icon { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
   .flag-icon.program { background: var(--green-light); color: var(--green); }
   .flag-icon.confirm { background: #FAEEDA; color: var(--amber-dark); }
-  .similarity-bar-wrap { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
-  .similarity-bar-bg { flex: 1; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
-  .similarity-bar-fill { height: 100%; background: var(--green); border-radius: 2px; }
   .flag-chips { display: flex; flex-wrap: wrap; gap: 6px; }
   .flag-chip { padding: 4px 10px; border-radius: 6px; font-size: 12px; }
   .flag-chip.yes { background: var(--green-light); color: var(--green); }
   .flag-chip.no { background: var(--wine-light); color: var(--wine); }
   .flag-chip.neutral { background: #F0F0EE; color: var(--text-sec); }
-
-  /* ── flag dinner table ── */
   .flag-table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
   .flag-table th { text-align: left; font-weight: 500; color: var(--text-sec); padding: 6px 8px; border-bottom: 0.5px solid var(--border); font-size: 12px; }
   .flag-table td { padding: 8px; border-bottom: 0.5px solid var(--border); vertical-align: top; }
-
-  /* ── insights ── */
   .insights-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 12px; }
   .insights-table th { text-align: left; padding: 6px 8px; border-bottom: 0.5px solid var(--border); font-weight: 500; color: var(--text-sec); font-size: 12px; }
   .insights-table td { padding: 6px 8px; }
-
-  /* ── slack section ── */
   .slack-box { margin-top: 16px; padding: 16px; background: var(--card); border: 0.5px solid var(--border); border-radius: 12px; }
   .slack-locked { padding: 16px; background: var(--khaki-light); border-radius: 8px; text-align: center; font-size: 13px; color: var(--text-sec); margin-top: 16px; }
   .slack-draft { width: 100%; min-height: 140px; padding: 10px 12px; border-radius: 8px; border: 0.5px solid var(--border); font-size: 13px; font-family: monospace; resize: vertical; margin-bottom: 10px; }
-
-  /* ── load panel ── */
   .load-panel { max-width: 600px; margin: 48px auto; padding: 0 16px; text-align: center; }
   .load-icon { font-size: 32px; margin-bottom: 12px; }
   .load-title { font-weight: 600; font-size: 18px; margin-bottom: 8px; }
   .load-sub { font-size: 14px; color: var(--text-sec); margin-bottom: 24px; }
   .load-status { padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 12px; }
-  .load-status.success { background: var(--green-light); color: var(--green); }
   .load-status.error { background: var(--wine-light); color: var(--wine); }
-
-  /* ── chat panel ── */
   .chat-panel { position: fixed; bottom: 0; right: 0; width: 400px; height: 60vh; background: var(--card); border: 1px solid var(--border); border-radius: 12px 12px 0 0; box-shadow: 0 -4px 24px rgba(0,0,0,0.12); display: flex; flex-direction: column; z-index: 1000; }
-  .chat-header { padding: 12px 16px; border-bottom: 0.5px solid var(--border); display: flex; justify-content: space-between; align-items: center; background: var(--wine); border-radius: 12px 12px 0 0; }
+  .chat-header { padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; background: var(--wine); border-radius: 12px 12px 0 0; }
   .chat-header-name { font-weight: 600; font-size: 14px; color: #fff; }
   .chat-header-sub { font-size: 12px; color: rgba(255,255,255,0.7); }
   .chat-close { background: transparent; border: none; color: #fff; font-size: 20px; cursor: pointer; line-height: 1; }
@@ -198,7 +139,6 @@
   .chat-bubble { max-width: 85%; padding: 8px 12px; border-radius: 12px; font-size: 13px; line-height: 1.5; }
   .chat-bubble.user { background: var(--wine); color: #fff; border-radius: 12px 12px 2px 12px; }
   .chat-bubble.assistant { background: var(--khaki-light); color: var(--text); border-radius: 12px 12px 12px 2px; }
-  .chat-bubble.thinking { color: var(--text-sec); }
   .chat-quick { padding: 6px 16px; display: flex; gap: 6px; flex-wrap: wrap; border-top: 0.5px solid var(--border); }
   .chat-quick-btn { font-size: 11px; padding: 3px 8px; border-radius: 10px; border: 0.5px solid var(--border); background: transparent; cursor: pointer; color: var(--text-sec); }
   .chat-quick-btn:hover { background: var(--khaki-light); }
@@ -207,170 +147,120 @@
   .chat-input:focus { border-color: var(--wine); }
   .chat-send { padding: 8px 14px; border-radius: 8px; border: none; background: var(--wine); color: #fff; font-size: 13px; cursor: pointer; }
   .chat-send:disabled { background: var(--border); cursor: default; }
-
-  /* ── history ── */
   .history-item { padding: 12px 16px; background: var(--card); border: 0.5px solid var(--border); border-radius: 8px; margin-bottom: 8px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
   .history-item:hover { background: var(--khaki-light); }
-
-  /* ── empty states ── */
   .empty { text-align: center; padding: 64px 24px; color: var(--text-sec); }
   .empty-icon { font-size: 32px; margin-bottom: 12px; }
-
-  /* ── misc ── */
-  .sep { color: var(--border); }
   a { color: inherit; }
   .purple-link { color: var(--purple); text-decoration: none; }
   .purple-link:hover { text-decoration: underline; }
-  .error-box { padding: 10px 14px; background: var(--wine-light); border-radius: 8px; color: var(--wine); font-size: 13px; margin-bottom: 16px; }
   .section-divider { font-size: 11px; font-weight: 500; color: var(--text-ter); text-transform: uppercase; letter-spacing: 0.05em; margin: 24px 0 10px; }
+  .prior-action-note { background: var(--khaki-light); border-left: 3px solid var(--khaki); padding: 8px 12px; font-size: 13px; color: var(--text-sec); border-radius: 0 6px 6px 0; margin-bottom: 8px; }
 </style>
 </head>
 <body>
-
 <div id="app"></div>
-
 <script>
 // ── state ──────────────────────────────────────────────────────────────────
 const state = {
-  view: 'load',   // load | review | history
+  view: 'load',
   runs: [],
   current: null,
   filter: 'all',
-  actionState: {},   // id -> {tier, reason, note}
-  activeChat: null,  // case object
+  actionState: {},
+  activeChat: null,
   overrideOpen: null,
   clusterWarning: null,
+  openCards: new Set(),
 };
 
 // ── storage ────────────────────────────────────────────────────────────────
 const STORE_KEY = 'ts-weekly-runs';
-function loadRuns() {
-  try { return JSON.parse(localStorage.getItem(STORE_KEY) || '[]'); }
-  catch { return []; }
-}
-function saveRuns(runs) {
-  try { localStorage.setItem(STORE_KEY, JSON.stringify(runs)); } catch {}
-}
-
-// ── init ───────────────────────────────────────────────────────────────────
+function loadRuns() { try { return JSON.parse(localStorage.getItem(STORE_KEY)||'[]'); } catch { return []; } }
+function saveRuns(r) { try { localStorage.setItem(STORE_KEY, JSON.stringify(r)); } catch {} }
 state.runs = loadRuns();
 
 // ── helpers ────────────────────────────────────────────────────────────────
-function tierLabel(tier) {
-  return {suspension:'Suspension', nourishment_pause:'Nourishment Pause', warning:'Warning', dismiss:'Dismissed · No misuse', program_team:'Referred to program team'}[tier] || tier;
-}
-function tierClass(tier) {
-  return {suspension:'suspension', nourishment_pause:'nourishment_pause', warning:'warning', dismiss:'dismiss', program_team:'program_team'}[tier] || 'warning';
-}
-function scoreColor(tier) {
-  return {suspension:'var(--wine)', nourishment_pause:'var(--amber-dark)', warning:'var(--olive)'}[tier] || 'var(--text-sec)';
-}
-function scoreBg(tier) {
-  return {suspension:'var(--wine-light)', nourishment_pause:'#FAEEDA', warning:'var(--olive-light)'}[tier] || '#F0F0EE';
-}
-function md(text) {
-  if (!text) return '';
-  return text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
-}
-function runDate() {
-  return state.current?.run?.run_date || state.current?.run?.week_of || '';
-}
+const TIER_LABELS = { suspension:'Suspension', nourishment_pause:'Nourishment Pause', warning:'Warning', dismiss:'Dismissed · No misuse', program_team:'Referred to program team' };
+const TIER_COLORS = { suspension:'var(--wine)', nourishment_pause:'var(--amber-dark)', warning:'var(--olive)' };
+const TIER_BGS = { suspension:'var(--wine-light)', nourishment_pause:'#FAEEDA', warning:'var(--olive-light)' };
+function tierLabel(t) { return TIER_LABELS[t] || t; }
+function tierClass(t) { return t || 'warning'; }
+function scoreColor(t) { return TIER_COLORS[t] || 'var(--text-sec)'; }
+function scoreBg(t) { return TIER_BGS[t] || '#F0F0EE'; }
+function md(s) { return (s||'').replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/\n/g,'<br>'); }
+function runDate() { return state.current?.run?.run_date || state.current?.run?.week_of || ''; }
+function esc(s) { return (s||'').replace(/'/g,"&#39;").replace(/"/g,'&quot;'); }
 
-// ── load from file ─────────────────────────────────────────────────────────
+// ── file load ──────────────────────────────────────────────────────────────
 async function tryLoadFromFile() {
-  // Try to fetch ts_ui_data.json from same directory
-  try {
-    const res = await fetch('./ts_ui_data.json');
-    if (!res.ok) return null;
-    const data = await res.json();
-    return data;
-  } catch { return null; }
+  try { const r = await fetch('./ts_ui_data.json'); return r.ok ? r.json() : null; }
+  catch { return null; }
 }
 
-// ── render engine ──────────────────────────────────────────────────────────
+// ── render ─────────────────────────────────────────────────────────────────
 function render() {
   document.getElementById('app').innerHTML = buildApp();
-  attachEvents();
+  const cm = document.getElementById('chat-messages');
+  if (cm) cm.scrollTop = cm.scrollHeight;
 }
 
 function buildApp() {
   return `
     ${buildHeader()}
     <div class="main">
-      ${state.view === 'load' ? buildLoadView() : ''}
-      ${state.view === 'review' ? buildReviewView() : ''}
-      ${state.view === 'history' ? buildHistoryView() : ''}
+      ${state.view==='load' ? buildLoadView() : ''}
+      ${state.view==='review' ? buildReviewView() : ''}
+      ${state.view==='history' ? buildHistoryView() : ''}
     </div>
-    ${state.activeChat ? buildChatPanel() : ''}
-  `;
+    ${state.activeChat ? buildChatPanel() : ''}`;
 }
 
 // ── header ─────────────────────────────────────────────────────────────────
 function buildHeader() {
-  return `
-    <div class="header">
-      <div class="header-left">
-        <span class="header-brand">OneTable</span>
-        <span class="header-sub">Trust & Safety</span>
-      </div>
-      <div class="header-tabs">
-        ${['load','review','history'].map(v => `
-          <button class="tab-btn ${state.view===v?'active':''}" onclick="switchView('${v}')">
-            ${v==='load'?'Load Run':v==='review'?'Current Run':'History'}
-          </button>`).join('')}
-      </div>
-    </div>`;
+  return `<div class="header">
+    <div class="header-left"><span class="header-brand">OneTable</span><span class="header-sub">Trust & Safety</span></div>
+    <div class="header-tabs">
+      ${['load','review','history'].map(v=>`<button class="tab-btn ${state.view===v?'active':''}" onclick="switchView('${v}')">${v==='load'?'Load Run':v==='review'?'Current Run':'History'}</button>`).join('')}
+    </div>
+  </div>`;
 }
 
 // ── load view ─────────────────────────────────────────────────────────────
 function buildLoadView() {
-  return `
-    <div class="load-panel">
-      <div class="load-icon">📋</div>
-      <div class="load-title">Load Weekly Run</div>
-      <div class="load-sub">
-        The review UI automatically loads <code>ts_ui_data.json</code> from the same folder.<br>
-        After Claude Code runs the review, click Refresh below.
-      </div>
-      <div style="display:flex;gap:10px;justify-content:center;margin-bottom:16px;">
-        <button class="btn btn-primary" onclick="autoLoad()">↻ Refresh from file</button>
-        <label class="btn btn-secondary" style="cursor:pointer;">
-          Or upload JSON
-          <input type="file" accept=".json" style="display:none" onchange="handleFileUpload(event)">
-        </label>
-      </div>
-      <div id="load-status"></div>
-      ${state.runs.length > 0 ? `
-        <div style="margin-top:24px;font-size:13px;color:var(--text-sec);">
-          Or <a href="#" onclick="switchView('history');return false;" style="color:var(--wine);">view a previous run</a> from history.
-        </div>` : ''}
-    </div>`;
+  return `<div class="load-panel">
+    <div class="load-icon">📋</div>
+    <div class="load-title">Load Weekly Run</div>
+    <div class="load-sub">Auto-loads <code>ts_ui_data.json</code> from the same folder. After Claude Code runs the review, click Refresh.</div>
+    <div style="display:flex;gap:10px;justify-content:center;margin-bottom:16px;">
+      <button class="btn btn-primary" onclick="autoLoad()">↻ Refresh from file</button>
+      <label class="btn btn-secondary" style="cursor:pointer;">Or upload JSON<input type="file" accept=".json" style="display:none" onchange="handleFileUpload(event)"></label>
+    </div>
+    <div id="load-status"></div>
+    ${state.runs.length>0?`<div style="margin-top:24px;font-size:13px;color:var(--text-sec);">Or <a href="#" onclick="switchView('history');return false;" style="color:var(--wine);">view a previous run</a>.</div>`:''}
+  </div>`;
 }
 
 // ── review view ───────────────────────────────────────────────────────────
 function buildReviewView() {
-  if (!state.current) return `
-    <div class="empty">
-      <div class="empty-icon">📭</div>
-      <div style="font-size:16px;margin-bottom:8px;">No run loaded</div>
-      <button class="btn btn-primary" onclick="switchView('load')">Load a run</button>
-    </div>`;
+  if (!state.current) return `<div class="empty"><div class="empty-icon">📭</div><div style="font-size:16px;margin-bottom:8px;">No run loaded</div><button class="btn btn-primary" onclick="switchView('load')">Load a run</button></div>`;
 
-  const cases = state.current.cases || [];
+  const cases = (state.current.cases||[]).filter(c => ['warning','nourishment_pause','suspension','deactivation'].includes(c.tier));
+  const priorAction = (state.current.cases||[]).filter(c => !['warning','nourishment_pause','suspension','deactivation'].includes(c.tier));
   const flags = state.current.cross_host_flags || [];
-  const allActioned = cases.length > 0 && cases.every(c => state.actionState[c.id]) && flags.every(f => state.actionState[f.id]);
+  const allActioned = cases.length>0 && cases.every(c=>state.actionState[c.id]) && flags.every(f=>state.actionState[f.id]);
 
-  const filtered = cases.filter(c => {
-    if (state.filter === 'all') return true;
-    if (state.filter === 'cluster') return c.is_cluster;
-    return c.tier === state.filter;
-  }).sort((a,b) => {
-    if (a.is_cluster && !b.is_cluster) return -1;
-    if (!a.is_cluster && b.is_cluster) return 1;
-    return b.score - a.score;
+  const filtered = cases.filter(c=>{
+    if (state.filter==='all') return true;
+    if (state.filter==='cluster') return c.is_cluster;
+    return c.tier===state.filter;
+  }).sort((a,b)=>{
+    if (a.is_cluster&&!b.is_cluster) return -1;
+    if (!a.is_cluster&&b.is_cluster) return 1;
+    return b.score-a.score;
   });
 
-  const s = state.current.run?.summary || {};
+  const s = state.current.run?.summary||{};
   return `
     <div class="summary-bar">
       <div class="summary-card"><div class="summary-num" style="color:var(--wine)">${s.suspension||0}</div><div class="summary-label">Suspension</div></div>
@@ -383,527 +273,349 @@ function buildReviewView() {
       <button class="btn btn-secondary" onclick="switchView('load')" style="font-size:12px;padding:4px 10px;">+ Load new run</button>
     </div>
     <div class="filter-bar">
-      ${[['all','All'],['cluster','⚠ Cluster'],['suspension','Suspension'],['nourishment_pause','Nourishment Pause'],['warning','Warning']].map(([f,l]) =>
-        `<button class="filter-btn ${state.filter===f?'active':''}" onclick="setFilter('${f}')">${l}</button>`).join('')}
+      ${[['all','All'],['cluster','⚠ Cluster'],['suspension','Suspension'],['nourishment_pause','Nourishment Pause'],['warning','Warning']].map(([f,l])=>`<button class="filter-btn ${state.filter===f?'active':''}" onclick="setFilter('${f}')">${l}</button>`).join('')}
     </div>
-    ${filtered.length === 0 ? '<div style="font-size:14px;color:var(--text-sec);margin-bottom:16px;">No cases match this filter.</div>' : filtered.map(c => buildCaseCard(c)).join('')}
-    ${flags.length > 0 ? `<div class="section-divider">Cross-host flags — program team</div>${flags.map(f => buildFlagCard(f)).join('')}` : ''}
+    ${filtered.length===0?'<div style="font-size:14px;color:var(--text-sec);margin-bottom:16px;">No cases match this filter.</div>':filtered.map(buildCaseCard).join('')}
+    ${flags.length>0?`<div class="section-divider">Cross-host flags — program team</div>${flags.map(buildFlagCard).join('')}`:''}
+    ${priorAction.length>0?`<div class="section-divider">Prior actions — no new consequence</div>${priorAction.map(c=>`<div class="prior-action-note">⚑ <strong>${c.name}</strong> — ${c.collapsed_summary||'Already suspended or DNN. No new action required this week.'}</div>`).join('')}`:''}
     ${buildInsights()}
-    ${buildSlack(allActioned)}
-  `;
+    ${buildSlack(allActioned)}`;
 }
 
 // ── case card ─────────────────────────────────────────────────────────────
 function buildCaseCard(c) {
-  const a = state.actionState[c.id] || {};
+  const a = state.actionState[c.id]||{};
   const actioned = !!a.tier;
-  const displayTier = a.tier || c.tier;
-  const isOpen = state.openCards?.has(c.id);
-  const overrideOpen = state.overrideOpen === c.id;
-  const clusterWarn = state.clusterWarning === c.id;
+  const displayTier = a.tier||c.tier;
+  const isOpen = state.openCards.has(c.id);
 
-  return `
-    <div class="case-card" id="card-${c.id}">
-      <div class="case-header ${isOpen?'open':''}" onclick="toggleCard('${c.id}')">
-        <div class="score-circle" style="background:${scoreBg(c.tier)};color:${scoreColor(c.tier)}">${c.score}</div>
-        <div class="case-meta">
-          <div class="case-name-row">
-            <a class="case-name" href="${c.sf_url}" target="_blank" onclick="event.stopPropagation()">${c.name} ↗</a>
-            <span class="badge ${tierClass(displayTier)}">${c.is_cluster?'⚠ Cluster · ':''}${tierLabel(displayTier)}</span>
-            ${actioned ? '<span class="badge actioned">✓ Actioned</span>' : ''}
-          </div>
-          <div class="case-stats">
-            <span>Score ${c.score}</span><span class="sep">·</span>
-            <span>${c.nourishment_received}</span><span class="sep">·</span>
-            <span>${c.future_dinners} future dinners</span>
-            ${c.suspended ? '<span class="sep">·</span><span style="color:var(--wine);font-weight:500">active suspension</span>' : ''}
-            ${c.dnn && !c.suspended ? '<span class="sep">·</span><span style="color:var(--amber-dark);font-weight:500">DNN</span>' : ''}
-          </div>
-          <div class="case-summary">${c.collapsed_summary||''}</div>
+  return `<div class="case-card" id="card-${c.id}">
+    <div class="case-header ${isOpen?'open':''}" onclick="toggleCard('${c.id}')">
+      <div class="score-circle" style="background:${scoreBg(c.tier)};color:${scoreColor(c.tier)}">${c.score}</div>
+      <div class="case-meta">
+        <div class="case-name-row">
+          <a class="case-name" href="${c.sf_url}" target="_blank" onclick="event.stopPropagation()">${c.name} ↗</a>
+          <span class="badge ${tierClass(displayTier)}">${c.is_cluster?'⚠ Cluster · ':''}${tierLabel(displayTier)}</span>
+          ${actioned?'<span class="badge actioned">✓ Actioned</span>':''}
         </div>
-        <span class="chevron ${isOpen?'open':''}">▾</span>
+        <div class="case-stats">
+          <span>Score ${c.score}</span><span style="color:var(--border)">·</span>
+          <span>${c.nourishment_received}</span><span style="color:var(--border)">·</span>
+          <span>${c.future_dinners} future dinners</span>
+          ${c.suspended?'<span style="color:var(--border)">·</span><span style="color:var(--wine);font-weight:500">active suspension</span>':''}
+          ${c.dnn&&!c.suspended?'<span style="color:var(--border)">·</span><span style="color:var(--amber-dark);font-weight:500">DNN</span>':''}
+        </div>
+        <div class="case-summary">${c.collapsed_summary||''}</div>
       </div>
-      ${isOpen ? buildCaseBody(c, a, actioned, displayTier, overrideOpen, clusterWarn) : ''}
-    </div>`;
+      <span class="chevron ${isOpen?'open':''}">▾</span>
+    </div>
+    ${isOpen?buildCaseBody(c,a,actioned,displayTier):''}
+  </div>`;
 }
 
-function buildCaseBody(c, a, actioned, displayTier, overrideOpen, clusterWarn) {
-  const hosts = c.is_cluster && c.cluster_hosts?.length ? c.cluster_hosts.map(h=>h.name) : [c.name];
-  return `
-    <div class="case-body">
-      ${c.is_cluster && c.cluster_note ? `<div class="cluster-banner">🔗 ${c.cluster_note}</div>` : ''}
-      ${c.is_cluster && c.cluster_hosts?.length ? `
-        <div class="section-label">Hosts</div>
-        <table class="cluster-table">
-          <thead><tr><th>Host</th><th>Score</th><th>Nourishment</th><th>Address</th><th>Key signals</th></tr></thead>
-          <tbody>${c.cluster_hosts.map(h=>`
-            <tr>
-              <td><a class="purple-link" href="${h.sf_url}" target="_blank">${h.name}</a></td>
-              <td>${h.score}</td>
-              <td>${h.nourishment_received}</td>
-              <td style="font-size:12px;color:var(--text-sec)">${h.address||'—'}</td>
-              <td style="font-size:12px;color:var(--text-sec)">${h.key_signals||''}</td>
-            </tr>`).join('')}
-          </tbody>
-        </table>` : ''}
+function buildCaseBody(c, a, actioned, displayTier) {
+  const hosts = c.is_cluster&&c.cluster_hosts?.length ? c.cluster_hosts.map(h=>h.name) : [c.name];
+  const overrideOpen = state.overrideOpen===c.id;
+  const clusterWarn = state.clusterWarning===c.id;
 
-      <div class="section-label">Summary</div>
-      <ul class="bullets">${(c.bullets||[]).map(b=>`<li>${md(b)}</li>`).join('')}</ul>
+  return `<div class="case-body">
+    ${c.is_cluster&&c.cluster_note?`<div class="cluster-banner">🔗 ${c.cluster_note}</div>`:''}
+    ${c.is_cluster&&c.cluster_hosts?.length?`
+      <div class="section-label">Hosts</div>
+      <table class="cluster-table">
+        <thead><tr><th>Host</th><th>Score</th><th>Nourishment</th><th>Address</th><th>Key signals</th></tr></thead>
+        <tbody>${c.cluster_hosts.map(h=>`<tr>
+          <td><a class="purple-link" href="${h.sf_url}" target="_blank">${h.name}</a></td>
+          <td>${h.score}</td><td>${h.nourishment_received}</td>
+          <td style="font-size:12px;color:var(--text-sec)">${h.address||'—'}</td>
+          <td style="font-size:12px;color:var(--text-sec)">${h.key_signals||''}</td>
+        </tr>`).join('')}</tbody>
+      </table>`:''}
 
-      <div class="section-label">Signals</div>
-      <div class="signals">${(c.signals||[]).map(s=>`
-        <span class="signal-pill ${s.triggered?'triggered':'not-triggered'}" title="${s.triggered?s.observed||'':'Not triggered: '+s.threshold}">${s.name}</span>`).join('')}</div>
+    <div class="section-label">Summary</div>
+    <ul class="bullets">${(c.bullets||[]).map(b=>`<li>${md(b)}</li>`).join('')}</ul>
 
-      ${c.score_breakdown ? `
-        <div class="collapsible">
-          <div class="collapsible-header" onclick="toggleCollapsible(this)">Score breakdown <span class="chevron">▾</span></div>
-          <div class="collapsible-body">
-            <div class="breakdown">
-              ${(c.signals||[]).filter(s=>s.triggered&&s.score_contribution>0).sort((a,b)=>b.score_contribution-a.score_contribution).map(s=>`
-                <div class="breakdown-row">
-                  <span style="color:var(--text-sec)">${s.name} <span style="font-size:12px;color:var(--text-ter)">${s.observed||''}</span></span>
-                  <span class="breakdown-contrib">+${s.score_contribution}</span>
-                </div>`).join('')}
-              ${(c.signals||[]).filter(s=>!s.triggered).map(s=>`
-                <div class="breakdown-row dimmed">
-                  <span style="color:var(--text-ter)">${s.name} — ${s.observed||s.threshold||'not triggered'}</span>
-                  <span style="color:var(--text-ter)">+0</span>
-                </div>`).join('')}
-              <div class="breakdown-total"><span>Total</span><span style="color:var(--wine)">${c.score}</span></div>
-            </div>
-          </div>
-        </div>` : ''}
+    <div class="section-label">Signals</div>
+    <div class="signals">${(c.signals||[]).map(s=>`<span class="signal-pill ${s.triggered?'triggered':'not-triggered'}" title="${s.triggered?s.observed||'':'Not triggered: '+s.threshold}">${s.name}</span>`).join('')}</div>
 
-      ${c.host_context ? `
-        <div class="collapsible">
-          <div class="collapsible-header" onclick="toggleCollapsible(this)">Host Context Profile <span class="chevron">▾</span></div>
-          <div class="collapsible-body">
-            <div class="context-grid">
-              <div>${[['Tenure',c.host_context.tenure],['Dinners hosted',c.host_context.dinners_hosted],['Nourishment received',c.host_context.nourishment_received],['Future dinners',c.host_context.future_dinners],['DNN',c.host_context.dnn]].map(([l,v])=>`
-                <div class="profile-row"><span class="profile-label">${l}</span><span class="profile-val">${v||'—'}</span></div>`).join('')}</div>
-              <div>${[['Benchmark call',c.host_context.benchmark_call],['Prior T&S cases',c.host_context.prior_ts_cases],['Suspended',c.host_context.suspended],['Graduated host',c.host_context.graduated_host],['New host',c.host_context.new_host]].map(([l,v])=>`
-                <div class="profile-row"><span class="profile-label">${l}</span><span class="profile-val">${v||'—'}</span></div>`).join('')}</div>
-            </div>
-          </div>
-        </div>` : ''}
-
-      ${clusterWarn ? `
-        <div class="cluster-warning">
-          ⚠ This is a cluster case. Consult Amalia before proceeding.
-          <div style="margin-top:8px;display:flex;gap:8px;">
-            <button class="btn btn-primary" style="font-size:12px;padding:5px 12px;" onclick="confirmCluster('${c.id}')">Confirmed, proceed</button>
-            <button class="btn btn-secondary" style="font-size:12px;padding:5px 12px;" onclick="cancelCluster()">Cancel</button>
-          </div>
-        </div>` : ''}
-
-      ${actioned ? buildActionChecklist(displayTier, hosts, runDate(), 'ts', a.note) : ''}
-
-      <div style="margin-top:14px;">
-        <div class="section-label">Internal notes</div>
-        <textarea class="notes-textarea" placeholder="Add notes for this case -- context, agreements, decisions. Saved with this run and added to Salesforce case on approval."
-          oninput="saveNote('${c.id}', this.value)">${a.note||''}</textarea>
-      </div>
-
-      ${overrideOpen ? `
-        <div class="override-panel">
-          <label>Select action</label>
-          <select id="override-tier-${c.id}">
-            <option value="">-- select --</option>
-            <optgroup label="Override tier">
-              <option value="warning">Warning (1-8)</option>
-              <option value="nourishment_pause">Nourishment Pause (9-17)</option>
-              <option value="suspension">Suspension (18-39)</option>
-              <option value="deactivation">Deactivation (40+)</option>
-            </optgroup>
-            <optgroup label="Close without consequence">
-              <option value="dismiss">Dismiss -- no misuse</option>
-              <option value="program_team">Refer to program team</option>
-            </optgroup>
-          </select>
-          <label>Reason</label>
-          <textarea id="override-reason-${c.id}" placeholder="Explain why..." style="min-height:60px;resize:vertical;"></textarea>
-          <button class="btn" style="background:var(--amber-dark);color:#fff;font-size:13px;" onclick="confirmOverride('${c.id}')">Confirm</button>
-        </div>` : ''}
-
-      <div class="card-footer">
-        <div class="footer-left">
-          <button class="btn btn-primary" ${actioned?'disabled':''} onclick="approveCase('${c.id}','${c.tier}',${c.is_cluster})">
-            ${actioned ? '✓ Approved' : 'Approve recommendation'}
-          </button>
-          ${!actioned ? `<button class="btn btn-secondary" onclick="toggleOverride('${c.id}')">${overrideOpen?'Cancel':'Override / dismiss'}</button>` : ''}
+    ${c.score_breakdown?`
+      <div class="collapsible">
+        <div class="collapsible-header" onclick="toggleCollapsible(this)">Score breakdown <span class="chevron">▾</span></div>
+        <div class="collapsible-body">
+          ${(c.signals||[]).filter(s=>s.triggered&&s.score_contribution>0).sort((a,b)=>b.score_contribution-a.score_contribution).map(s=>`
+            <div class="breakdown-row"><span style="color:var(--text-sec)">${s.name} <span style="font-size:12px;color:var(--text-ter)">${s.observed||''}</span></span><span class="breakdown-contrib">+${s.score_contribution}</span></div>`).join('')}
+          ${(c.signals||[]).filter(s=>!s.triggered).map(s=>`
+            <div class="breakdown-row dimmed"><span style="color:var(--text-ter)">${s.name} — ${s.observed||s.threshold||'not triggered'}</span><span style="color:var(--text-ter)">+0</span></div>`).join('')}
+          <div class="breakdown-total"><span>Total</span><span style="color:var(--wine)">${c.score}</span></div>
         </div>
-        <button class="btn-discuss" onclick="openChat(${JSON.stringify(c).replace(/'/g,"&#39;")})">Discuss ↗</button>
+      </div>`:''}
+
+    ${buildHostContextPanels(c)}
+
+    ${clusterWarn?`<div class="cluster-warning">⚠ This is a cluster case. Consult Amalia before proceeding.
+      <div style="margin-top:8px;display:flex;gap:8px;">
+        <button class="btn btn-primary" style="font-size:12px;padding:5px 12px;" onclick="confirmCluster('${c.id}')">Confirmed, proceed</button>
+        <button class="btn btn-secondary" style="font-size:12px;padding:5px 12px;" onclick="cancelCluster()">Cancel</button>
+      </div></div>`:''}
+
+    ${actioned?buildActionChecklist(displayTier,hosts,runDate(),'ts',a.note):''}
+
+    <div style="margin-top:14px;">
+      <div class="section-label">Internal notes</div>
+      <textarea class="notes-textarea" placeholder="Add notes -- context, agreements, decisions. Saved with this run and added to Salesforce case on approval." oninput="saveNote('${c.id}',this.value)">${a.note||''}</textarea>
+    </div>
+
+    ${overrideOpen?`<div class="override-panel">
+      <label>Select action</label>
+      <select id="override-tier-${c.id}">
+        <option value="">-- select --</option>
+        <optgroup label="Override tier">
+          <option value="warning">Warning (1-8)</option>
+          <option value="nourishment_pause">Nourishment Pause (9-17)</option>
+          <option value="suspension">Suspension (18-39)</option>
+          <option value="deactivation">Deactivation (40+)</option>
+        </optgroup>
+        <optgroup label="Close without consequence">
+          <option value="dismiss">Dismiss -- no misuse</option>
+          <option value="program_team">Refer to program team</option>
+        </optgroup>
+      </select>
+      <label>Reason</label>
+      <textarea id="override-reason-${c.id}" placeholder="Explain why..." style="min-height:60px;resize:vertical;"></textarea>
+      <button class="btn" style="background:var(--amber-dark);color:#fff;font-size:13px;" onclick="confirmOverride('${c.id}')">Confirm</button>
+    </div>`:''}
+
+    <div class="card-footer">
+      <div class="footer-left">
+        <button class="btn btn-primary" ${actioned?'disabled':''} onclick="approveCase('${c.id}','${c.tier}',${!!c.is_cluster})">${actioned?'✓ Approved':'Approve recommendation'}</button>
+        ${!actioned?`<button class="btn btn-secondary" onclick="toggleOverride('${c.id}')">${overrideOpen?'Cancel':'Override / dismiss'}</button>`:''}
       </div>
-    </div>`;
+      <button class="btn-discuss" onclick="openChat(${JSON.stringify(c).replace(/"/g,'&quot;')})">Discuss ↗</button>
+    </div>
+  </div>`;
 }
 
+// ── per-host context panels for clusters ─────────────────────────────────
+function buildHostContextPanels(c) {
+  if (!c.is_cluster || !c.cluster_hosts?.length) {
+    // Single host
+    if (!c.host_context) return '';
+    return `<div class="collapsible">
+      <div class="collapsible-header" onclick="toggleCollapsible(this)">Host Context Profile <span class="chevron">▾</span></div>
+      <div class="collapsible-body">${buildContextGrid(c.host_context)}</div>
+    </div>`;
+  }
+  // Cluster: one collapsible per host
+  return c.cluster_hosts.map(h => {
+    if (!h.host_context) return '';
+    return `<div class="collapsible">
+      <div class="collapsible-header" onclick="toggleCollapsible(this)">Host Context — ${h.name} <span class="chevron">▾</span></div>
+      <div class="collapsible-body">${buildContextGrid(h.host_context)}</div>
+    </div>`;
+  }).join('');
+}
+
+function buildContextGrid(ctx) {
+  const left = [['Tenure',ctx.tenure],['Dinners hosted',ctx.dinners_hosted],['Nourishment received',ctx.nourishment_received],['Future dinners',ctx.future_dinners],['DNN',ctx.dnn]];
+  const right = [['Benchmark call',ctx.benchmark_call],['Prior T&S cases',ctx.prior_ts_cases],['Suspended',ctx.suspended],['Graduated host',ctx.graduated_host],['New host',ctx.new_host]];
+  return `<div class="context-grid">
+    <div>${left.map(([l,v])=>`<div class="profile-row"><span class="profile-label">${l}</span><span class="profile-val">${v||'—'}</span></div>`).join('')}</div>
+    <div>${right.map(([l,v])=>`<div class="profile-row"><span class="profile-label">${l}</span><span class="profile-val">${v||'—'}</span></div>`).join('')}</div>
+  </div>`;
+}
+
+// ── action checklist ───────────────────────────────────────────────────────
 function buildActionChecklist(tier, hosts, rd, type, note) {
-  if (tier === 'dismiss') return `
-    <div class="action-box dismiss-box">
-      <div class="action-title" style="color:var(--text-sec)">Dismissed -- no misuse</div>
-      ${hosts.map(h=>`
-        <div class="action-host">${h}</div>
-        <div class="action-item pending">○ Create Salesforce case with Dismissed status (pending write access)</div>
-        ${note ? `<div class="action-item pending">○ Add note: "${note.slice(0,80)}${note.length>80?'...':''}" (pending write access)</div>` : ''}`).join('')}
-    </div>`;
-  if (tier === 'program_team') return `
-    <div class="action-box program">
-      <div class="action-title" style="color:var(--green)">Referred to program team</div>
-      ${hosts.map(h=>`
-        <div class="action-host">${h}</div>
-        <div class="action-item pending">○ Create Salesforce case -- Program Team Referral (pending write access)</div>
-        <div class="action-item ready">✓ Create Gmail draft to program team (active)</div>
-        ${note ? `<div class="action-item pending">○ Add note (pending write access)</div>` : ''}`).join('')}
-    </div>`;
+  if (tier==='dismiss') return `<div class="action-box dismiss-box">
+    <div class="action-title" style="color:var(--text-sec)">Dismissed -- no misuse</div>
+    ${hosts.map(h=>`<div class="action-host">${h}</div>
+      <div class="action-item pending">○ Create Salesforce case with Dismissed status (pending write access)</div>
+      ${note?`<div class="action-item pending">○ Add note (pending write access)</div>`:''}`).join('')}
+  </div>`;
+  if (tier==='program_team') return `<div class="action-box program">
+    <div class="action-title" style="color:var(--green)">Referred to program team</div>
+    ${hosts.map(h=>`<div class="action-host">${h}</div>
+      <div class="action-item pending">○ Create Salesforce coaching case (pending write access)</div>
+      <div class="action-item ready">✓ Create Gmail draft to program team (active)</div>
+      ${note?`<div class="action-item pending">○ Add note (pending write access)</div>`:''}`).join('')}
+  </div>`;
 
   const items = [
-    {label:'Create Salesforce case linked to Contact', ready:false},
-    {label:'Set Flag__c = true on Contact', ready:false},
-    {label:`Set Flag_Reason__c = "See case from ${rd}"`, ready:false},
-    {label:'Create Gmail draft with consequence email', ready:true},
+    {l:'Create Salesforce case linked to Contact',r:false},
+    {l:'Set Flag__c = true on Contact',r:false},
+    {l:`Set Flag_Reason__c = "See case from ${rd}"`,r:false},
+    {l:'Create Gmail draft with consequence email',r:true},
   ];
-  if (note) items.push({label:`Add note: "${note.slice(0,80)}${note.length>80?'...':''}"`, ready:false});
+  if (note) items.push({l:`Add note: "${note.slice(0,80)}${note.length>80?'...':''}"`,r:false});
   if (['nourishment_pause','suspension','deactivation'].includes(tier)) {
-    items.push({label:'Set Do_Not_Nourish__c = true', ready:false});
-    items.push({label:'Move future dinners to Not Nourishing', ready:false});
+    items.push({l:'Set Do_Not_Nourish__c = true',r:false});
+    items.push({l:'Move future dinners to Not Nourishing',r:false});
   }
   if (['suspension','deactivation'].includes(tier)) {
-    items.push({label:'Set Suspended_Flag__c = true', ready:false});
-    items.push({label:'Set Grant Application status = "Suspended"', ready:false});
+    items.push({l:'Set Suspended_Flag__c = true',r:false});
+    items.push({l:'Set Grant Application status = "Suspended"',r:false});
   }
-  if (tier === 'deactivation') {
-    items.push({label:'Alert Amalia', ready:true});
-    items.push({label:'Create Zendesk ticket for IP/account ban', ready:false});
+  if (tier==='deactivation') {
+    items.push({l:'Alert Amalia',r:true});
+    items.push({l:'Create Zendesk ticket for IP/account ban',r:false});
   }
-  items.push({label:'Manual: check DNN in backend', ready:false});
-  if (['suspension','deactivation'].includes(tier)) items.push({label:'Manual: check Banned in backend', ready:false});
+  items.push({l:'Manual: check DNN in backend',r:false});
+  if (['suspension','deactivation'].includes(tier)) items.push({l:'Manual: check Banned in backend',r:false});
 
-  return `
-    <div class="action-box ts">
-      <div class="action-title" style="color:var(--wine)">Actions queued:</div>
-      ${hosts.map(h=>`
-        <div class="action-host">${h}</div>
-        ${items.map(i=>`<div class="action-item ${i.ready?'ready':'pending'}">${i.ready?'✓':'○'} ${i.label}${i.ready?' (active)':' (pending write access)'}</div>`).join('')}`).join('')}
-    </div>`;
+  return `<div class="action-box ts">
+    <div class="action-title" style="color:var(--wine)">Actions queued:</div>
+    ${hosts.map(h=>`<div class="action-host">${h}</div>
+      ${items.map(i=>`<div class="action-item ${i.r?'ready':'pending'}">${i.r?'✓':'○'} ${i.l}${i.r?' (active)':' (pending write access)'}</div>`).join('')}`).join('')}
+  </div>`;
 }
 
-// ── flag card ─────────────────────────────────────────────────────────────
+// ── cross-host flag cards ─────────────────────────────────────────────────
 function buildFlagCard(f) {
-  const a = state.actionState[f.id] || {};
+  const a = state.actionState[f.id]||{};
   const actioned = !!a.tier;
-  const isOpen = state.openCards?.has(f.id);
-  const isProgram = f.type === 'program_policy';
+  const isOpen = state.openCards.has(f.id);
+  const isProgram = f.type==='program_policy';
 
-  return `
-    <div class="case-card" id="card-${f.id}">
-      <div class="case-header ${isOpen?'open':''}" onclick="toggleCard('${f.id}')">
-        <div class="flag-icon ${isProgram?'program':'confirm'}">${isProgram?'⊕':'⌂'}</div>
-        <div class="case-meta">
-          <div class="case-name-row">
-            <span style="font-weight:500;font-size:15px">${f.title}</span>
-            <span class="badge ${isProgram?'flag-program':'flag-confirm'}">${isProgram?'Program Policy · Not Fraud':'Confirm Rule Applied'}</span>
-            ${actioned ? '<span class="badge actioned">✓ Actioned</span>' : ''}
-          </div>
-          <div style="font-size:13px;color:var(--text-sec)">${(f.hosts||[]).map(h=>h.name).join(' · ')}</div>
+  return `<div class="case-card cross-host" id="card-${f.id}">
+    <div class="case-header ${isOpen?'open':''}" onclick="toggleCard('${f.id}')">
+      <div class="flag-icon ${isProgram?'program':'confirm'}">${isProgram?'⊕':'⌂'}</div>
+      <div class="case-meta">
+        <div class="case-name-row">
+          <span style="font-weight:500;font-size:15px">${f.title}</span>
+          <span class="badge ${isProgram?'flag-program':'flag-confirm'}">${isProgram?'Program Policy · Not Fraud':'Confirm Rule Applied'}</span>
+          ${actioned?'<span class="badge actioned">✓ Actioned</span>':''}
         </div>
-        <span class="chevron ${isOpen?'open':''}">▾</span>
+        <div style="font-size:13px;color:var(--text-sec)">${(f.hosts||[]).map(h=>h.name).join(' · ')}</div>
       </div>
-      ${isOpen ? `
-        <div class="case-body">
-          <div class="section-label">Summary</div>
-          <ul class="bullets">${(f.summary_bullets||[]).map(b=>`<li>${md(b)}</li>`).join('')}</ul>
-          ${f.similarity_pct != null ? `
-            <div class="section-label">Dinner similarity</div>
-            <div class="similarity-bar-wrap">
-              <div class="similarity-bar-bg"><div class="similarity-bar-fill" style="width:${f.similarity_pct}%"></div></div>
-              <span style="font-size:12px;color:var(--text-sec)">${f.similarity_pct}%</span>
-            </div>` : ''}
-          ${f.flags?.length ? `
-            <div class="section-label">Flags</div>
-            <div class="flag-chips">${f.flags.map(fl=>`<span class="flag-chip ${fl.type}">${fl.label}</span>`).join('')}</div>` : ''}
-          ${f.hosts?.length ? `
-            <div class="section-label">Dinners</div>
-            <table class="flag-table">
-              <colgroup><col style="width:22%"><col style="width:38%"><col style="width:18%"><col style="width:22%"></colgroup>
-              <thead><tr><th>Host</th><th>Description</th><th>Eligible</th><th>Status</th></tr></thead>
-              <tbody>${f.hosts.map(h=>`
-                <tr>
-                  <td><a class="purple-link" href="${h.sf_url||'#'}" target="_blank">${h.name}</a><div style="font-size:11px;color:var(--text-sec)">${h.dinner||''}</div></td>
-                  <td style="font-size:12px;color:var(--text-sec);line-height:1.4">${h.description||''}</td>
-                  <td>${h.eligible||''}</td>
-                  <td style="font-size:12px">${h.status||''}</td>
-                </tr>`).join('')}
-              </tbody>
-            </table>` : ''}
-          ${actioned ? buildActionChecklist(isProgram?'program_team':'confirm_rule', (f.hosts||[]).map(h=>h.name), runDate(), 'flag') : ''}
-          <div class="card-footer">
-            <button class="btn ${isProgram?'btn-green':'btn-amber'}" ${actioned?'disabled':''} onclick="actionFlag('${f.id}','${f.type}')">
-              ${actioned ? '✓ Done' : isProgram ? 'Route to program team' : 'Flag for review'}
-            </button>
-            <button class="btn-discuss" onclick="openChat(${JSON.stringify(f).replace(/'/g,"&#39;")})">Discuss ↗</button>
-          </div>
-        </div>` : ''}
-    </div>`;
+      <span class="chevron ${isOpen?'open':''}">▾</span>
+    </div>
+    ${isOpen?`<div class="case-body">
+      <div class="section-label">Summary</div>
+      <ul class="bullets">${(f.summary_bullets||[]).map(b=>`<li>${md(b)}</li>`).join('')}</ul>
+      ${f.flags?.length?`<div class="section-label">Flags</div><div class="flag-chips">${f.flags.map(fl=>`<span class="flag-chip ${fl.type}">${fl.label}</span>`).join('')}</div>`:''}
+      ${f.hosts?.length?`
+        <div class="section-label">Hosts</div>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-top:4px;">
+          ${f.hosts.map(h=>`<div style="display:flex;align-items:center;gap:8px;font-size:13px;">
+            <a class="purple-link" href="${h.sf_url||'#'}" target="_blank">${h.name} ↗</a>
+            ${h.dinner?`<span style="color:var(--text-sec)">·</span><span style="color:var(--text-sec)">${h.dinner}</span>`:''}
+            ${h.eligible?`<span style="color:var(--text-sec)">·</span><span>${h.eligible}</span>`:''}
+          </div>`).join('')}
+        </div>`:''}
+      ${actioned?buildActionChecklist(isProgram?'program_team':'confirm_rule',(f.hosts||[]).map(h=>h.name),runDate(),'flag'):''}
+      <div class="card-footer">
+        <button class="btn ${isProgram?'btn-green':'btn-amber'}" ${actioned?'disabled':''} onclick="actionFlag('${f.id}','${f.type}')">
+          ${actioned?'✓ Done':isProgram?'Route to program team':'Flag for review'}
+        </button>
+        <button class="btn-discuss" onclick="openChat(${JSON.stringify(f).replace(/"/g,'&quot;')})">Discuss ↗</button>
+      </div>
+    </div>`:''}
+  </div>`;
 }
 
 // ── insights ───────────────────────────────────────────────────────────────
 function buildInsights() {
   const ins = state.current?.insights;
   if (!ins) return '';
-  return `
-    <div class="collapsible" style="margin-top:16px;">
-      <div class="collapsible-header" onclick="toggleCollapsible(this)">Weekly Insights <span class="chevron">▾</span></div>
-      <div class="collapsible-body">
-        ${ins.patterns ? `<div class="section-label">Patterns</div><p style="font-size:13px;color:var(--text-sec);margin-bottom:12px">${ins.patterns}</p>` : ''}
-        ${ins.emerging_trends ? `<div class="section-label">Emerging Trends</div><p style="font-size:13px;color:var(--text-sec);margin-bottom:12px">${ins.emerging_trends}</p>` : ''}
-        ${ins.below_threshold?.length ? `
-          <div class="section-label">Below-threshold signals</div>
-          <table class="insights-table">
-            <thead><tr><th>Signal</th><th>Count</th><th>Threshold</th><th>Avg observed</th></tr></thead>
-            <tbody>${ins.below_threshold.map(b=>`<tr><td>${b.signal}</td><td>${b.count}</td><td>${b.threshold}</td><td>${b.avg_observed}</td></tr>`).join('')}</tbody>
-          </table>` : ''}
-        ${ins.open_questions?.length ? `
-          <div class="section-label">Open Questions</div>
-          <ul style="padding-left:16px">${ins.open_questions.map(q=>`<li style="font-size:13px;color:var(--text-sec);margin-bottom:4px">${q}</li>`).join('')}</ul>` : ''}
-      </div>
-    </div>`;
+  return `<div class="collapsible" style="margin-top:16px;">
+    <div class="collapsible-header" onclick="toggleCollapsible(this)">Weekly Insights <span class="chevron">▾</span></div>
+    <div class="collapsible-body">
+      ${ins.patterns?`<div class="section-label">Patterns</div><p style="font-size:13px;color:var(--text-sec);margin-bottom:12px">${ins.patterns}</p>`:''}
+      ${ins.emerging_trends?`<div class="section-label">Emerging Trends</div><p style="font-size:13px;color:var(--text-sec);margin-bottom:12px">${ins.emerging_trends}</p>`:''}
+      ${ins.below_threshold?.length?`<div class="section-label">Below-threshold signals</div>
+        <table class="insights-table"><thead><tr><th>Signal</th><th>Count</th><th>Threshold</th><th>Avg observed</th></tr></thead>
+        <tbody>${ins.below_threshold.map(b=>`<tr><td>${b.signal}</td><td>${b.count}</td><td>${b.threshold}</td><td>${b.avg_observed}</td></tr>`).join('')}</tbody></table>`:''}
+      ${ins.open_questions?.length?`<div class="section-label">Open Questions</div>
+        <ul style="padding-left:16px">${ins.open_questions.map(q=>`<li style="font-size:13px;color:var(--text-sec);margin-bottom:4px">${q}</li>`).join('')}</ul>`:''}
+    </div>
+  </div>`;
 }
 
 // ── slack ──────────────────────────────────────────────────────────────────
 function buildSlack(allActioned) {
   if (!allActioned) return `<div class="slack-locked">🔒 Slack summary unlocks after all cases are actioned</div>`;
-  const sl = state.current?.slack_summary || {};
-  const t = sl.totals || {};
-  const draft = [
-    `*Trust and Safety · Week of ${sl.week_of||runDate()}*`,
+  const sl = state.current?.slack_summary||{};
+  const t = sl.totals||{};
+  const draft = [`*Trust and Safety · Week of ${sl.week_of||runDate()}*`,
     `${t.suspension||0} suspensions · ${t.nourishment_pause||0} Nourishment pauses · ${t.warning||0} warnings · ${t.clusters||0} clusters`,
-    '',
-    sl.actioned?.length ? `*Actioned this week:*\n${sl.actioned.map(a=>`• ${a.name} · ${a.tier}${a.note?' · '+a.note:''}`).join('\n')}` : '',
-    sl.trends ? `\n*Trends:* ${sl.trends}` : '',
-    sl.urgent ? `\n⚠ *Urgent:* ${sl.urgent}` : '',
+    sl.actioned?.length?`\n*Actioned this week:*\n${sl.actioned.map(a=>`• ${a.name} · ${a.tier}${a.note?' · '+a.note:''}`).join('\n')}`:null,
+    sl.trends?`\n*Trends:* ${sl.trends}`:null,
+    sl.urgent?`\n⚠ *Urgent:* ${sl.urgent}`:null,
   ].filter(Boolean).join('\n');
-
-  return `
-    <div class="slack-box">
-      <div style="font-weight:500;font-size:14px;margin-bottom:10px">Slack summary — #trust-and-safety</div>
-      <textarea class="slack-draft" id="slack-draft">${draft}</textarea>
-      <button class="btn btn-primary" id="slack-send-btn" onclick="sendSlack()">Send to #trust-and-safety</button>
-    </div>`;
+  return `<div class="slack-box">
+    <div style="font-weight:500;font-size:14px;margin-bottom:10px">Slack summary — #trust-and-safety</div>
+    <textarea class="slack-draft" id="slack-draft">${draft}</textarea>
+    <button class="btn btn-primary" id="slack-send-btn" onclick="sendSlack()">Send to #trust-and-safety</button>
+  </div>`;
 }
 
 // ── history view ───────────────────────────────────────────────────────────
 function buildHistoryView() {
-  return `
-    <div style="font-weight:600;font-size:16px;margin-bottom:16px">Run History</div>
-    ${state.runs.length === 0 ? '<div style="font-size:14px;color:var(--text-sec)">No runs saved yet.</div>' :
-      state.runs.map((r,i) => `
-        <div class="history-item" onclick="loadRun(${i})">
-          <div>
-            <div style="font-weight:500;font-size:14px">Week of ${r.run?.week_of||'unknown'}</div>
-            <div style="font-size:12px;color:var(--text-sec);margin-top:2px">
-              ${r.run?.summary?.suspension||0} suspension · ${r.run?.summary?.nourishment_pause||0} pause · ${r.run?.summary?.warning||0} warning · ${r.run?.dinners_reviewed||0} dinners
-            </div>
-          </div>
-          <span style="font-size:12px;color:var(--text-sec)">View →</span>
-        </div>`).join('')}`;
+  return `<div style="font-weight:600;font-size:16px;margin-bottom:16px">Run History</div>
+    ${state.runs.length===0?'<div style="font-size:14px;color:var(--text-sec)">No runs saved yet.</div>':
+      state.runs.map((r,i)=>`<div class="history-item" onclick="loadRun(${i})">
+        <div><div style="font-weight:500;font-size:14px">Week of ${r.run?.week_of||'unknown'}</div>
+          <div style="font-size:12px;color:var(--text-sec);margin-top:2px">${r.run?.summary?.suspension||0} suspension · ${r.run?.summary?.nourishment_pause||0} pause · ${r.run?.summary?.warning||0} warning · ${r.run?.dinners_reviewed||0} dinners</div>
+        </div><span style="font-size:12px;color:var(--text-sec)">View →</span>
+      </div>`).join('')}`;
 }
 
 // ── chat panel ─────────────────────────────────────────────────────────────
-function buildChatPanel() {
-  const c = state.activeChat;
-  const msgs = state.chatMessages || [];
-  return `
-    <div class="chat-panel">
-      <div class="chat-header">
-        <div>
-          <div class="chat-header-name">Discuss: ${c.name||c.title}</div>
-          <div class="chat-header-sub">Score ${c.score||''} · ${tierLabel(c.tier||'')}</div>
-        </div>
-        <button class="chat-close" onclick="closeChat()">×</button>
-      </div>
-      <div class="chat-messages" id="chat-messages">
-        ${msgs.map(m=>`
-          <div class="chat-msg ${m.role}">
-            <div class="chat-bubble ${m.role} ${m.thinking?'thinking':''}">${md(m.content)}</div>
-          </div>`).join('')}
-      </div>
-      <div class="chat-quick">
-        ${['Why this score?','Draft outreach email','What to check in SF?','Explain the signals'].map(q=>
-          `<button class="chat-quick-btn" onclick="setChat('${q}')">${q}</button>`).join('')}
-      </div>
-      <div class="chat-input-row">
-        <input class="chat-input" id="chat-input" placeholder="Ask anything about this case..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat()}" value="${state.chatInput||''}">
-        <button class="chat-send" id="chat-send" onclick="sendChat()">↑</button>
-      </div>
-    </div>`;
-}
-
-// ── events ─────────────────────────────────────────────────────────────────
-function attachEvents() {
-  // auto-scroll chat
-  const cm = document.getElementById('chat-messages');
-  if (cm) cm.scrollTop = cm.scrollHeight;
-}
-
-function switchView(v) { state.view = v; render(); }
-function setFilter(f) { state.filter = f; render(); }
-
-function toggleCard(id) {
-  if (!state.openCards) state.openCards = new Set();
-  if (state.openCards.has(id)) state.openCards.delete(id);
-  else state.openCards.add(id);
-  render();
-}
-
-function toggleCollapsible(el) {
-  const body = el.nextElementSibling;
-  const chevron = el.querySelector('.chevron');
-  const isOpen = body.classList.contains('open');
-  body.classList.toggle('open');
-  if (chevron) chevron.style.transform = isOpen ? '' : 'rotate(180deg)';
-}
-
-function toggleOverride(id) {
-  state.overrideOpen = state.overrideOpen === id ? null : id;
-  render();
-}
-
-function approveCase(id, tier, isCluster) {
-  if (isCluster && state.clusterWarning !== id) { state.clusterWarning = id; render(); return; }
-  state.actionState[id] = { ...state.actionState[id], tier };
-  state.clusterWarning = null;
-  state.overrideOpen = null;
-  render();
-}
-
-function confirmCluster(id) {
-  const tier = (state.current.cases||[]).find(c=>c.id===id)?.tier || 'suspension';
-  state.actionState[id] = { ...state.actionState[id], tier };
-  state.clusterWarning = null;
-  render();
-}
-function cancelCluster() { state.clusterWarning = null; render(); }
-
-function confirmOverride(id) {
-  const tierEl = document.getElementById(`override-tier-${id}`);
-  const reasonEl = document.getElementById(`override-reason-${id}`);
-  if (!tierEl?.value) return;
-  state.actionState[id] = { ...state.actionState[id], tier: tierEl.value, reason: reasonEl?.value };
-  state.overrideOpen = null;
-  render();
-}
-
-function actionFlag(id, type) {
-  state.actionState[id] = { tier: type };
-  render();
-}
-
-function saveNote(id, val) {
-  state.actionState[id] = { ...state.actionState[id], note: val };
-  // Save runs with notes
-  if (state.current) {
-    const idx = state.runs.findIndex(r => r.id === state.current.id);
-    if (idx >= 0) { state.runs[idx]._actionState = state.actionState; saveRuns(state.runs); }
-  }
-}
-
-function sendSlack() {
-  const btn = document.getElementById('slack-send-btn');
-  if (btn) { btn.textContent = '✓ Sent to Slack'; btn.disabled = true; }
-}
-
-function loadRun(idx) {
-  state.current = state.runs[idx];
-  state.actionState = state.current._actionState || {};
-  state.openCards = new Set();
-  state.filter = 'all';
-  state.view = 'review';
-  render();
-}
-
-// ── load from file ─────────────────────────────────────────────────────────
-async function autoLoad() {
-  const statusEl = document.getElementById('load-status');
-  if (statusEl) statusEl.innerHTML = '<div class="load-status" style="background:var(--khaki-light)">Loading ts_ui_data.json...</div>';
-  const data = await tryLoadFromFile();
-  if (!data) {
-    if (statusEl) statusEl.innerHTML = '<div class="load-status error">Could not load ts_ui_data.json. Make sure the file is in the same folder as this HTML file and Claude Code has run the review.</div>';
-    return;
-  }
-  loadData(data);
-}
-
-function handleFileUpload(event) {
-  const file = event.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = e => {
-    try {
-      const data = JSON.parse(e.target.result);
-      loadData(data);
-    } catch {
-      const statusEl = document.getElementById('load-status');
-      if (statusEl) statusEl.innerHTML = '<div class="load-status error">Could not parse JSON file.</div>';
-    }
-  };
-  reader.readAsText(file);
-}
-
-function loadData(data) {
-  const run = { ...data, id: Date.now(), loadedAt: new Date().toISOString() };
-  state.runs = [run, ...state.runs].slice(0, 24);
-  saveRuns(state.runs);
-  state.current = run;
-  state.actionState = {};
-  state.openCards = new Set();
-  state.filter = 'all';
-  state.view = 'review';
-  render();
-}
-
-// ── chat ───────────────────────────────────────────────────────────────────
 const CHAT_SYSTEM = `You are the OneTable Trust and Safety case advisor. You help staff review individual host cases flagged during the weekly T&S review. You know the full signal definitions, scoring rules, consequence framework, and policy.
 
 Key rules:
 - Warning: 1-8 | Nourishment Pause: 9-17 | Suspension: 18-39 | Deactivation: 40+
-- First instance rule: even at 40+, first consequence is Suspension
-- Every signal requires pairing except: Signal 1 (shared host/guest FP), Signal 12 (hard bounces), Signals 21-23
-- Sequential PIDs: gap ≤ 2, denominator = ALL guests
+- First instance rule: even at 40+, first consequence is Suspension not Deactivation
+- Every signal requires pairing except: Shared device FP host+guest (Signal 1), Hard bounces (Signal 12), Reports from users (Signal 21), Deliberate fraud (Signal 22), Deliberate identity change (Signal 23)
+- Sequential PIDs: gap ≤ 2, denominator = ALL guests not just profiled guests
+- Device FP signals require minimum 3 guests at dinner
 - Tier determined by score only -- never override based on narrative
 
-Answer questions directly and concisely. You can draft outreach emails, explain signal math, suggest Salesforce checks, or discuss edge cases. Stay grounded in the data provided.`;
+Answer directly and concisely. You can draft outreach emails, explain signal math, suggest Salesforce checks, or discuss edge cases. Stay grounded in the data provided. Never invent facts.`;
 
 function openChat(c) {
   state.activeChat = c;
-  state.chatMessages = [{
-    role: 'assistant',
-    content: `I'm looking at the **${c.name||c.title}** case${c.score?' (score '+c.score+' → '+(tierLabel(c.tier))+')':''}. What would you like to know?`
-  }];
+  state.chatMessages = [{role:'assistant', content:`I'm looking at the **${c.name||c.title}** case${c.score?' (score '+c.score+' → '+tierLabel(c.tier)+')':''}. What would you like to know?`}];
   state.chatInput = '';
   render();
 }
 
-function closeChat() { state.activeChat = null; state.chatMessages = []; render(); }
-function setChat(q) {
-  const input = document.getElementById('chat-input');
-  if (input) { input.value = q; state.chatInput = q; }
+function closeChat() { state.activeChat=null; state.chatMessages=[]; render(); }
+function setChat(q) { const el=document.getElementById('chat-input'); if(el){el.value=q; state.chatInput=q;} }
+
+function buildChatPanel() {
+  const c = state.activeChat;
+  const msgs = state.chatMessages||[];
+  return `<div class="chat-panel">
+    <div class="chat-header">
+      <div><div class="chat-header-name">Discuss: ${c.name||c.title||''}</div>
+        <div class="chat-header-sub">Score ${c.score||''} · ${tierLabel(c.tier||'')}</div></div>
+      <button class="chat-close" onclick="closeChat()">×</button>
+    </div>
+    <div class="chat-messages" id="chat-messages">
+      ${msgs.map(m=>`<div class="chat-msg ${m.role}"><div class="chat-bubble ${m.role}">${md(m.content)}</div></div>`).join('')}
+      ${state.chatLoading?'<div class="chat-msg assistant"><div class="chat-bubble assistant" style="color:var(--text-sec)">Thinking...</div></div>':''}
+    </div>
+    <div class="chat-quick">
+      ${['Why this score?','Draft outreach email','What to check in SF?','Explain the signals'].map(q=>`<button class="chat-quick-btn" onclick="setChat('${q}')">${q}</button>`).join('')}
+    </div>
+    <div class="chat-input-row">
+      <input class="chat-input" id="chat-input" placeholder="Ask anything about this case..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat();}" value="${state.chatInput||''}">
+      <button class="chat-send" onclick="sendChat()" ${state.chatLoading?'disabled':''}>↑</button>
+    </div>
+  </div>`;
 }
 
 async function sendChat() {
-  const input = document.getElementById('chat-input');
-  const msg = input?.value?.trim();
-  if (!msg || state.chatLoading) return;
-
+  const el = document.getElementById('chat-input');
+  const msg = el?.value?.trim();
+  if (!msg||state.chatLoading) return;
   const c = state.activeChat;
-  const caseCtx = `Case data:
-Host: ${c.name||c.title}
-Tier: ${c.tier||''} | Score: ${c.score||''}
-Nourishment: ${c.nourishment_received||''}
-Suspended: ${c.suspended} | DNN: ${c.dnn}
+  const ctx = `Case: ${c.name||c.title} | Tier: ${c.tier||''} | Score: ${c.score||''} | Nourishment: ${c.nourishment_received||''} | Suspended: ${c.suspended} | DNN: ${c.dnn}
 Score breakdown: ${c.score_breakdown||''}
-Signals triggered: ${(c.signals||[]).filter(s=>s.triggered).map(s=>`${s.name} (${s.observed||''}, +${s.score_contribution})`).join('; ')}
+Signals triggered: ${(c.signals||[]).filter(s=>s.triggered).map(s=>`${s.name} (${s.observed||''} +${s.score_contribution})`).join('; ')}
 Host context: ${JSON.stringify(c.host_context||{})}
-Summary: ${(c.bullets||[]).join(' | ')}`;
+Summary: ${(c.bullets||[]).map(b=>b.replace(/\*\*/g,'')).join(' | ')}`;
 
   state.chatMessages = [...(state.chatMessages||[]), {role:'user', content:msg}];
   state.chatLoading = true;
@@ -913,14 +625,10 @@ Summary: ${(c.bullets||[]).join(' | ')}`;
   try {
     const history = (state.chatMessages||[]).slice(0,-1).map(m=>({role:m.role, content:m.content}));
     const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 1000,
-        system: CHAT_SYSTEM + '\n\n' + caseCtx,
-        messages: [...history, {role:'user', content:msg}],
-      })
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({model:'claude-sonnet-4-6', max_tokens:1000,
+        system: CHAT_SYSTEM+'\n\n'+ctx,
+        messages:[...history,{role:'user',content:msg}]})
     });
     const data = await res.json();
     const text = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
@@ -932,16 +640,111 @@ Summary: ${(c.bullets||[]).join(' | ')}`;
   render();
 }
 
-// ── boot ───────────────────────────────────────────────────────────────────
-// On load, try to auto-load ts_ui_data.json
-(async () => {
+// ── event handlers ─────────────────────────────────────────────────────────
+function switchView(v) { state.view=v; render(); }
+function setFilter(f) { state.filter=f; render(); }
+
+function toggleCard(id) {
+  if (state.openCards.has(id)) state.openCards.delete(id);
+  else state.openCards.add(id);
   render();
-  // Try auto-loading after a tick
-  setTimeout(async () => {
-    const data = await tryLoadFromFile();
-    if (data) loadData(data);
-  }, 100);
-})();
+}
+
+function toggleCollapsible(el) {
+  const body = el.nextElementSibling;
+  const ch = el.querySelector('.chevron');
+  const open = body.classList.toggle('open');
+  if (ch) ch.style.transform = open ? 'rotate(180deg)' : '';
+}
+
+function toggleOverride(id) { state.overrideOpen = state.overrideOpen===id ? null : id; render(); }
+
+function approveCase(id, tier, isCluster) {
+  if (isCluster && state.clusterWarning!==id) { state.clusterWarning=id; render(); return; }
+  state.actionState[id] = {...state.actionState[id], tier};
+  state.clusterWarning = null;
+  state.overrideOpen = null;
+  render();
+}
+
+function confirmCluster(id) {
+  const tier = (state.current.cases||[]).find(c=>c.id===id)?.tier||'suspension';
+  state.actionState[id] = {...state.actionState[id], tier};
+  state.clusterWarning = null;
+  render();
+}
+function cancelCluster() { state.clusterWarning=null; render(); }
+
+function confirmOverride(id) {
+  const t = document.getElementById(`override-tier-${id}`)?.value;
+  const r = document.getElementById(`override-reason-${id}`)?.value;
+  if (!t) return;
+  state.actionState[id] = {...state.actionState[id], tier:t, reason:r};
+  state.overrideOpen = null;
+  render();
+}
+
+function actionFlag(id, type) { state.actionState[id]={tier:type}; render(); }
+
+function saveNote(id, val) {
+  state.actionState[id] = {...state.actionState[id], note:val};
+  if (state.current) {
+    const idx = state.runs.findIndex(r=>r.id===state.current.id);
+    if (idx>=0) { state.runs[idx]._actionState=state.actionState; saveRuns(state.runs); }
+  }
+}
+
+function sendSlack() {
+  const btn=document.getElementById('slack-send-btn');
+  if (btn) { btn.textContent='✓ Sent to Slack'; btn.disabled=true; }
+}
+
+function loadRun(idx) {
+  state.current = state.runs[idx];
+  state.actionState = state.current._actionState||{};
+  state.openCards = new Set();
+  state.filter = 'all';
+  state.view = 'review';
+  render();
+}
+
+async function autoLoad() {
+  const el = document.getElementById('load-status');
+  if (el) el.innerHTML = '<div class="load-status" style="background:var(--khaki-light)">Loading ts_ui_data.json...</div>';
+  const data = await tryLoadFromFile();
+  if (!data) {
+    if (el) el.innerHTML = '<div class="load-status error">Could not load ts_ui_data.json. Make sure the file is in the same folder and Claude Code has run the review.</div>';
+    return;
+  }
+  loadData(data);
+}
+
+function handleFileUpload(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try { loadData(JSON.parse(ev.target.result)); }
+    catch { const el=document.getElementById('load-status'); if(el) el.innerHTML='<div class="load-status error">Could not parse JSON file.</div>'; }
+  };
+  reader.readAsText(file);
+}
+
+function loadData(data) {
+  const run = {...data, id:Date.now(), loadedAt:new Date().toISOString()};
+  state.runs = [run,...state.runs].slice(0,24);
+  saveRuns(state.runs);
+  state.current = run;
+  state.actionState = {};
+  state.openCards = new Set();
+  state.filter = 'all';
+  state.view = 'review';
+  render();
+}
+
+// ── boot ───────────────────────────────────────────────────────────────────
+render();
+setTimeout(async () => { const d=await tryLoadFromFile(); if(d) loadData(d); }, 100);
 </script>
 </body>
 </html>
