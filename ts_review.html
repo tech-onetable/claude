@@ -71,6 +71,7 @@
   .cluster-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
   .cluster-table th { text-align: left; font-weight: 500; color: var(--text-sec); padding: 6px 8px; border-bottom: 0.5px solid var(--border); font-size: 12px; }
   .cluster-table td { padding: 8px; border-bottom: 0.5px solid var(--border); vertical-align: top; }
+  .cluster-ctx-table td { padding: 5px 8px; border-bottom: 0.5px solid var(--border); font-size: 12px; vertical-align: top; }
   .cluster-banner { background: #FAEEDA; border-left: 3px solid #BA7517; padding: 8px 12px; font-size: 13px; color: var(--amber-dark); border-radius: 0 6px 6px 0; margin: 12px 0 4px; }
   .badge { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 6px; font-size: 12px; font-weight: 500; }
   .badge.suspension { background: var(--wine-light); color: var(--wine); }
@@ -425,26 +426,41 @@ function buildCaseBody(c, a, actioned, displayTier) {
 // ── per-host context panels for clusters ─────────────────────────────────
 function buildHostContextPanels(c) {
   if (!c.is_cluster || !c.cluster_hosts?.length) {
-    // Single host -- use top-level host_context
     if (!c.host_context) return '';
     return `<div class="collapsible">
       <div class="collapsible-header" onclick="toggleCollapsible(this)">Host Context Profile <span class="chevron">▾</span></div>
       <div class="collapsible-body">${buildContextGrid(c.host_context)}</div>
     </div>`;
   }
-  // Cluster: one collapsible per host
-  // host_context may be on the cluster_host object, or keyed by name in c.host_contexts, or fall back to c.host_context
-  return c.cluster_hosts.map((h, i) => {
-    const ctx = h.host_context || (c.host_contexts && c.host_contexts[h.name]) || (i === 0 ? c.host_context : null);
-    if (!ctx) return `<div class="collapsible">
-      <div class="collapsible-header" onclick="toggleCollapsible(this)">Host Context — ${h.name} <span class="chevron">▾</span></div>
-      <div class="collapsible-body"><p style="font-size:13px;color:var(--text-sec)">Context pending — query Salesforce for this host.</p></div>
-    </div>`;
-    return `<div class="collapsible">
-      <div class="collapsible-header" onclick="toggleCollapsible(this)">Host Context — ${h.name} <span class="chevron">▾</span></div>
-      <div class="collapsible-body">${buildContextGrid(ctx)}</div>
-    </div>`;
-  }).join('');
+
+  // Combined cluster context table
+  const rows = c.cluster_hosts.map(h => `<tr>
+    <td><a class="purple-link" href="${h.sf_url}" target="_blank">${h.name}</a></td>
+    <td>${h.applied_date||'—'}</td>
+    <td>${h.tenure||'—'}</td>
+    <td>${h.dinners_hosted||'—'}</td>
+    <td>${h.nourishment_received||'—'}</td>
+    <td>${h.prior_ts_cases||'—'}</td>
+    <td>${h.dnn||'—'}</td>
+    <td>${h.suspended||'—'}</td>
+    <td>${h.dinner_date||'—'}</td>
+    <td>${h.future_dinners||'0'}</td>
+  </tr>`).join('');
+
+  return `<div class="collapsible">
+    <div class="collapsible-header" onclick="toggleCollapsible(this)">Combined Host Context <span class="chevron">▾</span></div>
+    <div class="collapsible-body" style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:700px">
+        <thead><tr style="border-bottom:1px solid var(--border)">
+          ${['Host','Applied','Tenure','Dinners','Nourishment','T&S Cases','DNN','Suspended','This dinner','Future'].map(h=>`<th style="text-align:left;padding:5px 8px;color:var(--text-sec);font-weight:500;white-space:nowrap">${h}</th>`).join('')}
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div style="margin-top:10px;text-align:right">
+        <button class="btn-discuss" onclick="requestDeepDive(${JSON.stringify(c).replace(/"/g,'&quot;')})">Request deep dive ↗</button>
+      </div>
+    </div>
+  </div>`;
 }
 
 function buildContextGrid(ctx) {
@@ -608,6 +624,32 @@ Key rules:
 - Tier determined by score only -- never override based on narrative
 
 Answer directly and concisely. You can draft outreach emails, explain signal math, suggest Salesforce checks, or discuss edge cases. Stay grounded in the data provided. Never invent facts.`;
+
+function requestDeepDive(c) {
+  const hosts = c.cluster_hosts || [];
+  const ctx = `CLUSTER DEEP DIVE REQUEST
+
+Cluster: ${c.name}
+Device FP: ${(c.cluster_note||'').match(/\[([a-f0-9]+)\]/)?.[1] || 'see cluster_note'}
+Tier: ${c.tier} | Top score: ${c.score} | Combined Nourishment: ${c.nourishment_received}
+
+Hosts:
+${hosts.map(h => `- ${h.name} | Applied: ${h.applied_date||'unknown'} | ${h.dinners_hosted||'?'} dinners | ${h.nourishment_received} | T&S cases: ${h.prior_ts_cases||'?'} | This dinner: ${h.dinner_date||'?'}`).join('\n')}
+
+SF Contact URLs:
+${hosts.map(h => `- ${h.name}: ${h.sf_url}`).join('\n')}
+
+Please run the following deep dive analysis:
+1. Query all past campaign dates for each host and identify any nights where 2+ cluster members posted dinners on the same date
+2. Compare dinner descriptions across cluster members for similarity or templated language
+3. Note any other patterns in hosting history that suggest coordination`;
+
+  navigator.clipboard.writeText(ctx).then(() => {
+    alert('Deep dive request copied to clipboard. Paste into the review chat to run the analysis.');
+  }).catch(() => {
+    prompt('Copy this deep dive request and paste into the review chat:', ctx);
+  });
+}
 
 function openChat(c) {
   state.activeChat = c;
