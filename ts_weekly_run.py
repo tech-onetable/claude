@@ -638,13 +638,19 @@ def run(csv_path):
         addr = normalize_address(camp.get('address', ''))
         host = camp['host']
         if addr and host:
+            eligible_raw = host.get('Total Eligible Nourishment', '')
+            try:
+                eligible_str = f"${float(eligible_raw):,.0f}" if eligible_raw else '—'
+            except:
+                eligible_str = eligible_raw or '—'
             addresses[addr].append({
                 'cid': cid,
                 'contact_id': host.get('Contact ID', ''),
                 'name': (host.get('First Name', '') + ' ' + host.get('Last Name', '')).strip(),
                 'address': camp.get('address', ''),
                 'dinner_name': camp.get('name', ''),
-                'description': camp.get('description', '') or '',  # Campaign Description from CSV
+                'description': camp.get('description', '') or '',
+                'eligible': eligible_str,
             })
     same_address = {addr: hosts for addr, hosts in addresses.items() if len(hosts) >= 2}
 
@@ -916,16 +922,13 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns):
         for h in hosts:
             sf = sf_results.get(h['contact_id'], {})
             host_id_18 = sf.get('Id', sf_15_to_18(h['contact_id']))
-            eligible = sf.get('Total_Eligible_Nourishment__c')
-            eligible_str = f"${eligible:,.0f}" if eligible is not None else '—'
             flag_hosts.append({
                 'name': h['name'],
                 'sf_url': SF_BASE.format(host_id_18),
                 'dinner': h.get('dinner_name', ''),
                 'dinner_url': SF_CAMPAIGN_BASE.format(h['cid']),
                 'description': (h.get('description', '') or '')[:200],
-                'eligible': eligible_str,
-                'status': 'pending',
+                'eligible': h.get('eligible', '—'),
             })
         cross_host_flags.append({
             'id': f"flag-{addr[:20].replace(' ','-')}",
@@ -1024,7 +1027,6 @@ def run_pass2(pass1_output, sf):
         'Unique_Guests_Last_12_Months__c', 'Had_Benchmark_Checkin__c',
         'Host_Application_Date__c',
         'Guest_to_Host_formula__c', 'Times_Attended_as_Guest__c',
-        'Total_Eligible_Nourishment__c',
     ]
 
     all_ids = list(set(
