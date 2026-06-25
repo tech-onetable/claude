@@ -772,7 +772,6 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns):
             app_date = sf.get('Host_Application_Date__c', d.get('host_app', ''))
             if app_date:
                 try:
-                    from datetime import datetime
                     app_dt = datetime.strptime(str(app_date)[:10], '%Y-%m-%d')
                     delta = REVIEW_DATE - app_dt
                     tenure_str = f"{delta.days // 30} months" if delta.days >= 30 else f"{delta.days} days"
@@ -789,7 +788,6 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns):
             new_host_flag = False
             if app_date:
                 try:
-                    from datetime import datetime
                     app_dt = datetime.strptime(str(app_date)[:10], '%Y-%m-%d')
                     new_host_flag = (REVIEW_DATE - app_dt).days <= 90
                 except:
