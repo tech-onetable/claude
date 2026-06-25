@@ -463,6 +463,11 @@ def build_case_json(cid, camp, scored_signals, score, tier, sf_data=None):
     benchmark = bool(sf_data.get('Had_Benchmark_Checkin__c')) if sf_data else None
     app_date = sf_data.get('Host_Application_Date__c') if sf_data else host.get('Host Application Date', '')
 
+    # Future dinners from Pass 2
+    future_list = sf_data.get('_future_dinners', []) if sf_data else []
+    future_count = len(future_list)
+    future_dinners_str = str(future_count) if future_count > 0 else '0'
+
     # New host check
     new_host = False
     if app_date:
@@ -518,7 +523,7 @@ def build_case_json(cid, camp, scored_signals, score, tier, sf_data=None):
         'score': score,
         'sf_url': sf_url,
         'nourishment_received': nourishment,
-        'future_dinners': 'unknown',
+        'future_dinners': future_dinners_str,
         'suspended': suspended,
         'dnn': dnn,
         'collapsed_summary': collapsed,
@@ -529,7 +534,7 @@ def build_case_json(cid, camp, scored_signals, score, tier, sf_data=None):
             'tenure': tenure_str,
             'dinners_hosted': str(int(dinners_hosted)) if dinners_hosted is not None else 'pending',
             'nourishment_received': nourishment,
-            'future_dinners': 'unknown',
+            'future_dinners': future_dinners_str,
             'dnn': 'Yes · active' if dnn else 'No',
             'benchmark_call': ('Yes' if benchmark else 'No') if benchmark is not None else 'pending',
             'prior_ts_cases': str(int(prior_cases)) if prior_cases is not None else 'pending',
@@ -797,7 +802,7 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns):
                 'tenure': tenure_str,
                 'dinners_hosted': str(int(dinners_hosted)) if dinners_hosted is not None else 'pending',
                 'nourishment_received': n_str,
-                'future_dinners': 'unknown',
+                'future_dinners': str(len(sf.get('_future_dinners', []))),
                 'dnn': 'Yes · active' if dnn_sf else 'No',
                 'benchmark_call': ('Yes' if benchmark else 'No') if benchmark is not None else 'pending',
                 'prior_ts_cases': str(int(prior_cases)) if prior_cases is not None else 'pending',
@@ -815,7 +820,7 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns):
                 'sf_url': SF_BASE.format(host_id_18),
                 'score': d['score'],
                 'nourishment_received': n_str,
-                'future_dinners': 'unknown',
+                'future_dinners': str(len(sf.get('_future_dinners', []))),
                 'address': d['address'],
                 'key_signals': ', '.join(
                     v['name'] for v in sorted(d['signals'].values(),
@@ -866,7 +871,7 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns):
             'score': top_score,
             'sf_url': cluster_hosts[0]['sf_url'] if cluster_hosts else '',
             'nourishment_received': combined_n,
-            'future_dinners': 'unknown',
+            'future_dinners': str(sum(len(sf_results.get(h['sf_url'].split('/')[-2], {}).get('_future_dinners', [])) for h in cluster_hosts)),
             'suspended': False,
             'dnn': False,
             'collapsed_summary': f"{len(members)}-host cluster · top score {top_score} · {combined_n}",
@@ -883,7 +888,7 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns):
                 'tenure': 'see individual cases below',
                 'dinners_hosted': 'see individual cases below',
                 'nourishment_received': combined_n,
-                'future_dinners': 'unknown',
+                'future_dinners': str(sum(len(h.get('_future_dinners', [])) for h in [sf_results.get(ch['sf_url'].split('/')[-2], {}) for ch in cluster_hosts])),
                 'dnn': 'see individual cases below',
                 'benchmark_call': 'see individual cases below',
                 'prior_ts_cases': 'see individual cases below',
@@ -1064,6 +1069,49 @@ def run_pass2(pass1_output, sf):
             print(f"[T&S]   batch {i//BATCH + 1} error: {e}", file=sys.stderr)
 
     print(f"[T&S] Pass 2 complete: {len(sf_results)//2} contacts retrieved", file=sys.stderr)
+
+    # ── Future dinners query ─────────────────────────────────────────────────
+    # Query upcoming campaigns hosted by flagged contacts
+    future_dinners_by_contact = {}
+    today_str = REVIEW_DATE.strftime('%Y-%m-%d')
+    try:
+        # Build set of 18-char IDs for the query
+        ids_18 = list(set(r['Id'] for r in sf_results.values() if 'Id' in r))
+        for i in range(0, len(ids_18), 50):
+            batch = ids_18[i:i+50]
+            ids_str = "', '".join(batch)
+            future_soql = (
+                f"SELECT CampaignId, Campaign.Name, Campaign.StartDate, Campaign.Status, "
+                f"Campaign.Do_Not_Nourish__c, ContactId "
+                f"FROM CampaignMember "
+                f"WHERE Status = 'Host' "
+                f"AND ContactId IN ('{ids_str}') "
+                f"AND Campaign.StartDate >= {today_str} "
+                f"ORDER BY Campaign.StartDate ASC "
+                f"LIMIT 200"
+            )
+            result = sf.query(future_soql)
+            for rec in result.get('records', []):
+                cid = rec.get('ContactId', '')
+                if cid not in future_dinners_by_contact:
+                    future_dinners_by_contact[cid] = []
+                future_dinners_by_contact[cid].append({
+                    'id': rec.get('CampaignId', ''),
+                    'name': rec.get('Campaign', {}).get('Name', ''),
+                    'date': rec.get('Campaign', {}).get('StartDate', ''),
+                    'status': rec.get('Campaign', {}).get('Status', ''),
+                    'dnn': rec.get('Campaign', {}).get('Do_Not_Nourish__c', False),
+                })
+        print(f"[T&S] Future dinners: {len(future_dinners_by_contact)} hosts with upcoming dinners", file=sys.stderr)
+    except Exception as e:
+        print(f"[T&S] Future dinners query error: {e}", file=sys.stderr)
+
+    # Attach future dinner counts to sf_results for easy lookup
+    for id18, record in sf_results.items():
+        if len(id18) == 18:
+            future = future_dinners_by_contact.get(id18, [])
+            record['_future_dinners'] = future
+
     return sf_results
 
 
