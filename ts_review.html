@@ -231,13 +231,12 @@ function buildLoadView() {
   return `<div class="load-panel">
     <div class="load-icon">📋</div>
     <div class="load-title">Load Weekly Run</div>
-    <div class="load-sub">Auto-loads <code>ts_ui_data.json</code> from the same folder. After Claude Code runs the review, click Refresh.</div>
-    <div style="display:flex;gap:10px;justify-content:center;margin-bottom:16px;">
-      <button class="btn btn-primary" onclick="autoLoad()">↻ Refresh from file</button>
-      <label class="btn btn-secondary" style="cursor:pointer;">Or upload JSON<input type="file" accept=".json" style="display:none" onchange="handleFileUpload(event)"></label>
-    </div>
+    <div class="load-sub">Auto-loads <code>ts_ui_data.json</code> from the same folder, or paste the JSON below.</div>
+    <button class="btn btn-primary" onclick="autoLoad()" style="margin-bottom:16px;">↻ Refresh from file</button>
     <div id="load-status"></div>
-    ${state.runs.length>0?`<div style="margin-top:24px;font-size:13px;color:var(--text-sec);">Or <a href="#" onclick="switchView('history');return false;" style="color:var(--wine);">view a previous run</a>.</div>`:''}
+    <textarea id="paste-input" placeholder="Or paste ts_ui_data JSON here..." style="width:100%;min-height:120px;padding:10px;border-radius:8px;border:0.5px solid var(--border);font-size:13px;font-family:monospace;resize:vertical;margin-bottom:10px;"></textarea>
+    <button class="btn btn-primary" onclick="loadFromPaste()" style="width:100%;">Load from paste</button>
+    ${state.runs.length>0?`<div style="margin-top:16px;font-size:13px;color:var(--text-sec);">Or <a href="#" onclick="switchView('history');return false;" style="color:var(--wine);">view a previous run</a>.</div>`:''}
   </div>`;
 }
 
@@ -398,7 +397,7 @@ function buildCaseBody(c, a, actioned, displayTier) {
 // ── per-host context panels for clusters ─────────────────────────────────
 function buildHostContextPanels(c) {
   if (!c.is_cluster || !c.cluster_hosts?.length) {
-    // Single host
+    // Single host -- use top-level host_context
     if (!c.host_context) return '';
     return `<div class="collapsible">
       <div class="collapsible-header" onclick="toggleCollapsible(this)">Host Context Profile <span class="chevron">▾</span></div>
@@ -406,11 +405,16 @@ function buildHostContextPanels(c) {
     </div>`;
   }
   // Cluster: one collapsible per host
-  return c.cluster_hosts.map(h => {
-    if (!h.host_context) return '';
+  // host_context may be on the cluster_host object, or keyed by name in c.host_contexts, or fall back to c.host_context
+  return c.cluster_hosts.map((h, i) => {
+    const ctx = h.host_context || (c.host_contexts && c.host_contexts[h.name]) || (i === 0 ? c.host_context : null);
+    if (!ctx) return `<div class="collapsible">
+      <div class="collapsible-header" onclick="toggleCollapsible(this)">Host Context — ${h.name} <span class="chevron">▾</span></div>
+      <div class="collapsible-body"><p style="font-size:13px;color:var(--text-sec)">Context pending — query Salesforce for this host.</p></div>
+    </div>`;
     return `<div class="collapsible">
       <div class="collapsible-header" onclick="toggleCollapsible(this)">Host Context — ${h.name} <span class="chevron">▾</span></div>
-      <div class="collapsible-body">${buildContextGrid(h.host_context)}</div>
+      <div class="collapsible-body">${buildContextGrid(ctx)}</div>
     </div>`;
   }).join('');
 }
@@ -717,6 +721,19 @@ async function autoLoad() {
     return;
   }
   loadData(data);
+}
+
+function loadFromPaste() {
+  const el = document.getElementById('paste-input');
+  const text = el?.value?.trim();
+  if (!text) return;
+  try {
+    const data = JSON.parse(text);
+    loadData(data);
+  } catch {
+    const statusEl = document.getElementById('load-status');
+    if (statusEl) statusEl.innerHTML = '<div class="load-status error">Could not parse JSON. Make sure you pasted the full ts_ui_data block.</div>';
+  }
 }
 
 function handleFileUpload(e) {
