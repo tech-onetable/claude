@@ -443,7 +443,6 @@ function buildHostContextPanels(c) {
     <td>${h.prior_ts_cases||'—'}</td>
     <td>${h.dnn||'—'}</td>
     <td>${h.suspended||'—'}</td>
-    <td>${h.dinner_date||'—'}</td>
     <td>${h.future_dinners||'0'}</td>
   </tr>`).join('');
 
@@ -452,7 +451,7 @@ function buildHostContextPanels(c) {
     <div class="collapsible-body" style="overflow-x:auto">
       <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:700px">
         <thead><tr style="border-bottom:1px solid var(--border)">
-          ${['Host','Applied','Tenure','Dinners','Nourishment','T&S Cases','DNN','Suspended','This dinner','Future'].map(h=>`<th style="text-align:left;padding:5px 8px;color:var(--text-sec);font-weight:500;white-space:nowrap">${h}</th>`).join('')}
+          ${['Host','Applied','Tenure','Dinners','Nourishment','T&S Cases','DNN','Suspended','Future'].map(h=>`<th style="text-align:left;padding:5px 8px;color:var(--text-sec);font-weight:500;white-space:nowrap">${h}</th>`).join('')}
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
