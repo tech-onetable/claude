@@ -271,13 +271,20 @@ function buildReviewView() {
     return b.score-a.score;
   });
 
-  const s = state.current.run?.summary||{};
+  // Derive counts from actual cases, not the summary object which may be stale
+  const validCases = (state.current.cases||[]).filter(c => ['warning','nourishment_pause','suspension','deactivation'].includes(c.tier));
+  const countSuspension = validCases.filter(c => ['suspension','deactivation'].includes(c.tier) && !c.is_cluster).length +
+    (state.current.cases||[]).filter(c => c.is_cluster && ['suspension','deactivation'].includes(c.tier)).length;
+  const countPause = validCases.filter(c => c.tier === 'nourishment_pause' && !c.is_cluster).length +
+    (state.current.cases||[]).filter(c => c.is_cluster && c.tier === 'nourishment_pause').length;
+  const countWarning = validCases.filter(c => c.tier === 'warning').length;
+  const countClusters = (state.current.cases||[]).filter(c => c.is_cluster).length;
   return `
     <div class="summary-bar">
-      <div class="summary-card"><div class="summary-num" style="color:var(--wine)">${s.suspension||0}</div><div class="summary-label">Suspension</div></div>
-      <div class="summary-card"><div class="summary-num" style="color:var(--amber-dark)">${s.nourishment_pause||0}</div><div class="summary-label">Nourishment Pause</div></div>
-      <div class="summary-card"><div class="summary-num" style="color:var(--olive)">${s.warning||0}</div><div class="summary-label">Warning</div></div>
-      <div class="summary-card"><div class="summary-num" style="color:var(--text-sec)">${state.current.run?.dinners_reviewed||0}</div><div class="summary-label">Dinners reviewed</div></div>
+      <div class="summary-card"><div class="summary-num" style="color:var(--wine)">${countSuspension}</div><div class="summary-label">Suspension</div></div>
+      <div class="summary-card"><div class="summary-num" style="color:var(--amber-dark)">${countPause}</div><div class="summary-label">Nourishment Pause</div></div>
+      <div class="summary-card"><div class="summary-num" style="color:var(--olive)">${countWarning}</div><div class="summary-label">Warning</div></div>
+      <div class="summary-card"><div class="summary-num" style="color:var(--text-sec)">${countClusters}</div><div class="summary-label">Clusters</div></div>
     </div>
     <div class="run-info">
       <div class="run-meta">Week of ${state.current.run?.week_of} · Run date: ${runDate()} · Agent v5.2</div>
