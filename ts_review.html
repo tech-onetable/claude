@@ -636,11 +636,26 @@ Summary: ${(c.bullets||[]).map(b=>b.replace(/\*\*/g,'')).join(' | ')}`;
         system: CHAT_SYSTEM+'\n\n'+ctx,
         messages:[...history,{role:'user',content:msg}]})
     });
+    if (!res.ok) throw new Error('API error');
     const data = await res.json();
+    if (data.error) throw new Error(data.error.message);
     const text = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
     state.chatMessages = [...state.chatMessages, {role:'assistant', content:text}];
   } catch {
-    state.chatMessages = [...state.chatMessages, {role:'assistant', content:'Error connecting. Try again.'}];
+    // Clipboard fallback -- copy case context + question for pasting into Claude.ai
+    const clipText = `[T&S case question]\n\n${ctx}\n\nQuestion: ${msg}`;
+    try {
+      await navigator.clipboard.writeText(clipText);
+      state.chatMessages = [...state.chatMessages, {
+        role:'assistant',
+        content:`_API unavailable from local file. Case context + your question copied to clipboard._\n\nPaste into your Claude.ai chat to continue the conversation there.`
+      }];
+    } catch {
+      state.chatMessages = [...state.chatMessages, {
+        role:'assistant',
+        content:`_API unavailable from local file. To discuss this case, paste the following into Claude.ai:_\n\n\`\`\`\n${ctx}\n\nQuestion: ${msg}\n\`\`\``
+      }];
+    }
   }
   state.chatLoading = false;
   render();
