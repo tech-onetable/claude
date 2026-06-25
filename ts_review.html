@@ -254,8 +254,15 @@ function buildReviewView() {
     if (state.filter==='cluster') return c.is_cluster;
     return c.tier===state.filter;
   }).sort((a,b)=>{
+    // Clusters first
     if (a.is_cluster&&!b.is_cluster) return -1;
     if (!a.is_cluster&&b.is_cluster) return 1;
+    // Then by tier severity
+    const tierOrder = {suspension:0, deactivation:0, nourishment_pause:1, warning:2};
+    const tA = tierOrder[a.tier]??3;
+    const tB = tierOrder[b.tier]??3;
+    if (tA!==tB) return tA-tB;
+    // Within tier, by score descending
     return b.score-a.score;
   });
 
