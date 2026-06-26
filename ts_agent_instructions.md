@@ -652,3 +652,23 @@ For the dinner being reviewed, compare the Dinner Privacy setting to the descrip
 - Public dinner + closed language ("invite only", "friends only", "private circle", "select guests")
 Use judgment. A private dinner for close friends with warm but specific language is not a flag. A private dinner that reads like a public recruitment event is.
 Finding: Triggered (+2) / Not triggered / Inconclusive
+
+---
+
+**5. Deliberate identity change (sig23) -- weight 10**
+Query the host's account history across their last 10 dinners:
+- Email address changes between dinners
+- Name changes on the Contact record
+- Profile swaps (same Contact ID, different email or name appearing on successive dinners)
+Also check: were replacement guest accounts created immediately before a new dinner was posted? This indicates premeditated evasion.
+Finding: Triggered (+10) / Not triggered / Inconclusive
+
+---
+
+**6. Deliberate activity to defraud (sig22) -- surfacing only, no score**
+This signal is not scored -- it requires staff judgment. However, during the deep dive, flag if the evidence pattern suggests sig22:
+- Coordinated email swaps across multiple accounts on the same device
+- Replacement accounts created immediately before the next dinner posted
+- Template-matched descriptions across unrelated hosts
+- Any pattern that demonstrates awareness of and active circumvention of detection systems
+Output: "Sig22 consideration: [description of pattern]" -- not a score, a flag for staff to evaluate.
