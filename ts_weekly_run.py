@@ -48,7 +48,7 @@ SIGNAL_WEIGHTS = {
     'sig22': 10, # Deliberate fraud (standalone, staff judgment)
     'sig23': 8,  # Deliberate identity change (standalone, staff judgment)
 }
-STANDALONE = {'sig1', 'sig12', 'sig21', 'sig22', 'sig23'}
+STANDALONE = {'sig1', 'sig12', 'sig22', 'sig23'}  # sig21 standalone only for user reports, not problem flag alone; sig20 needs pairing
 GUEST_INTEGRITY_SIGNALS = {'sig12', 'sig13', 'sig14', 'sig9', 'sig8', 'sig10'}
 SF_BASE = "https://onetable.lightning.force.com/lightning/r/Contact/{}/view"
 SF_CAMPAIGN_BASE = "https://onetable.lightning.force.com/lightning/r/Campaign/{}/view"
@@ -309,17 +309,22 @@ def score_campaign(cid, camp, cross_dinner, high_volume):
                     f"Multiple future dinners posted: {future_count} upcoming dinners",
                     f"{future_count} future dinners", "3+ future dinners posted", True)
 
-    # ── Signal 21: Reports from other users / problem flags (standalone) ──────
+    # ── Signal 21: Reports from other users / user reports (standalone) ─────────
+    # Problem flag alone does NOT score -- surfaces as context only
+    # T&S-specific Further Review Reason = standalone score
+    # User reports (future: platform reporting function) = standalone score
     problem_flag = host.get('Problem Flag', '').strip() in ('1', '1.0') if host else False
     further_review = host.get('Further Review Reason', '').strip() if host else ''
-    # Only score on explicit T&S flags, not routine AI review reasons
     ts_flag_phrases = ['trust & safety', 'misuse', 'fraud', 'suspicious', 'report']
     further_is_ts = any(p in further_review.lower() for p in ts_flag_phrases)
-    if problem_flag or further_is_ts:
-        reason = further_review or 'Problem flag set'
+    if further_is_ts:
+        # T&S-specific review reason = scores as standalone
         add_sig('sig21',
-                f"Platform flag or report: {reason[:100]}",
-                "Problem flag or T&S further review reason present", "Any", True)
+                f"T&S review flag: {further_review[:100]}",
+                "T&S-specific further review reason present", "Any", True)
+    elif problem_flag:
+        # Problem flag alone = does not score, surfaces as anomaly note only
+        anomaly_notes.append(f"Problem flag is set on this dinner -- review for context but does not score independently.")
 
     # ── Signal 7: Same IP across guests (needs pairing, 80%+, min 3 guests) ──
     guest_ips = [g.get('RSVP IP', '').strip() for g in guests if g.get('RSVP IP', '').strip()]
