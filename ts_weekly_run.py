@@ -253,6 +253,18 @@ def score_campaign(cid, camp, cross_dinner, high_volume):
                 f"Suspicious guest email domains: {len(sus)}/{n} ({round(100*pct)}%)",
                 f"{round(100*pct)}% ({len(sus)}/{n} guests)", "50%+", met)
 
+    # ── Signal 7: Same IP across guests (needs pairing, 80%+, min 3 guests) ──
+    guest_ips = [g.get('RSVP IP', '').strip() for g in guests if g.get('RSVP IP', '').strip()]
+    if n >= 3 and guest_ips:
+        ip_counts = collections.Counter(guest_ips)
+        top_ip, top_ip_count = ip_counts.most_common(1)[0]
+        ip_pct = top_ip_count / n
+        # Only score if 3+ guests share the IP (not just 1-2)
+        met = ip_pct >= 0.80 and top_ip_count >= 3
+        add_sig('sig7',
+                f"Same IP across guests: {top_ip_count}/{n} ({round(100*ip_pct)}%) share IP {top_ip}",
+                f"{round(100*ip_pct)}% ({top_ip_count}/{n} guests)", "80%+ and ≥3 guests sharing (min 3 guests total)", met)
+
     # ── Signal 17: AI Not Pass (needs any guest integrity signal) ───────────
     ai_flag = host.get('AI Not Pass Summary', '') if host else ''
     if ai_flag:
