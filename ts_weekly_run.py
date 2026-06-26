@@ -910,7 +910,6 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns):
                 f"**Guest device breakdown:** {guest_breakdown}.",
                 f"**Individual scores:** {scores_str}. Score shown is the highest individual score, not a combined total.",
                 f"**Combined Nourishment: {combined_n}.**",
-                "**Consult Amalia before actioning.** Cluster case.",
             ],
             'signals': cluster_signals,
             'score_breakdown': top_d['score_breakdown'],
