@@ -171,6 +171,7 @@ const state = {
   actionState: {},
   activeChat: null,
   overrideOpen: null,
+  hostOverrideOpen: null,
   clusterWarning: null,
   openCards: new Set(),
 };
@@ -415,8 +416,35 @@ function buildCaseBody(c, a, actioned, displayTier) {
 
     <div class="card-footer">
       <div class="footer-left">
-        <button class="btn btn-primary" ${actioned?'disabled':''} onclick="approveCase('${c.id}','${c.tier}',${!!c.is_cluster})">${actioned?'✓ Approved':'Approve recommendation'}</button>
-        ${!actioned?`<button class="btn btn-secondary" onclick="toggleOverride('${c.id}')">${overrideOpen?'Cancel':'Override / dismiss'}</button>`:''}
+        ${c.is_cluster && c.cluster_hosts?.length ? `
+          <div style="display:flex;flex-direction:column;gap:6px;width:100%">
+            <div style="font-size:11px;font-weight:600;color:var(--text-sec);text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px">Approve per host</div>
+            ${c.cluster_hosts.map(h => {
+              const hid = `${c.id}__${h.name.replace(/\s+/g,'_')}`;
+              const ha = state.actionState[hid];
+              const happroved = !!ha?.tier;
+              const htier = ha?.tier || h.score >= 18 ? 'suspension' : h.score >= 9 ? 'nourishment_pause' : 'warning';
+              return `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                <span style="font-size:13px;min-width:120px"><a class="purple-link" href="${h.sf_url}" target="_blank">${h.name}</a></span>
+                <span class="badge ${htier}" style="font-size:11px">${TIER_LABELS[h.score >= 18 ? 'suspension' : h.score >= 9 ? 'nourishment_pause' : 'warning']}</span>
+                <button class="btn btn-primary" style="font-size:12px;padding:4px 10px" ${happroved?'disabled':''} onclick="approveHost('${c.id}','${h.name}','${h.score >= 18 ? 'suspension' : h.score >= 9 ? 'nourishment_pause' : 'warning'}')">${happroved?'✓ Approved':'Approve'}</button>
+                ${!happroved?`<button class="btn btn-secondary" style="font-size:12px;padding:4px 10px" onclick="overrideHost('${c.id}','${h.name}')">Override</button>`:''}
+                ${state.hostOverrideOpen===hid?`<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:4px">
+                  <select id="host-override-tier-${hid}" style="font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:4px">
+                    <option value="warning">Warning</option>
+                    <option value="nourishment_pause">Nourishment Pause</option>
+                    <option value="suspension">Suspension</option>
+                    <option value="deactivation">Deactivation</option>
+                    <option value="dismissed">Dismiss</option>
+                  </select>
+                  <input id="host-override-reason-${hid}" placeholder="Reason..." style="font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;width:160px">
+                  <button class="btn" style="font-size:12px;padding:4px 8px;background:var(--amber-dark);color:#fff" onclick="confirmHostOverride('${c.id}','${h.name}')">Confirm</button>
+                </div>`:''}
+              </div>`;
+            }).join('')}
+          </div>
+        ` : `<button class="btn btn-primary" ${actioned?'disabled':''} onclick="approveCase('${c.id}','${c.tier}',false)">${actioned?'✓ Approved':'Approve recommendation'}</button>
+        ${!actioned?`<button class="btn btn-secondary" onclick="toggleOverride('${c.id}')">${overrideOpen?'Cancel':'Override / dismiss'}</button>`:''}`}
       </div>
       <button class="btn-discuss" onclick="openChat(${JSON.stringify(c).replace(/"/g,'&quot;')})">Discuss ↗</button>
     </div>
@@ -762,6 +790,29 @@ function toggleCollapsible(el) {
 }
 
 function toggleOverride(id) { state.overrideOpen = state.overrideOpen===id ? null : id; render(); }
+
+function approveHost(clusterId, hostName, tier) {
+  const hid = `${clusterId}__${hostName.replace(/\s+/g,'_')}`;
+  state.actionState[hid] = { tier };
+  state.hostOverrideOpen = null;
+  render();
+}
+
+function overrideHost(clusterId, hostName) {
+  const hid = `${clusterId}__${hostName.replace(/\s+/g,'_')}`;
+  state.hostOverrideOpen = state.hostOverrideOpen === hid ? null : hid;
+  render();
+}
+
+function confirmHostOverride(clusterId, hostName) {
+  const hid = `${clusterId}__${hostName.replace(/\s+/g,'_')}`;
+  const t = document.getElementById(`host-override-tier-${hid}`)?.value;
+  const r = document.getElementById(`host-override-reason-${hid}`)?.value;
+  if (!t) return;
+  state.actionState[hid] = { tier: t, reason: r };
+  state.hostOverrideOpen = null;
+  render();
+}
 
 function approveCase(id, tier, isCluster) {
   if (isCluster && state.clusterWarning!==id) { state.clusterWarning=id; render(); return; }
