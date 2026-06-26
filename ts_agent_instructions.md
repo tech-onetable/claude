@@ -211,11 +211,11 @@ A single geographic mismatch signal does not score and does not trigger a Warnin
 | 12 | Guest List Integrity | Hard bounces on guest emails | 8 | 50%+ | High confidence. Applies regardless of email domain type. |
 | 13 | Guest List Integrity | Reject bounces on guest emails | 5 | 50%+ | Must combine with at least one other signal to score. More ambiguous than hard bounce; high confidence when combined with sequential PIDs or shared device. |
 | 14 | Guest List Integrity | Sequential guest Profile IDs | 6 | 50%+ | High confidence only when paired with another triggered signal at threshold. Sequential = PIDs within 1-2 of each other. Threshold calculated against all guests, not profiled guests only. |
-| 15 | Guest List Integrity | Recycled guest lists across dinners | 1 | Any | Requires 2+ dinners. Low weight. Must combine with at least one other signal to score. |
+| 15 | Guest List Integrity | Recycled guest lists across dinners | 5 | 30%+ recycled | **Deep dive signal -- not scored in weekly run.** Triggered on staff request. Does not require independent pairing -- existing case signals serve as the pair. Query last 5 dinners per host via Salesforce. |
 | 16 | Guest List Integrity | Privacy domain, no bounce | 2 | Any | Must combine with at least one other signal to score. |
 | 17 | Posting Behavior | AI-generated or templated description | 3 | Any | Must combine with at least one guest integrity signal (bounces, sequential PIDs, suspicious domains) to score in T&S. Standalone routes to program team -- not a T&S finding. |
-| 18 | Posting Behavior | Description quality degradation over time | 3 | Any | 90%+ similarity = copy/paste. Must combine with at least one other signal to score. |
-| 19 | Posting Behavior | Privacy type mismatch | 2 | Any | Must combine with at least one other signal to score. |
+| 18 | Posting Behavior | Description quality degradation over time | 3 | Any | **Deep dive signal -- not scored in weekly run.** Triggered on staff request. Does not require independent pairing. Check last 5 dinner descriptions for copy/paste, template patterns, or declining quality. |
+| 19 | Posting Behavior | Privacy/description mismatch | 2 | Any | **Deep dive signal -- not scored in weekly run.** Triggered on staff request. Does not require independent pairing. Private dinner with open/public-sounding description, or public dinner with closed/exclusive language. |
 | 20 | Posting Behavior | Multiple future dinners posted immediately | 2 | Any | Must combine with at least one other signal to score. |
 | 21 | External Signals | Reports from other users | 6 | Any | High confidence |
 | 22 | Deliberate Activity | Deliberate activity to defraud the program | 10 | Any | Staff judgment required. High confidence. |
@@ -607,23 +607,48 @@ References: Trust and Safety Policy v3 (June 2026) | Signal Reference Addendum v
 
 ## DEEP DIVE REQUESTS
 
-When a staff member pastes a T&S DEEP DIVE REQUEST into the chat, run all four analyses listed. These use Salesforce MCP queries and LLM judgment. Output a structured analysis -- not a JSON block.
+When a staff member pastes a T&S DEEP DIVE REQUEST into the chat, run all analyses listed. These use Salesforce MCP queries and LLM judgment. Output a structured analysis -- not a JSON block.
 
-**1. Historical date overlap (clusters)**
+**Important: deep dive signals do not require independent pairing.** By the time a deep dive is requested, the host is already a flagged case with at least one scored signal. The existing case signals serve as the pair. If a deep dive signal triggers, add its weight directly to the host's existing score and state the revised tier.
+
+**Scoring adjustment format:**
+At the end of the deep dive, state:
+- Which signals triggered (sig15 / sig18 / sig19)
+- Points added per signal
+- Original score → revised score → revised tier
+- Whether the revised tier changes the consequence recommendation
+
+---
+
+**1. Historical date overlap (clusters only)**
 Query: `SELECT Campaign.StartDate, Campaign.Name FROM CampaignMember WHERE Status = 'Host' AND ContactId = '[id]' ORDER BY Campaign.StartDate DESC LIMIT 20` for each cluster host. Compare dates across hosts and flag any where 2+ hosts posted on the same night.
+Finding: Flag / No flag / Inconclusive. Does not score -- informational only.
 
-**2. Description similarity (sig18)**
-Query last 5 dinner descriptions per host: `SELECT Campaign.Name, Campaign.StartDate, Campaign.Description FROM CampaignMember WHERE Status = 'Host' AND ContactId = '[id]' ORDER BY Campaign.StartDate DESC LIMIT 5`. Then:
-- Use difflib or semantic judgment to compare descriptions within a host (degradation over time) and across hosts (shared templates)
-- Flag: identical phrases, copy/paste patterns, declining specificity
+---
 
-**3. Guest list recycling (sig15)**
-Query: `SELECT ContactId, Contact.FirstName, Contact.LastName FROM CampaignMember WHERE Status IN ('Attended','Applied') AND CampaignId IN (SELECT CampaignId FROM CampaignMember WHERE Status = 'Host' AND ContactId = '[id]') ORDER BY CampaignId` for each host's last 5 dinners. Count Contact IDs appearing at 2+ dinners. Flag: recycled guest percentage, whether a core group appears at every dinner.
+**2. Description similarity (sig18) -- weight 3**
+Query last 5 dinner descriptions per host:
+`SELECT Campaign.Name, Campaign.StartDate, Campaign.Description FROM CampaignMember WHERE Status = 'Host' AND ContactId = '[id]' ORDER BY Campaign.StartDate DESC LIMIT 5`
+Check for:
+- Copy/paste or near-identical descriptions across dinners
+- Degrading quality over time (earlier dinners rich and specific, later ones generic or templated)
+- Template patterns shared across cluster hosts
+Finding: Triggered (+3) / Not triggered / Inconclusive
 
-**4. Privacy/description mismatch (sig19)**
-For each dinner: compare `Dinner_Privacy__c` field to the description tone. Flag:
-- Private dinner + open language ("everyone welcome", "come one come all", "meet new people", "open to all")
+---
+
+**3. Guest list recycling (sig15) -- weight 5**
+Query last 5 dinners per host, then their guest Contact IDs:
+`SELECT CampaignId FROM CampaignMember WHERE Status = 'Host' AND ContactId = '[id]' ORDER BY Campaign.StartDate DESC LIMIT 5`
+Then for each campaign: `SELECT ContactId FROM CampaignMember WHERE CampaignId = '[id]' AND Status IN ('Attended','Applied')`
+Count Contact IDs appearing at 2+ of the last 5 dinners. Flag if 30%+ of guests are recycled across dinners.
+Finding: Triggered (+5) / Not triggered / Inconclusive
+
+---
+
+**4. Privacy/description mismatch (sig19) -- weight 2**
+For the dinner being reviewed, compare the Dinner Privacy setting to the description tone:
+- Private dinner + open language ("everyone welcome", "come one come all", "meet new people", "open to all", "new friends")
 - Public dinner + closed language ("invite only", "friends only", "private circle", "select guests")
-Use judgment -- a private dinner for close friends with warm but specific language is fine. A private dinner that reads like a public event is a flag.
-
-Output format: one section per analysis, with a clear finding (flag / no flag / inconclusive) and supporting evidence. End with an overall confidence assessment.
+Use judgment. A private dinner for close friends with warm but specific language is not a flag. A private dinner that reads like a public recruitment event is.
+Finding: Triggered (+2) / Not triggered / Inconclusive
