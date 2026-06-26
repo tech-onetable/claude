@@ -333,6 +333,90 @@ def score_campaign(cid, camp, cross_dinner, high_volume):
                 f"Same IP across guests: {top_ip_count}/{n} ({round(100*ip_pct)}%) share IP {top_ip}",
                 f"{round(100*ip_pct)}% ({top_ip_count}/{n} guests)", "80%+ and ≥3 guests sharing (min 3 guests total)", met)
 
+
+    # ── Signal 11: Host/guest email similarity (needs pairing, 50%+) ──────────
+    # Only meaningful when host uses a non-common domain shared with guests
+    COMMON_DOMAINS = {'gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com',
+                      'icloud.com', 'aol.com', 'me.com', 'live.com', 'msn.com',
+                      'mac.com', 'ymail.com', 'googlemail.com'}
+    host_email = host.get('Campaign Member Email', '').lower().strip() if host else ''
+    if host_email and '@' in host_email:
+        host_domain = host_email.split('@')[1]
+        host_local = host_email.split('@')[0]
+        # Only flag if host uses a non-common domain, or if local parts are suspiciously similar
+        similar_guests = []
+        for g in guests:
+            g_email = g.get('Campaign Member Email', '').lower().strip()
+            if not g_email or '@' not in g_email: continue
+            g_domain = g_email.split('@')[1]
+            g_local = g_email.split('@')[0]
+            # Same non-common domain
+            if g_domain == host_domain and host_domain not in COMMON_DOMAINS:
+                similar_guests.append(g_email)
+            # Or very similar local part (e.g. host123@gmail, guest124@gmail)
+            elif len(host_local) > 5 and len(g_local) > 5:
+                shared = sum(1 for a, b in zip(host_local, g_local) if a == b)
+                if shared / max(len(host_local), len(g_local)) >= 0.85:
+                    similar_guests.append(g_email)
+        if n > 0 and len(similar_guests) >= 2:
+            pct = len(similar_guests) / n
+            met = pct >= 0.5
+            add_sig('sig11',
+                    f"Host/guest email similarity: {len(similar_guests)}/{n} ({round(100*pct)}%) guests share domain or pattern with host ({host_email})",
+                    f"{round(100*pct)}% ({len(similar_guests)}/{n} guests)", "50%+ and ≥2 guests (non-common domain match)", met)
+
+    # ── Signal 10: Suspicious phone number patterns (needs pairing, 50%+) ─────
+    # Sequential or patterned phone numbers suggest bulk account creation
+    phone_numbers = [g.get('Phone', '').strip() for g in guests if g.get('Phone', '').strip()]
+    if len(phone_numbers) >= 3:
+        # Extract last 4 digits and check for sequential patterns
+        def last4(p):
+            digits = ''.join(c for c in p if c.isdigit())
+            return digits[-4:] if len(digits) >= 4 else None
+        last4s = [last4(p) for p in phone_numbers if last4(p)]
+        if len(last4s) >= 3:
+            # Check for sequential last 4 digits (e.g. 5551, 5552, 5553)
+            sorted_nums = sorted(set(int(x) for x in last4s if x.isdigit()))
+            sequential = 0
+            for i in range(1, len(sorted_nums)):
+                if sorted_nums[i] - sorted_nums[i-1] <= 2:
+                    sequential += 1
+            pct_seq = (sequential + 1) / len(last4s) if last4s else 0
+            # Also check same prefix (first 6 digits match across guests)
+            prefixes = [''.join(c for c in p if c.isdigit())[:6] for p in phone_numbers]
+            prefix_counts = collections.Counter(p for p in prefixes if len(p) == 6)
+            top_prefix_count = prefix_counts.most_common(1)[0][1] if prefix_counts else 0
+            prefix_pct = top_prefix_count / n if n > 0 else 0
+            met = (pct_seq >= 0.5 or prefix_pct >= 0.5) and n >= 3
+            if met or pct_seq >= 0.3 or prefix_pct >= 0.3:
+                add_sig('sig10',
+                        f"Suspicious phone patterns: {round(100*max(pct_seq, prefix_pct))}% sequential or shared-prefix phones",
+                        f"{round(100*max(pct_seq, prefix_pct))}% pattern match", "50%+ sequential or shared prefix (min 3 guests)", met)
+
+    # ── Signal 5: Known VPN/proxy IP (needs pairing) ──────────────────────────
+    # Check guest IPs against known VPN/datacenter ranges
+    # Common VPN/proxy subnets -- not exhaustive but catches obvious cases
+    KNOWN_VPN_PREFIXES = {
+        '104.16.', '104.17.', '104.18.', '104.19.',  # Cloudflare
+        '162.158.', '172.64.', '172.65.', '172.66.', '172.67.',  # Cloudflare
+        '10.', '192.168.', '172.16.',  # Private/internal (spoofed)
+        '155.117.',  # Known VPN range from prior investigations
+        '45.14.', '45.15.',  # Common VPN datacenter ranges
+        '185.220.',  # Tor exit nodes
+        '194.165.',  # Common proxy range
+    }
+    vpn_guests = []
+    for g in guests:
+        ip = g.get('RSVP IP', '').strip()
+        if ip and any(ip.startswith(pfx) for pfx in KNOWN_VPN_PREFIXES):
+            vpn_guests.append(ip)
+    if n > 0 and len(vpn_guests) > 0:
+        pct = len(vpn_guests) / n
+        met = pct >= 0.3 and len(vpn_guests) >= 2
+        add_sig('sig5',
+                f"Known VPN/proxy IPs detected: {len(vpn_guests)}/{n} ({round(100*pct)}%) guests",
+                f"{round(100*pct)}% ({len(vpn_guests)}/{n} guests)", "30%+ and ≥2 guests from known VPN ranges", met)
+
     # ── Signal 17: AI Not Pass (needs any guest integrity signal) ───────────
     ai_flag = host.get('AI Not Pass Summary', '') if host else ''
     if ai_flag:
@@ -591,6 +675,17 @@ def build_case_json(cid, camp, scored_signals, score, tier, sf_data=None):
                 anomaly_notes.append(f"Host approved {_days_since_app} days ago but has {int(dinners_hosted)} dinners -- very new host with high dinner count.")
         except:
             pass
+
+    # sig22 pattern surfacing -- flag if multiple high-weight signals co-occur with suspicious domain
+    triggered_sigs = {k for k, v in scored_signals.items() if v.get('triggered') and v.get('score_contribution', 0) > 0}
+    has_device = bool(triggered_sigs & {'sig1', 'sig2', 'sig3'})
+    has_guest_integrity = bool(triggered_sigs & {'sig12', 'sig13', 'sig14', 'sig9', 'sig8'})
+    has_suspicious_host = host and any(
+        host.get('Campaign Member Email', '').lower().endswith('@' + d)
+        for d in SUSPICIOUS_DOMAINS
+    ) if host else False
+    if has_device and has_guest_integrity and has_suspicious_host:
+        anomaly_notes.append("Pattern consistent with sig22 (deliberate activity to defraud): device signals + guest integrity signals + suspicious host email domain co-occurring. Staff judgment required.")
     for note in anomaly_notes:
         bullets.append(f"**Anomaly:** {note}")
 
