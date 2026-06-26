@@ -253,6 +253,74 @@ def score_campaign(cid, camp, cross_dinner, high_volume):
                 f"Suspicious guest email domains: {len(sus)}/{n} ({round(100*pct)}%)",
                 f"{round(100*pct)}% ({len(sus)}/{n} guests)", "50%+", met)
 
+    # ── Signal 8: Clearly fake guest identities (needs pairing, 50%+) ─────────
+    FAKE_NAMES = {
+        'taylor swift', 'bing bong', 'mickey mouse', 'john doe', 'jane doe',
+        'test user', 'test guest', 'asdf', 'qwerty', 'xxx', 'aaa', 'bbb',
+        'fake user', 'fake guest', 'no name', 'anonymous', 'guest guest',
+    }
+    def is_fake_name(g):
+        first = g.get('First Name', '').strip().lower()
+        last = g.get('Last Name', '').strip().lower()
+        full = f"{first} {last}".strip()
+        if full in FAKE_NAMES: return True
+        if not first or not last: return True
+        if first == last: return True
+        if len(first) <= 1 or len(last) <= 1: return True
+        if all(c == first[0] for c in first) or all(c == last[0] for c in last): return True
+        return False
+    fake_guests = [g for g in guests if is_fake_name(g)]
+    if n > 0:
+        pct = len(fake_guests) / n
+        met = pct >= 0.5 and len(fake_guests) >= 2
+        if len(fake_guests) > 0:
+            examples = ', '.join(
+                f"{g.get('First Name','')} {g.get('Last Name','')}".strip()
+                for g in fake_guests[:3]
+            )
+            add_sig('sig8',
+                    f"Clearly fake guest identities: {len(fake_guests)}/{n} ({round(100*pct)}%) -- e.g. {examples}",
+                    f"{round(100*pct)}% ({len(fake_guests)}/{n} guests)", "50%+ and ≥2 fake guests", met)
+
+    # ── Signal 16: Privacy email domain + no hard bounce (needs pairing) ──────
+    # Guests using known privacy domains (not already in SUSPICIOUS_DOMAINS) with no bounce
+    PRIVACY_DOMAINS = {'protonmail.com', 'proton.me', 'pm.me', 'tutanota.com',
+                       'tuta.io', 'guerrillamail.com', 'sharklasers.com',
+                       'guerrillamailblock.com', 'grr.la', 'guerrillamail.info'}
+    privacy_guests = [g for g in guests if
+                      any(g.get('Campaign Member Email','').lower().endswith('@' + d)
+                          for d in PRIVACY_DOMAINS)
+                      and not g.get('Mandrill Bounce Reason','').strip()]
+    if n > 0 and len(privacy_guests) > 0:
+        pct = len(privacy_guests) / n
+        met = pct >= 0.5 and len(privacy_guests) >= 2
+        add_sig('sig16',
+                f"Privacy email domains with no bounce: {len(privacy_guests)}/{n} ({round(100*pct)}%)",
+                f"{round(100*pct)}% ({len(privacy_guests)}/{n} guests)", "50%+ and ≥2 guests", met)
+
+    # ── Signal 20: Multiple future dinners posted immediately (standalone) ─────
+    # Count from the CSV: how many dinners does this host have with a future start date
+    host_contact_id = host.get('Contact ID', '') if host else ''
+    if host_contact_id:
+        review_date_str = REVIEW_DATE.strftime('%m/%d/%Y')
+        future_count = host.get('_future_dinner_count', 0)
+        if future_count >= 3:
+            add_sig('sig20',
+                    f"Multiple future dinners posted: {future_count} upcoming dinners",
+                    f"{future_count} future dinners", "3+ future dinners posted", True)
+
+    # ── Signal 21: Reports from other users / problem flags (standalone) ──────
+    problem_flag = host.get('Problem Flag', '').strip() in ('1', '1.0') if host else False
+    further_review = host.get('Further Review Reason', '').strip() if host else ''
+    # Only score on explicit T&S flags, not routine AI review reasons
+    ts_flag_phrases = ['trust & safety', 'misuse', 'fraud', 'suspicious', 'report']
+    further_is_ts = any(p in further_review.lower() for p in ts_flag_phrases)
+    if problem_flag or further_is_ts:
+        reason = further_review or 'Problem flag set'
+        add_sig('sig21',
+                f"Platform flag or report: {reason[:100]}",
+                "Problem flag or T&S further review reason present", "Any", True)
+
     # ── Signal 7: Same IP across guests (needs pairing, 80%+, min 3 guests) ──
     guest_ips = [g.get('RSVP IP', '').strip() for g in guests if g.get('RSVP IP', '').strip()]
     if n >= 3 and guest_ips:
@@ -964,6 +1032,9 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns):
             'triggered': v['triggered'],
         } for k, v in d['signals'].items()}
 
+        # Attach future dinner count to host row for sig20
+        if camp.get('host') and sf_data:
+            camp['host']['_future_dinner_count'] = len(sf_data.get('_future_dinners', []))
         case = build_case_json(cid, camp, scored_signals, d['score'],
                                d['tier'] or 'watch', sf)
         cases.append(case)
