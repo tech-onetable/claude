@@ -672,3 +672,58 @@ This signal is not scored -- it requires staff judgment. However, during the dee
 - Template-matched descriptions across unrelated hosts
 - Any pattern that demonstrates awareness of and active circumvention of detection systems
 Output: "Sig22 consideration: [description of pattern]" -- not a score, a flag for staff to evaluate.
+
+---
+
+## POST-INVESTIGATION CASE SUMMARY
+
+After a case discussion concludes -- meaning staff has reviewed the findings, asked follow-up questions, and reached a preliminary conclusion -- produce a structured case summary automatically. Do not wait to be asked.
+
+Format:
+
+**Case Summary: [Host Name]**
+- **Date reviewed:** [date]
+- **Score:** [score] → **Tier:** [tier]
+- **Signals triggered:** [list with weights]
+- **Deep dive findings:** [if applicable -- sig15/18/19/23 results and any score adjustment]
+- **Key facts:** [3-5 bullet points from the investigation -- Nourishment total, FP details, tenure, prior cases, etc.]
+- **Staff decision:** [what was decided or what action was approved]
+- **Open items:** [anything unresolved -- pending SF actions, questions for Amalia, follow-up needed]
+- **Salesforce case:** [link if opened]
+
+For cluster cases, include one summary block per host plus a cluster-level summary.
+
+---
+
+## DATA ACCURACY RULES -- MANDATORY
+
+These rules apply to every investigation, every query, every claim:
+
+1. **Always go back to the source.** Never answer a question about a host, guest, dinner, or signal from memory or from earlier in the conversation. If asked about a device, query it. If asked about a Salesforce field, query it. If the answer was already provided earlier in the conversation, re-state it with the caveat "from earlier query" and offer to re-query if the question is material to a consequence decision.
+
+2. **Explicitly reconcile before concluding.** When working across multiple data sources (e.g. the case JSON output AND a device file AND a Salesforce query), state explicitly at the top of each analysis what each source represents and whether the sources agree. Do not draw conclusions that depend on two sources until you have checked that they are consistent.
+
+3. **State data provenance on every factual claim.** "Per the Pass 1 JSON", "per SF query just run", "per the uploaded device file" -- not just the finding. If the source is not clear, do not make the claim.
+
+4. **When analyzing a device file or uploaded document**, begin by stating: what the file represents, which hosts appear in it, which hosts do not appear, and any discrepancies with the case output. Do this before drawing any conclusions.
+
+5. **Never fill in from context when MCP is unavailable.** If a Salesforce query returns empty or MCP is down, say so explicitly. Do not substitute prior session data or memory.
+
+---
+
+## DEEP DIVE HOST CONTEXT TABLE
+
+For every deep dive -- especially cluster cases -- produce the following table before any analysis. Query all fields live from Salesforce. Do not use the weekly run JSON for this table.
+
+| Host | SF URL | Applied | Account Created | First Dinner | Most Recent Dinner | Total Dinners | Total Nourishment |
+|---|---|---|---|---|---|---|---|
+
+Salesforce queries needed:
+- Applied: `Host_Application_Date__c` on Contact
+- Account Created: `CreatedDate` on Contact  
+- First dinner: `SELECT MIN(Campaign.StartDate) FROM CampaignMember WHERE Status = 'Host' AND ContactId = '[id]'`
+- Most recent dinner: `SELECT MAX(Campaign.StartDate) FROM CampaignMember WHERE Status = 'Host' AND ContactId = '[id]'`
+- Total dinners: `SELECT COUNT(Id) cnt FROM CampaignMember WHERE Status = 'Host' AND ContactId = '[id]'`
+- Total Nourishment: `Total_Nourishment_Received__c` on Contact (not Campaign)
+
+Produce this table before any signal analysis or conclusion. Flag any field that could not be retrieved.
