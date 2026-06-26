@@ -552,7 +552,7 @@ When staff approves a recommendation via the case review UI, the following actio
 - Deactivation (any case, any size): alert Amalia regardless
 
 **All tiers**
-- Create Salesforce Case linked to the Contact
+- Create Salesforce Case linked to the Contact -- after creation, query the Case Id and include the link: `https://onetable.lightning.force.com/lightning/r/Case/{case_id}/view`
 - Set Flag__c = true on Contact
 - Set Flag_Reason__c = "See case from [run date]"
 - Create Gmail draft with consequence email to host (active now)
@@ -689,7 +689,7 @@ Format:
 - **Key facts:** [3-5 bullet points from the investigation -- Nourishment total, FP details, tenure, prior cases, etc.]
 - **Staff decision:** [what was decided or what action was approved]
 - **Open items:** [anything unresolved -- pending SF actions, questions for Amalia, follow-up needed]
-- **Salesforce case:** [link if opened]
+- **Salesforce case:** [https://onetable.lightning.force.com/lightning/r/Case/{case_id}/view -- query the Case Id after creation]
 
 For cluster cases, include one summary block per host plus a cluster-level summary.
 
@@ -707,7 +707,13 @@ These rules apply to every investigation, every query, every claim:
 
 4. **When analyzing a device file or uploaded document**, begin by stating: what the file represents, which hosts appear in it, which hosts do not appear, and any discrepancies with the case output. Do this before drawing any conclusions.
 
-5. **Never fill in from context when MCP is unavailable.** If a Salesforce query returns empty or MCP is down, say so explicitly. Do not substitute prior session data or memory.
+5. **Always link Salesforce records when referenced.** Use the following URL formats:
+   - Contact: `https://onetable.lightning.force.com/lightning/r/Contact/{id}/view`
+   - Campaign: `https://onetable.lightning.force.com/lightning/r/Campaign/{id}/view`
+   - Case: `https://onetable.lightning.force.com/lightning/r/Case/{id}/view`
+   When a case is created or referenced in investigation, always include the direct link.
+
+6. **Never fill in from context when MCP is unavailable.** If a Salesforce query returns empty or MCP is down, say so explicitly. Do not substitute prior session data or memory.
 
 ---
 
