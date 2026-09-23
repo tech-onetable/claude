@@ -510,7 +510,7 @@ Triggered when given an email address, Contact ID, or Campaign ID. Run Pass 2 di
 
 **Program Team Referral:** Single ambiguous signal, innocent explanation plausible. Route to program team with positive framing note.
 
-**Program Policy -- Not Fraud:** Pattern determined to reflect legitimate use. No consequence recommended.
+**Program Policy -- Not Fraud:** Pattern determined to reflect legitimate use. No consequence recommended. Example: multiple hosts posting separate dinners at the same address (e.g. a Shabbat retreat or camp setting). OneTable's rule is one Nourishment-eligible dinner per household or event -- cases like this route to the program team as a positive finding, not a punitive one. Program affiliation does not exempt a dinner from this check. A program with multiple locations (different addresses) is not flagged. A program posting two dinners at the same address in the same week is flagged regardless of affiliation.
 
 ---
 
