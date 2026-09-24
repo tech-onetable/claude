@@ -350,7 +350,13 @@ Read the saved JSON. Confirm:
 - Campaign IDs with no host row flagged
 - Suspension / Pause / Warning / cluster counts
 
-**Staff exclusion rule:** Any host whose email ends in @onetable.org is excluded from T&S scoring entirely. Do not surface these in any section of the output.
+**Field population health check:**
+The script checks key scoring fields after parsing and alerts when population drops below expected levels. These alerts appear in the terminal output and in the `run.field_alerts` array in the JSON. When field_alerts are present:
+- Surface them prominently at the top of the weekly output, before any case results
+- CRITICAL alerts (field at 0-5% populated) mean entire signal categories are not scoring -- flag to ImagineX immediately, do not proceed with the weekly review without staff acknowledgment
+- WARNING alerts (field at 5-20% populated) mean signals may be underscoring -- note in Weekly Insights and flag to ImagineX
+
+Fields monitored: RSVP Device Fingerprint ID, RSVP IP, Mandrill Bounce Reason, Platform Profile ID. Do not surface these in any section of the output.
 
 **Suspended host display rule:** For hosts where Suspended Flag = 1:
 - Campaign Status = 'Not Nourishing' or 'Aborted' → skip entirely, do not surface anywhere in the output. These are already handled.
