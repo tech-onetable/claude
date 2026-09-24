@@ -907,6 +907,40 @@ def run(csv_path, lead_path=None):
     campaigns, total_rows = parse_csv(csv_path, lead_path)
     print(f"[T&S] {total_rows} rows, {len(campaigns)} campaigns", file=sys.stderr)
 
+    # ── FIELD POPULATION HEALTH CHECK ────────────────────────────────────────
+    # Alert immediately if key scoring fields are unexpectedly empty
+    # These fields are critical -- if they drop to near-zero something is broken in the data pipeline
+    all_guest_rows = []
+    for camp in campaigns.values():
+        all_guest_rows.extend(camp.get('guests', []))
+
+    total_guests = len(all_guest_rows)
+    if total_guests > 0:
+        CRITICAL_FIELDS = {
+            'RSVP Device Fingerprint ID': 'Device fingerprint signals (Signals 1-3) will not score',
+            'RSVP IP': 'IP-based signals (Signal 6) will not score',
+            'Mandrill Bounce Reason': 'Hard bounce and reject bounce signals (Signals 11-12) will not score',
+            'Platform Profile ID': 'Sequential PID signal (Signal 13-14) will not score',
+        }
+        alerts = []
+        for field, impact in CRITICAL_FIELDS.items():
+            populated = sum(1 for g in all_guest_rows if g.get(field, '').strip() not in ('', 'nan', 'None'))
+            pct = populated / total_guests
+            if pct < 0.05:  # Less than 5% populated = critical alert
+                alerts.append(f"⚠ CRITICAL: '{field}' is {pct:.0%} populated ({populated}/{total_guests} guests). {impact}.")
+            elif pct < 0.20:  # Less than 20% = warning
+                alerts.append(f"⚠ WARNING: '{field}' is only {pct:.0%} populated ({populated}/{total_guests} guests). Signals may be underscoring.")
+
+        if alerts:
+            print("[T&S] DATA PIPELINE ALERTS:", file=sys.stderr)
+            for alert in alerts:
+                print(f"[T&S] {alert}", file=sys.stderr)
+        else:
+            print(f"[T&S] Field health check: all key fields populated", file=sys.stderr)
+
+    # Store alerts for inclusion in JSON output
+    field_alerts = alerts if total_guests > 0 else []
+
     high_volume, cross_dinner, all_cross, all_fps = build_fp_maps(campaigns)
     print(f"[T&S] High-volume FPs (10+): {len(high_volume)}", file=sys.stderr)
     print(f"[T&S] Cross-dinner FPs (2-9): {len(cross_dinner)}", file=sys.stderr)
@@ -1005,6 +1039,7 @@ def run(csv_path, lead_path=None):
         'same_address': {addr: hosts for addr, hosts in same_address.items()},
         'high_volume_fps': {fp: len(all_fps[fp]) for fp in high_volume},
         'total_dinners': len(campaigns),
+        'field_alerts': field_alerts,
         'summary': {
             'suspension': len(sus_cases),
             'nourishment_pause': len(pause_cases),
@@ -1348,6 +1383,7 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns):
             'run_date': datetime.now().strftime('%Y-%m-%d'),
             'dinners_reviewed': pass1_output['total_dinners'],
             'summary': pass1_output['summary'],
+            'field_alerts': pass1_output.get('field_alerts', []),
         },
         'existing_cases': existing_cases,
         'cases': cases,
