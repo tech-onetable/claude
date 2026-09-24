@@ -559,7 +559,7 @@ def compute_total_score(scored_signals):
 def tier_from_score(score):
     if score >= 18:
         return 'suspension'
-    elif score >= 8:
+    elif score >= 9:
         return 'nourishment_pause'
     elif score >= 1:
         return 'warning'
