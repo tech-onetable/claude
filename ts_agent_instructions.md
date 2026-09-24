@@ -663,6 +663,15 @@ This protocol is triggered by staff approval of a Suspension -- not by the agent
 - Same steps fire as above for selected tier
 - Log override reason to Salesforce case note
 
+**Post-approval checklist -- Warning DNN and Nourishment Pause**
+The following actions require manual backend access or are pending build. The UI displays these as a checklist after DNN is approved:
+
+- [ ] Check DNN checkbox on host user record in backend (manual until bulk upload is built)
+- [ ] Confirm future dinners are showing Not Nourishing in platform
+
+**DNN bulk upload output (pending ImagineX build)**
+When a DNN case is approved, add the host Contact ID to a weekly DNN bulk upload CSV. This mirrors the guest ban CSV pattern and will be used to mark hosts as "not eligible for Nourishment" in bulk once the backend upload tool is available. Until then, the DNN checkbox is checked manually per the checklist above.
+
 **Post-approval checklist -- displayed in UI after Suspension is approved**
 The following actions require manual backend access and cannot be automated via MCP. The UI displays these as a checklist for staff to complete after approving a Suspension:
 
