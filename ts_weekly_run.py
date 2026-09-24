@@ -43,9 +43,8 @@ SIGNAL_WEIGHTS = {
     'sig9': 0,   # Suspicious guest email domains -- anomaly note only, does not score (only meaningful with bounce)
     'sig10': 4,  # Suspicious phone number patterns (needs pairing, 50%+)
     'sig11': 4,  # Host/guest email similarity (needs pairing)
-    'sig12_low': 4,  # Hard bounces 50-74% (corroborating, Warning-range standalone)
-    'sig12': 8,  # Hard bounces 75%+ (standalone, DNN-range)
-    'sig13': 5,  # Reject bounces (needs pairing, 50%+)
+    'sig12_low': 4,  # Guest email bounces 50-74% (any type, corroborating)
+    'sig12': 8,  # Guest email bounces 75%+ (any type, high-confidence, Warning DNN eligible)
     'sig14_low': 3,  # Sequential guest PIDs 55-99% of profiled (corroborating, can score standalone)
     'sig14': 6,  # Sequential guest PIDs 100% of profiled (Warning-eligible standalone)
     'sig15': 3,  # Recycled bounced guest lists (needs pairing -- same exact email across 2+ dinners AND bounced)
@@ -59,7 +58,7 @@ SIGNAL_WEIGHTS = {
     'sig23': 8,  # Deliberate identity change (standalone, staff judgment)
 }
 STANDALONE = {'sig1', 'sig12', 'sig22', 'sig23', 'sig14', 'sig14_low'}
-GUEST_INTEGRITY_SIGNALS = {'sig12', 'sig12_low', 'sig13', 'sig14', 'sig14_low', 'sig10'}
+GUEST_INTEGRITY_SIGNALS = {'sig12', 'sig12_low', 'sig14', 'sig14_low', 'sig10'}
 SF_BASE = "https://onetable.lightning.force.com/lightning/r/Contact/{}/view"
 SF_CAMPAIGN_BASE = "https://onetable.lightning.force.com/lightning/r/Campaign/{}/view"
 TS_RECORD_TYPE_ID = '012PO000001F53dYAC'  # Trust and Safety record type for Salesforce Cases
@@ -265,43 +264,29 @@ def score_campaign(cid, camp, cross_dinner, high_volume):
                     f"Same device fingerprint across guests: {top_count}/{n} ({round(100*pct)}%) [{top_fp}]",
                     f"{round(100*pct)}% ({top_count}/{n} guests)", "40%+ and ≥3 guests sharing (min 3 guests total)", met)
 
-    # ── Signal 12: Hard bounces (75%+ standalone weight 8; 50-74% weight 4 needs pairing) ──
-    # Also treat any bounce on a known throwaway/suspicious domain as hard bounce
-    # regardless of Mandrill's classification -- these addresses are confirmed fake
-    def is_hard_bounce(g):
+    # ── Signal 12: Guest email bounces (any type -- hard or reject combined) ──
+    # 50-74% = weight 4 corroborating; 75%+ = weight 8 high-confidence Warning DNN eligible
+    # Bounces on throwaway domains always count regardless of Mandrill classification
+    def is_bounce(g):
         reason = g.get('Mandrill Bounce Reason', '').lower()
-        if not reason or reason == 'nan':
-            return False
+        if not reason or reason == 'nan': return False
         email = g.get('Campaign Member Email', '').lower()
         domain = email.split('@')[1] if '@' in email else ''
-        # Explicit hard bounce from Mandrill
-        if 'hard_bounce' in reason or 'invalid' in reason or 'earlier hard_bounce' in reason:
-            return True
-        # Any bounce on a known throwaway domain = treat as hard bounce
-        if domain in SUSPICIOUS_DOMAINS and ('bounce' in reason or 'reject' in reason):
-            return True
+        if 'bounce' in reason or 'reject' in reason or 'invalid' in reason: return True
+        if domain in SUSPICIOUS_DOMAINS and reason.strip(): return True
         return False
 
-    hard = [g for g in guests if is_hard_bounce(g)]
+    bounced = [g for g in guests if is_bounce(g)]
     if n > 0:
-        pct = len(hard) / n
+        pct = len(bounced) / n
         if pct >= 0.75:
             add_sig('sig12',
-                    f"Hard bounces on guest emails (75%+): {len(hard)}/{n} ({round(100*pct)}%)",
-                    f"{round(100*pct)}% ({len(hard)}/{n} guests)", "75%+", True)
+                    f"Guest email bounces (75%+): {len(bounced)}/{n} ({round(100*pct)}%) -- any bounce type",
+                    f"{round(100*pct)}% ({len(bounced)}/{n} guests)", "75%+", True)
         elif pct >= 0.50:
             add_sig('sig12_low',
-                    f"Hard bounces on guest emails (50-74%): {len(hard)}/{n} ({round(100*pct)}%)",
-                    f"{round(100*pct)}% ({len(hard)}/{n} guests)", "50-74% (needs pairing)", True)
-
-    # ── Signal 13: Reject bounces (needs pairing, 50%+) ────────────────────
-    reject = [g for g in guests if 'reject' in g.get('Mandrill Bounce Reason', '').lower()]
-    if n > 0:
-        pct = len(reject) / n
-        met = pct >= 0.5
-        add_sig('sig13',
-                f"Reject bounces on guest emails: {len(reject)}/{n} ({round(100*pct)}%)",
-                f"{round(100*pct)}% ({len(reject)}/{n} guests)", "50%+", met)
+                    f"Guest email bounces (50-74%): {len(bounced)}/{n} ({round(100*pct)}%) -- any bounce type",
+                    f"{round(100*pct)}% ({len(bounced)}/{n} guests)", "50-74% (needs pairing)", True)
 
     # ── Signal 14: Sequential PIDs (profiled guests only as denominator) ────────
     # 55-99% of profiled = weight 3 corroborating (sig14_low, can score standalone)
@@ -560,7 +545,7 @@ def tier_from_score(score):
     if score >= 18:
         return 'suspension'
     elif score >= 9:
-        return 'nourishment_pause'
+        return 'warning_dnn'
     elif score >= 1:
         return 'warning'
     return None
@@ -651,9 +636,8 @@ SIG_NAMES = {
     'sig9': 'Suspicious guest email patterns',
     'sig10': 'Suspicious phone number patterns',
     'sig11': 'Host/guest email similarity',
-    'sig12': 'Hard bounces on guest emails (75%+)',
-    'sig12_low': 'Hard bounces on guest emails (50-74%)',
-    'sig13': 'Reject bounces on guest emails',
+    'sig12': 'Guest email bounces (75%+)',
+    'sig12_low': 'Guest email bounces (50-74%)',
     'sig14': 'Sequential guest Profile IDs (100%)',
     'sig14_low': 'Sequential guest Profile IDs (55-99%)',
     'sig15': 'Recycled bounced guest list',
@@ -813,7 +797,7 @@ def build_case_json(cid, camp, scored_signals, score, tier, sf_data=None):
     # sig22 pattern surfacing -- flag if multiple high-weight signals co-occur with suspicious domain
     triggered_sigs = {k for k, v in scored_signals.items() if v.get('triggered') and v.get('score_contribution', 0) > 0}
     has_device = bool(triggered_sigs & {'sig1', 'sig2', 'sig3'})
-    has_guest_integrity = bool(triggered_sigs & {'sig12', 'sig13', 'sig14', 'sig9', 'sig8'})
+    has_guest_integrity = bool(triggered_sigs & {'sig12', 'sig14', 'sig9', 'sig8'})
     has_suspicious_host = host and any(
         host.get('Campaign Member Email', '').lower().endswith('@' + d)
         for d in SUSPICIOUS_DOMAINS
@@ -919,7 +903,7 @@ def run(csv_path, lead_path=None):
         CRITICAL_FIELDS = {
             'RSVP Device Fingerprint ID': 'Device fingerprint signals (Signals 1-3) will not score',
             'RSVP IP': 'IP-based signals (Signal 6) will not score',
-            'Mandrill Bounce Reason': 'Hard bounce and reject bounce signals (Signals 11-12) will not score',
+            'Mandrill Bounce Reason': 'Guest email bounce signal (Signal 12) will not score',
             'Platform Profile ID': 'Sequential PID signal (Signal 13-14) will not score',
         }
         alerts = []
@@ -972,7 +956,7 @@ def run(csv_path, lead_path=None):
     pause_cases = {c: d for c, d in all_scored.items() if 9 <= d['score'] < 18}
     warn_cases = {c: d for c, d in all_scored.items() if 1 <= d['score'] < 9}
 
-    print(f"[T&S] Suspension: {len(sus_cases)} | Pause: {len(pause_cases)} | Warning: {len(warn_cases)}", file=sys.stderr)
+    print(f"[T&S] Suspension: {len(sus_cases)} | Warning DNN: {len(pause_cases)} | Warning: {len(warn_cases)}", file=sys.stderr)
 
     # ── Pass 2: Salesforce queries ───────────────────────────────────────────
     # This section is called by the agent after Pass 1.
@@ -1042,7 +1026,7 @@ def run(csv_path, lead_path=None):
         'field_alerts': field_alerts,
         'summary': {
             'suspension': len(sus_cases),
-            'nourishment_pause': len(pause_cases),
+            'warning_dnn': len(pause_cases),
             'warning': len(warn_cases),
             'clusters': len(clusters),
         }
