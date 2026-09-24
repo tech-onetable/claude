@@ -968,8 +968,18 @@ def run(csv_path, lead_path=None):
     clusters = detect_clusters(all_scored, campaigns, cross_dinner)
     print(f"[T&S] Clusters identified: {len(clusters)}", file=sys.stderr)
 
+    # Identify cluster members for suspension override rule
+    cluster_cids = set()
+    for cl in clusters:
+        cluster_cids.update(cl['members'])
+
+    # Apply cluster rule: any host in a cluster gets Suspension (soft) minimum
+    for cid in cluster_cids:
+        if cid in all_scored and all_scored[cid]['score'] < 14:
+            all_scored[cid]['tier'] = 'suspension'
+            all_scored[cid]['_cluster_override'] = True
+
     # Remove existing cases (suspended + active status) from scored output
-    # They surface in the Existing Cases section of the UI, not the scored queue
     existing_case_cids = {cid for cid, camp in campaigns.items() if camp.get('_existing_case')}
     all_scored = {cid: d for cid, d in all_scored.items() if cid not in existing_case_cids}
 
@@ -1113,7 +1123,9 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns):
 
     # Build cluster cases first
     for cluster in pass1_output['clusters']:
-        members = cluster['members']
+        members = [m for m in cluster['members'] if m in pass1_output['campaigns']]
+        if len(members) < 2:
+            continue
         fp = cluster['fp']
         cluster_hosts = []
         total_nourishment = 0
