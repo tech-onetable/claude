@@ -406,7 +406,10 @@ ContactId, Contact.FirstName, Contact.LastName, Campaign_Member_Email__c, Platfo
 
 **Guest pool reappearance check:** If new host (within 90 days), check whether any guest Profile IDs appeared on a recently deactivated host's dinners in the prior 90 days.
 
-**Approved host check on guests (Suspension cases only):** Note any guests where Host? = 1. Surface in anomaly flags with recommendation to review their own dinner activity. Host? = 1 on a guest is not a fraud signal -- it is a monitoring indicator.
+**Cluster rule:**
+Any host identified as part of a cluster receives Suspension (soft) minimum regardless of individual score. Cluster membership itself is sufficient evidence of coordinated behavior. The script applies this automatically. The agent flags any cluster member that appears to be an outlier (e.g. very low score, plausible innocent explanation for shared fingerprint, no corroborating signals beyond the cluster FP) and notes this for staff review -- staff decides whether to downgrade. Prior formal consequence on any cluster member → flag for Suspension (strict) or Deactivation review.
+
+Clusters surface at the top of the weekly output before all other cases. All cluster members receive the same consequence unless staff overrides per member.
 
 ### Cluster Detection
 
