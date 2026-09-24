@@ -837,7 +837,7 @@ def build_case_json(cid, camp, scored_signals, score, tier, sf_data=None):
         'bullets': bullets[:5],
         'signals': build_signals_array(scored_signals),
         'score_breakdown': breakdown,
-        'host_context': {
+        'host_context': None if tier == 'warning' else {
             'tenure': tenure_str,
             'dinners_hosted': str(int(dinners_hosted)) if dinners_hosted is not None else 'pending',
             'nourishment_received': nourishment,
@@ -1467,9 +1467,9 @@ def run_pass2(pass1_output, sf):
 
     all_ids = list(set(
         d['host_id_15'] for d in pass1_output['campaigns'].values()
-        if d.get('host_id_15')
+        if d.get('host_id_15') and d.get('tier') != 'warning'
     ))
-    print(f"[T&S] Pass 2: querying {len(all_ids)} contacts...", file=sys.stderr)
+    print(f"[T&S] Pass 2: querying {len(all_ids)} contacts (warning cases skipped)...", file=sys.stderr)
 
     sf_results = {}
     BATCH = 50  # Salesforce IN clause limit
