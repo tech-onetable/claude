@@ -401,33 +401,9 @@ function buildCaseBody(c, a, actioned, displayTier) {
     <div class="section-label">Summary</div>
     <ul class="bullets">${(c.bullets||[]).map(b=>`<li>${md(b)}</li>`).join('')}</ul>
 
-    <div class="section-label">Signals</div>
-    <div class="signals-list">
-      ${(c.signals||[]).filter(s=>s.triggered).map(s=>`
-        <div class="signal-row ${s.score_contribution>0?'signal-scored':'signal-unscored'}">
-          <div class="signal-dot ${s.score_contribution>0?'dot-triggered':'dot-unscored'}"></div>
-          <div class="signal-content">
-            <span class="signal-name">${s.name}</span>
-            ${s.observed?`<span class="signal-observed">${s.observed}</span>`:''}
-          </div>
-          ${s.score_contribution>0?`<span class="signal-contrib">+${s.score_contribution}</span>`:'<span class="signal-contrib-zero">context only</span>'}
-        </div>`).join('')}
-      ${(c.signals||[]).filter(s=>!s.triggered&&s.threshold_met===false).length > 0 ? `
-        <div class="signal-row-header">Not triggered</div>
-        ${(c.signals||[]).filter(s=>!s.triggered&&s.threshold_met===false).map(s=>`
-          <div class="signal-row signal-unscored">
-            <div class="signal-dot dot-unscored"></div>
-            <div class="signal-content">
-              <span class="signal-name" style="color:var(--text-ter)">${s.name}</span>
-              ${s.observed?`<span class="signal-observed">${s.observed}</span>`:''}
-            </div>
-            <span class="signal-contrib-zero">+0</span>
-          </div>`).join('')}`:''}
-    </div>
-
     ${c.score_breakdown?`
       <div class="collapsible">
-        <div class="collapsible-header" onclick="toggleCollapsible(this)">Score breakdown <span class="chevron">▾</span></div>
+        <div class="collapsible-header" onclick="toggleCollapsible(this)">Signals &amp; Score <span class="chevron">▾</span></div>
         <div class="collapsible-body">
           ${(c.signals||[]).filter(s=>s.triggered&&s.score_contribution>0).sort((a,b)=>b.score_contribution-a.score_contribution).map(s=>`
             <div class="breakdown-row"><span style="color:var(--text-sec)">${s.name} <span style="font-size:12px;color:var(--text-ter)">${s.observed||''}</span></span><span class="breakdown-contrib">+${s.score_contribution}</span></div>`).join('')}
