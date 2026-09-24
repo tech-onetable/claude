@@ -335,8 +335,17 @@ Read the saved JSON. Confirm:
 - Campaign IDs with no host row flagged
 - Suspension / Pause / Warning / cluster counts
 
-**Field population health check:**
-The script checks key scoring fields after parsing and alerts when population drops below expected levels. These alerts appear in the terminal output and in the `run.field_alerts` array in the JSON. When field_alerts are present:
+**Weekly Insights:**
+Populated after Pass 2 completes. Insights should cover both Pass 2 findings (host context, SF data, cluster patterns) AND Pass 1 patterns that don't reach Pass 2 (warning-tier hosts, signal frequency across the full population, bounce rate distribution, PID patterns, field health observations). Specifically:
+
+- How many hosts scored on bounces vs PIDs vs other signals -- is one signal driving most cases?
+- Warning cases with signals that are close to DNN threshold -- worth noting any that are borderline
+- Field health observations from the population (e.g. bounce data only 12% populated -- how many cases might be underscoring?)
+- Any signal patterns that appear frequently below threshold (would score if threshold were lower)
+- Cross-host flag groups -- any that look more suspicious than standard roommate situations
+- Proposed signal calibration updates if any pattern suggests a weight is off
+
+Leave blank if there is genuinely nothing notable. Do not pad.
 - Surface them prominently at the top of the weekly output, before any case results
 - CRITICAL alerts (field at 0-5% populated) mean entire signal categories are not scoring -- flag to ImagineX immediately, do not proceed with the weekly review without staff acknowledgment
 - WARNING alerts (field at 5-20% populated) mean signals may be underscoring -- note in Weekly Insights and flag to ImagineX
