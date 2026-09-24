@@ -542,7 +542,7 @@ def compute_total_score(scored_signals):
 
 
 def tier_from_score(score):
-    if score >= 18:
+    if score >= 14:
         return 'suspension'
     elif score >= 9:
         return 'warning_dnn'
@@ -952,8 +952,8 @@ def run(csv_path, lead_path=None):
                 'dnn': dnn,
             }
 
-    sus_cases = {c: d for c, d in all_scored.items() if d['score'] >= 18}
-    pause_cases = {c: d for c, d in all_scored.items() if 9 <= d['score'] < 18}
+    sus_cases = {c: d for c, d in all_scored.items() if d['score'] >= 14}
+    pause_cases = {c: d for c, d in all_scored.items() if 9 <= d['score'] < 14}
     warn_cases = {c: d for c, d in all_scored.items() if 1 <= d['score'] < 9}
 
     print(f"[T&S] Suspension: {len(sus_cases)} | Warning DNN: {len(pause_cases)} | Warning: {len(warn_cases)}", file=sys.stderr)
