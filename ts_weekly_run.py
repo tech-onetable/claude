@@ -149,7 +149,7 @@ def parse_csv(contact_path, lead_path=None):
                 continue
 
             # Suspended host filter
-            suspended = row.get('Suspended Flag', '').strip() in ('1', '1.0')
+            suspended = str(row.get('Suspended Flag', '')).strip() in ('1', '1.0', 'True', 'true')
             status = row.get('Campaign Status', '').strip().lower()
             if suspended and status in ('not nourishing', 'aborted'):
                 campaigns[cid]['_skip'] = True
@@ -950,6 +950,11 @@ def run(csv_path, lead_path=None):
     clusters = detect_clusters(all_scored, campaigns, cross_dinner)
     print(f"[T&S] Clusters identified: {len(clusters)}", file=sys.stderr)
 
+    # Remove existing cases (suspended + active status) from scored output
+    # They surface in the Existing Cases section of the UI, not the scored queue
+    existing_case_cids = {cid for cid, camp in campaigns.items() if camp.get('_existing_case')}
+    all_scored = {cid: d for cid, d in all_scored.items() if cid not in existing_case_cids}
+
     # Same-address cross-host flags
     addresses = collections.defaultdict(list)
     for cid, camp in campaigns.items():
@@ -1054,6 +1059,27 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns):
     Build final ts_ui_data JSON from Pass 1 results + Salesforce data.
     sf_results: dict of contact_id_15 -> SF Contact record
     """
+    # Build existing cases FIRST so we can exclude them from scored cases
+    existing_cases = []
+    for cid, camp in campaigns.items():
+        if camp.get('_existing_case') and camp.get('host'):
+            host = camp['host']
+            contact_id = host.get('Contact ID', '')
+            host_id_18 = sf_results.get(contact_id, {}).get('Id', sf_15_to_18(contact_id)) if contact_id else ''
+            existing_cases.append({
+                'host_name': f"{host.get('First Name','')} {host.get('Last Name','')}".strip(),
+                'contact_id': contact_id,
+                'sf_url': SF_BASE.format(host_id_18) if host_id_18 else '',
+                'campaign_id': cid,
+                'campaign_url': SF_CAMPAIGN_BASE.format(cid),
+                'dinner_name': camp.get('name', ''),
+                'campaign_status': camp.get('_suspended_status', ''),
+                'nourishment_received': f"${float(host.get('Total Nourishment Received', 0) or 0):,.0f}",
+                'nourishment_eligible': f"${float(host.get('Total Eligible Nourishment', 0) or 0):,.0f}",
+                'note': f"Suspended host with active dinner status: {camp.get('_suspended_status','')}. Review immediately -- Nourishment may have been sent while account was suspended."
+            })
+    existing_case_cids = {c['campaign_id'] for c in existing_cases}
+
     cases = []
     cross_dinner_fps = {fp: [] for fp in pass1_output.get('high_volume_fps', {})}
 
@@ -1247,6 +1273,8 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns):
     for cid in all_cids:
         if cid in cluster_members:
             continue
+        if cid in existing_case_cids:
+            continue
         d = pass1_output['campaigns'][cid]
         if d['score'] == 0 and not d['suspended'] and not d['dnn']:
             continue
@@ -1321,6 +1349,7 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns):
             'dinners_reviewed': pass1_output['total_dinners'],
             'summary': pass1_output['summary'],
         },
+        'existing_cases': existing_cases,
         'cases': cases,
         'cross_host_flags': cross_host_flags,
         'insights': {
