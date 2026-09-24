@@ -76,6 +76,7 @@
   .badge { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 6px; font-size: 12px; font-weight: 500; }
   .badge.suspension { background: var(--wine-light); color: var(--wine); }
   .badge.nourishment_pause { background: #FAEEDA; color: var(--amber-dark); }
+  .badge.warning_dnn { background: #FAEEDA; color: var(--amber-dark); }
   .badge.warning { background: var(--olive-light); color: #27500A; }
   .badge.dismiss { background: #F0F0EE; color: var(--text-sec); }
   .badge.program_team { background: var(--green-light); color: var(--green); }
@@ -160,6 +161,7 @@
 </style>
 </head>
 <body>
+<div id="field-alerts" style="display:none;max-width:900px;margin:12px auto 0;padding:0 16px"></div>
 <div id="app"></div>
 <script>
 // ── state ──────────────────────────────────────────────────────────────────
@@ -183,9 +185,9 @@ function saveRuns(r) { try { localStorage.setItem(STORE_KEY, JSON.stringify(r));
 state.runs = loadRuns();
 
 // ── helpers ────────────────────────────────────────────────────────────────
-const TIER_LABELS = { suspension:'Suspension', nourishment_pause:'Nourishment Pause', warning:'Warning', dismiss:'Dismissed · No misuse', program_team:'Referred to program team' };
-const TIER_COLORS = { suspension:'var(--wine)', nourishment_pause:'var(--amber-dark)', warning:'var(--olive)' };
-const TIER_BGS = { suspension:'var(--wine-light)', nourishment_pause:'#FAEEDA', warning:'var(--olive-light)' };
+const TIER_LABELS = { suspension:'Suspension', nourishment_pause:'Nourishment Pause', warning_dnn:'Warning (DNN)', warning:'Warning', dismiss:'Dismissed · No misuse', program_team:'Referred to program team' };
+const TIER_COLORS = { suspension:'var(--wine)', nourishment_pause:'var(--amber-dark)', warning_dnn:'var(--amber-dark)', warning:'var(--olive)' };
+const TIER_BGS = { suspension:'var(--wine-light)', nourishment_pause:'#FAEEDA', warning_dnn:'#FAEEDA', warning:'var(--olive-light)' };
 function tierLabel(t) { return TIER_LABELS[t] || t; }
 function tierClass(t) { return t || 'warning'; }
 function scoreColor(t) { return TIER_COLORS[t] || 'var(--text-sec)'; }
@@ -212,7 +214,20 @@ async function tryLoadFromFile() {
 }
 
 // ── render ─────────────────────────────────────────────────────────────────
-function render() {
+  // Field alerts -- shown above everything when present
+  const alertsEl = document.getElementById('field-alerts');
+  if (alertsEl && state.current) {
+    const alerts = state.current.field_alerts || [];
+    alertsEl.style.display = alerts.length ? 'block' : 'none';
+    alertsEl.innerHTML = alerts.map(a => {
+      const critical = a.includes('CRITICAL');
+      return `<div style="padding:10px 14px;border-radius:8px;margin-bottom:8px;font-size:13px;font-weight:500;
+        background:${critical?'#FEF2F2':'#FFFBEB'};color:${critical?'#991B1B':'#633806'};
+        border-left:3px solid ${critical?'#991B1B':'#F59E0B'}">
+        ${a.replace('⚠ CRITICAL: ','🚨 ').replace('⚠ WARNING: ','⚠️ ')}
+      </div>`;
+    }).join('');
+  }
   document.getElementById('app').innerHTML = buildApp();
   const cm = document.getElementById('chat-messages');
   if (cm) cm.scrollTop = cm.scrollHeight;
@@ -257,8 +272,8 @@ function buildLoadView() {
 function buildReviewView() {
   if (!state.current) return `<div class="empty"><div class="empty-icon">📭</div><div style="font-size:16px;margin-bottom:8px;">No run loaded</div><button class="btn btn-primary" onclick="switchView('load')">Load a run</button></div>`;
 
-  const cases = (state.current.cases||[]).filter(c => ['warning','nourishment_pause','suspension','deactivation'].includes(c.tier));
-  const priorAction = (state.current.cases||[]).filter(c => !['warning','nourishment_pause','suspension','deactivation'].includes(c.tier));
+  const cases = (state.current.cases||[]).filter(c => ['warning','warning_dnn','nourishment_pause','suspension','deactivation'].includes(c.tier));
+  const priorAction = (state.current.cases||[]).filter(c => !['warning','warning_dnn','nourishment_pause','suspension','deactivation'].includes(c.tier));
   const flags = state.current.cross_host_flags || [];
   const allActioned = cases.length>0 && cases.every(c=>state.actionState[c.id]) && flags.every(f=>state.actionState[f.id]);
 
@@ -271,7 +286,7 @@ function buildReviewView() {
     if (a.is_cluster&&!b.is_cluster) return -1;
     if (!a.is_cluster&&b.is_cluster) return 1;
     // Then by tier severity
-    const tierOrder = {suspension:0, deactivation:0, nourishment_pause:1, warning:2};
+    const tierOrder = {suspension:0, deactivation:0, nourishment_pause:1, warning_dnn:1, warning:2};
     const tA = tierOrder[a.tier]??3;
     const tB = tierOrder[b.tier]??3;
     if (tA!==tB) return tA-tB;
@@ -280,7 +295,7 @@ function buildReviewView() {
   });
 
   // Derive counts from actual cases, not the summary object which may be stale
-  const validCases = (state.current.cases||[]).filter(c => ['warning','nourishment_pause','suspension','deactivation'].includes(c.tier));
+  const validCases = (state.current.cases||[]).filter(c => ['warning','warning_dnn','nourishment_pause','suspension','deactivation'].includes(c.tier));
   const countSuspension = validCases.filter(c => ['suspension','deactivation'].includes(c.tier) && !c.is_cluster).length +
     (state.current.cases||[]).filter(c => c.is_cluster && ['suspension','deactivation'].includes(c.tier)).length;
   const countPause = validCases.filter(c => c.tier === 'nourishment_pause' && !c.is_cluster).length +
@@ -299,7 +314,7 @@ function buildReviewView() {
       <button class="btn btn-secondary" onclick="switchView('load')" style="font-size:12px;padding:4px 10px;">+ Load new run</button>
     </div>
     <div class="filter-bar">
-      ${[['all','All'],['cluster','⚠ Cluster'],['suspension','Suspension'],['nourishment_pause','Nourishment Pause'],['warning','Warning']].map(([f,l])=>`<button class="filter-btn ${state.filter===f?'active':''}" onclick="setFilter('${f}')">${l}</button>`).join('')}
+      ${[['all','All'],['cluster','⚠ Cluster'],['suspension','Suspension'],['nourishment_pause','Nourishment Pause'],['warning_dnn','Warning DNN'],['warning','Warning']].map(([f,l])=>`<button class="filter-btn ${state.filter===f?'active':''}" onclick="setFilter('${f}')">${l}</button>`).join('')}
     </div>
     ${filtered.length===0?'<div style="font-size:14px;color:var(--text-sec);margin-bottom:16px;">No cases match this filter.</div>':filtered.map(buildCaseCard).join('')}
     ${flags.length>0?`<div class="section-divider">Cross-host flags — program team</div>${flags.map(buildFlagCard).join('')}`:''}
@@ -898,7 +913,38 @@ function handleFileUpload(e) {
   reader.readAsText(file);
 }
 
+function normaliseCase(c) {
+  // Map fields from ts_weekly_run.py JSON output to UI expected format
+  const tier = c.tier === 'warning_dnn' ? 'warning_dnn' :
+               c.tier === 'suspension' ? 'suspension' :
+               c.tier === 'warning' ? 'warning' :
+               c.tier === 'nourishment_pause' ? 'nourishment_pause' : c.tier;
+  return {
+    ...c,
+    name: c.name || c.host_name || '',
+    tier,
+    nourishment_received: c.nourishment_received || '—',
+    nourishment_eligible: c.nourishment_eligible_this_dinner || c.nourishment_eligible || '—',
+    dinner_name: c.dinner_name || '',
+    contact_id: c.contact_id || (c.sf_url||'').match(/Contact\/([^/]+)\/view/)?.[1] || '',
+    campaign_id: c.campaign_id || (c.id||'').replace('case-',''),
+    host_context: c.host_context || {},
+    signals: (c.signals||[]).filter(s => s.score_contribution > 0 || s.triggered),
+    pattern_summary: c.collapsed_summary || c.pattern_summary || '',
+  };
+}
+
 function loadData(data) {
+  // Normalise cases
+  if (data.cases) data.cases = data.cases.map(normaliseCase);
+  // Surface run-level fields
+  if (data.run) {
+    data.week_of = data.week_of || data.run.week_of;
+    data.run_date = data.run_date || data.run.run_date;
+    data.dinners_reviewed = data.dinners_reviewed || data.run.dinners_reviewed;
+    data.summary = data.summary || data.run.summary;
+    data.field_alerts = data.field_alerts || data.run.field_alerts || [];
+  }
   const run = {...data, id:Date.now(), loadedAt:new Date().toISOString()};
   state.runs = [run,...state.runs].slice(0,24);
   saveRuns(state.runs);
