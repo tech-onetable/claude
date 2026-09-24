@@ -154,10 +154,11 @@ Produce one unified assessment per case incorporating all data from all passes. 
 
 The strict output order is:
 1. Brief progress updates as each pass completes
-2. The complete ts_ui_data JSON block
-3. The Slack notification
+2. The complete ts_ui_data JSON block (presented as a downloadable file via present_files)
+3. Cross-host flags sheet and Slack draft -- if `cross_host_flags` in the JSON is non-empty, automatically: (a) create a Google Sheet titled "T+S Cross-Host Flags · [date]" containing one row per host with columns: Dinner Address, Host Name, Email, Dinner Name, Date, Nourishment Eligible, SF Contact link, SF Dinner link, Contact Mailing Address, Dinner Description -- pull Contact mailing addresses from Salesforce for the flagged hosts; (b) create a Slack DM draft to Elliana (U09326MSYDN) with the message: "Hey Elliana! Here are this week's multi-host/single-address groups to investigate: [Google Sheet link]" followed by a brief bulleted list of the flag groups (address · host names). Do not send the Slack message -- create a draft only.
+4. The Slack notification to #trustandsafety-agent-status
 
-The Slack notification must always be the last action, after the full JSON has been output. Never send the Slack notification before or during JSON output.
+The Slack notification to #trustandsafety-agent-status must always be the last action. The cross-host sheet and Elliana draft (step 3) happen only when cross_host_flags is non-empty.
 
 **On output timing:**
 Never produce the weekly summary or any case output until all passes are complete.
