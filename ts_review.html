@@ -192,6 +192,8 @@ const state = {
 const STORE_KEY = 'ts-weekly-runs';
 function loadRuns() { try { return JSON.parse(localStorage.getItem(STORE_KEY)||'[]'); } catch { return []; } }
 function saveRuns(r) { try { localStorage.setItem(STORE_KEY, JSON.stringify(r)); } catch {} }
+
+// State initialised after loadRuns -- safe even if localStorage throws
 state.runs = loadRuns();
 
 // ── helpers ────────────────────────────────────────────────────────────────
@@ -373,7 +375,6 @@ function buildCaseCard(c) {
     </div>
     ${isOpen?buildCaseBody(c,a,actioned,displayTier):''}
   </div>`;
-}
 }
 
 function buildCaseBody(c, a, actioned, displayTier) {
