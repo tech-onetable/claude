@@ -187,6 +187,7 @@ const state = {
   clusterWarning: null,
   openCards: new Set(),
   warningsExpanded: false,
+  highNourWarningsExpanded: false,
 };
 
 // ── storage ────────────────────────────────────────────────────────────────
@@ -347,22 +348,65 @@ function buildReviewView() {
     </div>`:''}
     ${(()=>{
       const actionableCases = filtered.filter(c => c.tier !== 'warning');
-      const warnCases = filtered.filter(c => c.tier === 'warning');
       const allWarnings = (state.current.cases||[]).filter(c => c.tier === 'warning');
+      const highNourWarnings = allWarnings.filter(c => {
+        const n = parseFloat(String(c.nourishment_received||'0').replace(/[$,]/g,'')) || 0;
+        return n >= 1000;
+      });
+      const stdWarnings = allWarnings.filter(c => {
+        const n = parseFloat(String(c.nourishment_received||'0').replace(/[$,]/g,'')) || 0;
+        return n < 1000;
+      });
       let html = '';
       if (actionableCases.length === 0 && state.filter === 'all') {
         html += '<div style="font-size:14px;color:var(--text-sec);margin-bottom:16px;">No suspension or DNN cases this week.</div>';
       } else {
         html += actionableCases.map(buildCaseCard).join('');
       }
-      // Warning cases -- collapsible summary table, not individual cards
-      if ((state.filter === 'all' || state.filter === 'warning') && allWarnings.length > 0) {
+
+      // High-nourishment warnings -- needs Abbie review
+      if ((state.filter === 'all' || state.filter === 'warning') && highNourWarnings.length > 0) {
+        const isExpanded = state.highNourWarningsExpanded;
+        html += `<div style="margin-top:16px;border:0.5px solid #FED7AA;border-radius:8px;overflow:hidden">
+          <div style="padding:12px 16px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;background:#FFFBEB" onclick="state.highNourWarningsExpanded=!state.highNourWarningsExpanded;render()">
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="font-size:13px;font-weight:600;color:#92400E">⚠ Warnings · High Nourishment</span>
+              <span style="font-size:12px;color:#92400E">${highNourWarnings.length} cases · $1,000+ received · review with Abbie</span>
+            </div>
+            <span style="font-size:14px;color:#92400E;transform:${isExpanded?'rotate(180deg)':'rotate(0)'};transition:transform .2s">▾</span>
+          </div>
+          ${isExpanded ? `<div style="border-top:0.5px solid #FED7AA">
+            <table style="width:100%;border-collapse:collapse;font-size:13px">
+              <thead><tr style="background:#FFFBEB;font-size:11px;color:#92400E;text-transform:uppercase;letter-spacing:.04em">
+                <th style="padding:8px 16px;text-align:left;font-weight:500">Host</th>
+                <th style="padding:8px 16px;text-align:left;font-weight:500">Signals</th>
+                <th style="padding:8px 8px;text-align:center;font-weight:500">Score</th>
+                <th style="padding:8px 16px;text-align:right;font-weight:500">Nourishment</th>
+                <th style="padding:8px 16px;text-align:right;font-weight:500">Links</th>
+              </tr></thead>
+              <tbody>${highNourWarnings.map((c,i)=>`<tr style="border-top:0.5px solid #FED7AA;background:${i%2===0?'#fff':'#FFFBEB'}">
+                <td style="padding:10px 16px"><a href="${c.sf_url}" target="_blank" style="color:var(--text);text-decoration:underline;font-weight:500">${c.name}</a></td>
+                <td style="padding:10px 16px;color:var(--text-sec)">${(c.signals||[]).filter(s=>s.score_contribution>0).map(s=>s.name).join(', ')}</td>
+                <td style="padding:10px 8px;text-align:center;font-weight:500">${c.score}</td>
+                <td style="padding:10px 16px;text-align:right;font-weight:600;color:#92400E">${c.nourishment_received||'—'}</td>
+                <td style="padding:10px 16px;text-align:right;white-space:nowrap">
+                  ${c.sf_url?`<button onclick="copyLink('${c.sf_url}')" style="font-size:11px;padding:2px 6px;border:0.5px solid var(--border);border-radius:4px;background:transparent;color:var(--text-sec);cursor:pointer">Contact</button> `:''}
+                  ${sfCampaignUrl(c)?`<button onclick="copyLink('${sfCampaignUrl(c)}')" style="font-size:11px;padding:2px 6px;border:0.5px solid var(--border);border-radius:4px;background:transparent;color:var(--text-sec);cursor:pointer">Dinner</button>`:''}
+                </td>
+              </tr>`).join('')}</tbody>
+            </table>
+          </div>` : ''}
+        </div>`;
+      }
+
+      // Standard warnings -- auto-sent, no review needed
+      if ((state.filter === 'all' || state.filter === 'warning') && stdWarnings.length > 0) {
         const isExpanded = state.warningsExpanded;
-        html += `<div style="margin-top:16px;border:0.5px solid var(--border);border-radius:8px;overflow:hidden">
+        html += `<div style="margin-top:8px;border:0.5px solid var(--border);border-radius:8px;overflow:hidden">
           <div style="padding:12px 16px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;background:var(--card)" onclick="state.warningsExpanded=!state.warningsExpanded;render()">
             <div style="display:flex;align-items:center;gap:10px">
               <span style="font-size:13px;font-weight:600;color:var(--olive)">Warnings</span>
-              <span style="font-size:12px;color:var(--text-sec)">${allWarnings.length} cases · auto-sent · no review needed</span>
+              <span style="font-size:12px;color:var(--text-sec)">${stdWarnings.length} cases · auto-sent · no review needed</span>
             </div>
             <span style="font-size:14px;color:var(--text-sec);transform:${isExpanded?'rotate(180deg)':'rotate(0)'};transition:transform .2s">▾</span>
           </div>
@@ -375,7 +419,7 @@ function buildReviewView() {
                 <th style="padding:8px 16px;text-align:right;font-weight:500">Nourishment</th>
                 <th style="padding:8px 16px;text-align:right;font-weight:500">Links</th>
               </tr></thead>
-              <tbody>${allWarnings.map((c,i)=>`<tr style="border-top:0.5px solid var(--border);background:${i%2===0?'#fff':'#FAFAF8'}">
+              <tbody>${stdWarnings.map((c,i)=>`<tr style="border-top:0.5px solid var(--border);background:${i%2===0?'#fff':'#FAFAF8'}">
                 <td style="padding:10px 16px"><a href="${c.sf_url}" target="_blank" style="color:var(--text);text-decoration:underline;font-weight:500">${c.name}</a></td>
                 <td style="padding:10px 16px;color:var(--text-sec)">${(c.signals||[]).filter(s=>s.score_contribution>0).map(s=>s.name).join(', ')}</td>
                 <td style="padding:10px 8px;text-align:center;font-weight:500">${c.score}</td>
@@ -388,6 +432,14 @@ function buildReviewView() {
             </table>
           </div>` : ''}
         </div>`;
+      }
+      return html;
+    })()}
+      let html = '';
+      if (actionableCases.length === 0 && state.filter === 'all') {
+        html += '<div style="font-size:14px;color:var(--text-sec);margin-bottom:16px;">No suspension or DNN cases this week.</div>';
+      } else {
+        html += actionableCases.map(buildCaseCard).join('');
       }
       return html;
     })()}
@@ -492,7 +544,7 @@ function buildCaseBody(c, a, actioned, displayTier) {
         </div>
       </div>`:''}
 
-    ${buildHostContextPanels(c)}
+    ${['warning_dnn','nourishment_pause','suspension','deactivation'].includes(c.tier) ? buildHostContextPanels(c) : ''}
 
     ${clusterWarn?`<div class="cluster-warning">⚠ This is a cluster case. Consult Amalia before proceeding.
       <div style="margin-top:8px;display:flex;gap:8px;">
@@ -1052,6 +1104,7 @@ function loadData(data) {
   );
   state.filter = 'all';
   state.warningsExpanded = false;
+  state.highNourWarningsExpanded = false;
   state.view = 'review';
   render();
 }
