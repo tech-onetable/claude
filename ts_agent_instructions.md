@@ -182,29 +182,19 @@ Does not score when a shared last name between host and guest already explains t
 **Cross-dinner device fingerprint match signal:**
 Requires at least one other triggered signal to score. Standalone cross-dinner FP match is a watch flag only -- noted in Weekly Insights, does not flag individual hosts. When paired with other signals (bounces, sequential PIDs, shared host/guest device), scores at weight 7 and is high confidence. A fingerprint appearing on many dinners does not reduce its weight when paired. When this signal fires on multiple dinners sharing other signals, treat as a cluster.
 
-**Hard bounces on guest emails signal:**
-Two tiers based on percentage:
-- 50-74%: weight 4, corroborating. Scores standalone at Warning level.
-- 75%+: weight 8, high confidence. Scores standalone at DNN level.
-Applies regardless of email domain type.
-
-**Reject bounces on guest emails:**
-Reject bounces (50%+) are a scored corroborating signal at weight 5. A concentration of reject bounces indicates guests may have been fabricated using addresses designed to evade hard bounce detection. High confidence when combined with sequential guest Profile IDs or shared device fingerprint across guests. Score it. Do not treat it as pending or unconfirmed.
-
-**Sequential guest Profile IDs signal:**
-Two tiers based on percentage. Denominator is guests WITH Profile IDs only -- plus-ones and guests without Profile IDs are excluded from both numerator and denominator entirely.
-- 55-99% of profiled guests sequential: weight 3, corroborating only. Can score standalone and stack with other signals.
-- 100% of profiled guests sequential: weight 6, Warning-eligible standalone.
-Sequential means PIDs within 1-2 of each other. PIDs more than 2 apart are not sequential.
+**Guest email bounces signal:**
+Hard and reject bounces are combined into a single signal. Any delivery failure counts regardless of Mandrill's classification (hard_bounce, reject, invalid). Bounces on known throwaway domains always count. The hard/reject distinction is not meaningful for consequence decisions.
+- 50-74% of guests bounced: weight 4, corroborating, needs pairing
+- 75%+ of guests bounced: weight 8, high-confidence, Warning (DNN) eligible standalone
 
 **Recycled guest lists signal:**
-Does not score on clean recycled guests. Triggers only when the same exact guest email address appears across 2+ of this host's dinners AND those guests have hard or reject bounces. Weight 3, corroborating only. Exact email match required -- near-matches do not count. Clean recycled guests (no bounces) are normal hosting behavior and do not score.
+Does not score on clean recycled guests. Triggers only when the same exact guest email address appears across 2+ of this host's dinners AND those guests have bounces (any type). Weight 3, corroborating only. Exact email match required. Clean recycled guests are normal hosting behavior and do not score.
 
 **Same device fingerprint across guests signal:**
-Requires at least one other triggered signal to score. Standalone -- even above the 25% threshold -- is a watch flag only and does not score. Note the observed percentage in anomaly flags. This mirrors the same IP signal pairing requirement.
+Requires at least one other triggered signal to score. Standalone -- even above the 25% threshold -- is a watch flag only and does not score. Note the observed percentage in anomaly flags.
 
 **AI-generated or templated description signal:**
-Does not score in T&S without at least one guest integrity signal also triggered (hard bounces, reject bounces, sequential guest Profile IDs, or suspicious guest email domains). Standalone AI Not Pass routes to program team as a program quality flag, not a T&S finding. Do not include standalone AI Not Pass cases in T&S output -- route to program team instead.
+Does not score in T&S without at least one guest integrity signal also triggered (bounces, sequential guest Profile IDs, or suspicious guest email domains). Standalone AI Not Pass routes to program team as a program quality flag, not a T&S finding. Do not include standalone AI Not Pass cases in T&S output -- route to program team instead.
 
 **Same IP across guests signal:**
 Requires 80%+ AND must combine with at least one other signal. Never scores on its own.
@@ -235,11 +225,10 @@ A single geographic mismatch signal does not score and does not trigger a Warnin
 | 9 | Account and Identity | Suspicious guest email patterns | 4 | 50%+ | Duplicate, clearly fake, or offensive/inappropriate email addresses. Must combine with at least one other signal to score. |
 | 10 | Account and Identity | Suspicious phone number patterns | 4 | 50%+ | Sequential or patterned phone numbers. Must combine with at least one other signal to score. |
 | 11 | Account and Identity | Host/guest email similarity | 4 | Any | Does not score when shared last name explains similarity. Must combine with at least one other signal to score. |
-| 12 | Guest List Integrity | Hard bounces on guest emails | 4 or 8 | 50%+ | 50-74% = weight 4, corroborating, Warning-range standalone. 75%+ = weight 8, high confidence, DNN-range standalone. Applies regardless of email domain type. |
-| 13 | Guest List Integrity | Reject bounces on guest emails | 5 | 50%+ | Must combine with at least one other signal to score. More ambiguous than hard bounce; high confidence when combined with sequential PIDs or shared device. |
-| 14 | Guest List Integrity | Sequential guest Profile IDs | 3 or 6 | 55%+ of profiled guests | Denominator = guests WITH Profile IDs only; plus-ones excluded. 55-99% = weight 3, corroborating, can score standalone. 100% = weight 6, Warning-eligible standalone. Sequential = PIDs within 1-2 of each other. |
-| 15 | Guest List Integrity | Recycled bounced guest list | 3 | Any | Same exact guest email across 2+ dinners AND those guests have hard or reject bounces. Clean recycled guests do not score. Must combine with at least one other signal to score. |
-| 16 | Guest List Integrity | Privacy domain, no bounce | 2 | Any | Must combine with at least one other signal to score. |
+| 12 | Guest List Integrity | Guest email bounces | 4 or 8 | 50%+ | Hard and reject combined. 50-74% = weight 4, corroborating. 75%+ = weight 8, high-confidence, Warning DNN standalone. Throwaway domain bounces always count regardless of Mandrill type. |
+| 13 | Guest List Integrity | Sequential guest Profile IDs | 3 or 6 | 55%+ of profiled guests | Denominator = guests WITH Profile IDs only; plus-ones excluded. 55-99% = weight 3, corroborating, can score standalone. 100% = weight 6, Warning-eligible standalone. Sequential = PIDs within 1-2 of each other. |
+| 14 | Guest List Integrity | Recycled bounced guest list | 3 | Any | Same exact guest email across 2+ dinners AND those guests have bounces (any type). Clean recycled guests do not score. Needs pairing. |
+| 15 | Guest List Integrity | Privacy domain, no bounce | 1 | Any | Must combine with at least one guest integrity signal to score. |
 | 17 | Posting Behavior | AI-generated or templated description | 3 | Any | Must combine with at least one guest integrity signal (bounces, sequential PIDs, suspicious domains) to score in T&S. Standalone routes to program team -- not a T&S finding. |
 | 18 | Posting Behavior | Description quality degradation over time | 3 | Any | **Deep dive signal -- not scored in weekly run.** Triggered on staff request. Does not require independent pairing. Check last 5 dinner descriptions for copy/paste, template patterns, or declining quality. |
 | 19 | Posting Behavior | Privacy/description mismatch | 2 | Any | **Deep dive signal -- not scored in weekly run.** Triggered on staff request. Does not require independent pairing. Private dinner with open/public-sounding description, or public dinner with closed/exclusive language. |
@@ -248,21 +237,20 @@ A single geographic mismatch signal does not score and does not trigger a Warnin
 | 22 | Deliberate Activity | Deliberate activity to defraud the program | 10 | Any | Staff judgment required. High confidence. |
 | 23 | Deliberate Activity | Deliberate identity change | 8 | Any | Staff judgment required. High confidence. Host reapplying under new name/account matching deactivated host patterns. |
 
-**High-confidence signals (can justify Suspension on first instance):**
-Shared device fingerprint host and guest; Hard bounces on guest emails; Sequential guest Profile IDs (when paired); Reports from other users; Deliberate activity to defraud; Deliberate identity change
+**High-confidence signals (75%+ bounce standalone qualifies for Warning DNN):**
+Shared device fingerprint host and guest; Guest email bounces 75%+; Sequential guest Profile IDs (when paired); Reports from other users; Deliberate activity to defraud; Deliberate identity change
 
-**Suspicious email domains (always flag, treat bounces on these as hard bounces):** atomicmail.io, mailshield.org, tutamail.com, otheremail.org, bumpmail.io, simplelogin.com, membermail.net, freemail.is, ourisp.net, altaddress.org, dropons.com, jourrapide.com, armyspy.com, teleworm.us, dayrep.com
+**Suspicious email domains (always flag, bounces on these always count):** atomicmail.io, mailshield.org, tutamail.com, otheremail.org, bumpmail.io, simplelogin.com, membermail.net, freemail.is, ourisp.net, altaddress.org, dropons.com, jourrapide.com, armyspy.com, teleworm.us, dayrep.com
 
 **On Nourishment display:** Always show Total Nourishment Received as the lifetime figure with an explicit label ("Total Nourishment received to date: $X"). Show dinner-eligible Nourishment separately as "Eligible this dinner: $X". Never compare the lifetime figure to the dinner-eligible figure -- they are different things and the comparison is misleading.
 
 **Score ranges:**
 - 0: No action
-- 1-8: Reminder and Support (Warning) -- auto-sent, no restriction
-- 9-17, corroborating only: Warning (DNN) -- DNN activated, community@ email
-- 9-17, high-confidence present or prior Warning: Nourishment Pause -- DNN activated, T&S@ email, Zoom required
+- 1-8: Warning (Reminder and Support) -- auto-sent, no restriction
+- 9-17: Warning (DNN) -- DNN activated, community@ email, Zoom required
 - 18-24: Suspension (softer approach)
 - 25-39: Suspension (stricter approach)
-- 40+: Account Deactivation range (first instance rule applies)
+- 40+: Suspension (first instance rule applies)
 
 **First instance rule:** Even at 40+, first formal consequence is Suspension not Deactivation.
 
