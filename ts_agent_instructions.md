@@ -663,9 +663,16 @@ This protocol is triggered by staff approval of a Suspension -- not by the agent
 - Same steps fire as above for selected tier
 - Log override reason to Salesforce case note
 
-**Platform actions -- manual staff checklist (not automated, backend only)**
-- Check DNN checkbox on user record in backend (Warning DNN, Nourishment Pause, and above)
-- Check Banned checkbox on user record in backend (Suspension and above)
+**Post-approval checklist -- displayed in UI after Suspension is approved**
+The following actions require manual backend access and cannot be automated via MCP. The UI displays these as a checklist for staff to complete after approving a Suspension:
+
+- [ ] Check "Banned" checkbox on host user record in backend (prevents platform access)
+- [ ] Deactivate any known device IDs associated with the host account in backend
+- [ ] Confirm DNN checkbox is checked on host user record in backend
+- [ ] Confirm future dinners are showing Not Nourishing in platform
+- [ ] Upload bulk ban CSV to build team if guest cases were created (Pammie handles)
+
+For Warning DNN and Nourishment Pause: only the DNN checkbox in backend applies. No ban, no device deactivation.
 
 ---
 
