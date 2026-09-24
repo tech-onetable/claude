@@ -197,10 +197,14 @@ function saveRuns(r) { try { localStorage.setItem(STORE_KEY, JSON.stringify(r));
 state.runs = loadRuns();
 
 // ── helpers ────────────────────────────────────────────────────────────────
-const TIER_LABELS = { suspension:'Suspension', nourishment_pause:'Warning (DNN)', warning_dnn:'Warning (DNN)', warning:'Warning', dismiss:'Dismissed · No misuse', program_team:'Referred to program team' };
+const TIER_LABELS = { suspension:'Suspension (Soft)', nourishment_pause:'Warning (DNN)', warning_dnn:'Warning (DNN)', warning:'Warning', dismiss:'Dismissed · No misuse', program_team:'Referred to program team' };
 const TIER_COLORS = { suspension:'var(--wine)', nourishment_pause:'var(--amber-dark)', warning_dnn:'var(--amber-dark)', warning:'var(--olive)' };
 const TIER_BGS = { suspension:'var(--wine-light)', nourishment_pause:'#FAEEDA', warning_dnn:'#FAEEDA', warning:'var(--olive-light)' };
-function tierLabel(t) { return TIER_LABELS[t] || t; }
+
+function tierLabel(t, score) {
+  if (t === 'suspension') return (score >= 25) ? 'Suspension (Strict)' : 'Suspension (Soft)';
+  return TIER_LABELS[t] || t;
+}
 function tierClass(t) { return t || 'warning'; }
 function scoreColor(t) { return TIER_COLORS[t] || 'var(--text-sec)'; }
 function scoreBg(t) { return TIER_BGS[t] || '#F0F0EE'; }
@@ -338,7 +342,7 @@ function buildCaseCard(c) {
         <div class="score-circle" style="background:${scoreBg(c.tier)};color:${scoreColor(c.tier)};width:32px;height:32px;font-size:13px">${c.score}</div>
         <div class="case-meta" style="display:flex;align-items:center;gap:10px;flex:1;min-width:0">
           <a class="case-name" href="${c.sf_url}" target="_blank" onclick="event.stopPropagation()" style="font-size:14px;white-space:nowrap">${c.name} ↗</a>
-          <span class="badge ${tierClass(displayTier)}" style="font-size:11px">${tierLabel(displayTier)}</span>
+          <span class="badge ${tierClass(displayTier)}" style="font-size:11px">${tierLabel(displayTier, c.score)}</span>
           <span style="font-size:12px;color:var(--text-sec);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${signalSummary}</span>
           ${actioned?'<span class="badge actioned" style="font-size:11px">✓ Reviewed</span>':''}
         </div>
@@ -356,7 +360,7 @@ function buildCaseCard(c) {
       <div class="case-meta">
         <div class="case-name-row">
           <a class="case-name" href="${c.sf_url}" target="_blank" onclick="event.stopPropagation()">${c.name} ↗</a>
-          <span class="badge ${tierClass(displayTier)}">${c.is_cluster?'⚠ Cluster · ':''}${tierLabel(displayTier)}</span>
+          <span class="badge ${tierClass(displayTier)}">${c.is_cluster?'⚠ Cluster · ':''}${tierLabel(displayTier, c.score)}</span>
           ${actioned?'<span class="badge actioned">✓ Actioned</span>':''}
         </div>
         <div class="case-stats">
@@ -551,7 +555,7 @@ function buildActionChecklist(tier, hosts, rd, type, note) {
 
   const TS_RT = '012PO000001F53dYAC';
   const items = [
-    {l:`Create Salesforce Case — RecordTypeId: ${TS_RT} · Subject: "Trust and Safety — ${tierLabel(tier)} — ${rd}"`,r:false},
+    {l:`Create Salesforce Case — RecordTypeId: ${TS_RT} · Subject: "Trust and Safety — ${tierLabel(tier, 14)} — ${rd}"`,r:false},
     {l:'Set Flag__c = true on Contact',r:false},
     {l:`Set Flag_Reason__c = "See case from ${rd}"`,r:false},
     {l:'Create Gmail draft with consequence email',r:true},
@@ -726,7 +730,7 @@ Please run ALL of the following:
 
 function openChat(c) {
   state.activeChat = c;
-  state.chatMessages = [{role:'assistant', content:`I'm looking at the **${c.name||c.title}** case${c.score?' (score '+c.score+' → '+tierLabel(c.tier)+')':''}. What would you like to know?`}];
+  state.chatMessages = [{role:'assistant', content:`I'm looking at the **${c.name||c.title}** case${c.score?' (score '+c.score+' → '+tierLabel(c.tier, c.score)+')':''}. What would you like to know?`}];
   state.chatInput = '';
   render();
 }
@@ -740,7 +744,7 @@ function buildChatPanel() {
   return `<div class="chat-panel">
     <div class="chat-header">
       <div><div class="chat-header-name">Discuss: ${c.name||c.title||''}</div>
-        <div class="chat-header-sub">Score ${c.score||''} · ${tierLabel(c.tier||'')}</div></div>
+        <div class="chat-header-sub">Score ${c.score||''} · ${tierLabel(c.tier||'', c.score||0)}</div></div>
       <button class="chat-close" onclick="closeChat()">×</button>
     </div>
     <div class="chat-messages" id="chat-messages">
