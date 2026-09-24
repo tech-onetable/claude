@@ -852,6 +852,7 @@ def build_case_json(cid, camp, scored_signals, score, tier, sf_data=None):
         },
         'cluster_note': None,
         'cluster_hosts': [],
+        'open_ts_cases': sf_data.get('_open_ts_cases', []) if sf_data else [],
     }
 
 
@@ -1330,6 +1331,29 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns):
         sf = sf_results.get(d['host_id_15'], {})
         camp = campaigns[cid]
 
+        # If host has open T&S cases, surface in existing_cases rather than scored queue
+        open_cases = sf.get('_open_ts_cases', [])
+        if open_cases:
+            host = camp.get('host', {})
+            contact_id = host.get('Contact ID', '') if host else ''
+            host_id_18 = sf.get('Id', sf_15_to_18(contact_id)) if contact_id else ''
+            case_refs = '; '.join(f"Case {c['case_number']} ({c['status']})" for c in open_cases)
+            existing_cases.append({
+                'host_name': f"{host.get('First Name','')} {host.get('Last Name','')}".strip() if host else '',
+                'contact_id': contact_id,
+                'sf_url': SF_BASE.format(host_id_18) if host_id_18 else '',
+                'campaign_id': cid,
+                'campaign_url': SF_CAMPAIGN_BASE.format(cid),
+                'dinner_name': camp.get('name', ''),
+                'campaign_status': host.get('Campaign Status', '') if host else '',
+                'nourishment_received': f"${float(host.get('Total Nourishment Received', 0) or 0):,.0f}" if host else '—',
+                'nourishment_eligible': f"${float(host.get('Total Eligible Nourishment', 0) or 0):,.0f}" if host else '—',
+                'note': f"Open T&S case(s): {case_refs}. Score this week: {d['score']} ({d['tier']}). Review before taking new action.",
+                'existing_case_type': 'open_case',
+            })
+            existing_case_cids.add(cid)
+            continue
+
         # Reconstruct scored_signals for case building
         scored_signals = {k: {
             'name': v['name'],
@@ -1534,6 +1558,42 @@ def run_pass2(pass1_output, sf):
         if len(id18) == 18:
             future = future_dinners_by_contact.get(id18, [])
             record['_future_dinners'] = future
+
+    # ── Open T&S cases query ─────────────────────────────────────────────────
+    # Flag any flagged host who already has an open T&S case -- surfaces in existing_cases
+    open_cases_by_contact = {}
+    try:
+        ids_18 = list(set(r['Id'] for r in sf_results.values() if 'Id' in r))
+        for i in range(0, len(ids_18), 30):
+            batch = ids_18[i:i+30]
+            ids_str = "', '".join(batch)
+            cases_soql = (
+                f"SELECT Id, CaseNumber, Subject, Status, ContactId "
+                f"FROM Case "
+                f"WHERE ContactId IN ('{ids_str}') "
+                f"AND T_S_Type__c = 'Misuse of Platform' "
+                f"AND Status != 'Closed' "
+                f"LIMIT 100"
+            )
+            result = sf.query(cases_soql)
+            for rec in result.get('records', []):
+                cid = rec.get('ContactId', '')
+                if cid not in open_cases_by_contact:
+                    open_cases_by_contact[cid] = []
+                open_cases_by_contact[cid].append({
+                    'id': rec.get('Id', ''),
+                    'case_number': rec.get('CaseNumber', ''),
+                    'subject': rec.get('Subject', ''),
+                    'status': rec.get('Status', ''),
+                })
+        print(f"[T&S] Open T&S cases: found for {len(open_cases_by_contact)} contacts", file=sys.stderr)
+    except Exception as e:
+        print(f"[T&S] Open T&S cases query error: {e}", file=sys.stderr)
+
+    # Attach open cases to sf_results
+    for id18, record in sf_results.items():
+        if len(id18) == 18:
+            record['_open_ts_cases'] = open_cases_by_contact.get(id18, [])
 
     return sf_results
 
