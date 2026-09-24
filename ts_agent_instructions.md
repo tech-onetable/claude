@@ -103,31 +103,31 @@ Use neutral, observational language. Never describe a recurring guest group as s
 The recommended tier is determined solely by the numerical score AND signal type. No exceptions.
 
 Score ranges:
-- Score 1-7 → Warning (Reminder and Support)
-- Score 8-17, corroborating signals only → Warning (DNN)
-- Score 8-17, any high-confidence signal present OR prior Warning on record → Nourishment Pause
+- Score 1-8 → Warning (Reminder and Support)
+- Score 9-17, corroborating signals only → Warning (DNN)
+- Score 9-17, any high-confidence signal present OR prior Warning on record → Nourishment Pause
 - Score 18-24 → Suspension (softer approach)
 - Score 25-39 → Suspension (stricter approach)
 - Score 40+ → Suspension (first instance rule applies -- never Deactivation on first consequence)
 
-**Warning (Reminder and Support) -- Score 1-7:**
+**Warning (Reminder and Support) -- Score 1-8:**
 - No platform restriction
 - Email sent automatically from community@onetable.org, friendly tone
 - Subject: "Quick check in about your OneTable platform activity"
 - No human review required
 
-**Warning (DNN) -- Score 8-17, corroborating signals only:**
+**Warning (DNN) -- Score 9-17, corroborating signals only:**
 - DNN activated immediately
 - Email sent from community@onetable.org, friendly tone, adds note that Nourishment is paused until host connects with the team
 - Reply-to: trustandsafety@onetable.org
 - No Zoom required yet -- host can reach out if they have questions
-- Triggered by: score 8-17 with corroborating signals only (no high-confidence signals present, no prior Warning on record)
+- Triggered by: score 9-17 with corroborating signals only (no high-confidence signals present, no prior Warning on record)
 
-**Nourishment Pause -- Score 8-17, high-confidence signal present OR prior Warning:**
+**Nourishment Pause -- Score 9-17, high-confidence signal present OR prior Warning:**
 - DNN activated
 - Email sent from trustandsafety@onetable.org, more formal tone, Zoom required
 - Subject: "OneTable Nourishment Status Update"
-- Triggered by: any high-confidence signal present at score 8-17, OR prior Warning on record, OR no response to Warning (DNN) email and host posts again
+- Triggered by: any high-confidence signal present at score 9-17, OR prior Warning on record, OR no response to Warning (DNN) email and host posts again
 
 The agent never elevates a tier based on aggravating factors, narrative context, financial exposure, host email type, VPN use, or any other qualitative judgment. Those factors belong in anomaly flags for staff review -- they do not move the tier. Staff decides at review whether escalation is warranted. The agent's job is to grade signals fairly and report accurately, not to make escalation decisions.
 
@@ -259,9 +259,9 @@ Shared device fingerprint host and guest; Hard bounces on guest emails; Sequenti
 
 **Score ranges:**
 - 0: No action
-- 1-7: Reminder and Support (Warning) -- auto-sent, no restriction
-- 8-17, corroborating only: Warning (DNN) -- DNN activated, community@ email
-- 8-17, high-confidence present or prior Warning: Nourishment Pause -- DNN activated, T&S@ email, Zoom required
+- 1-8: Reminder and Support (Warning) -- auto-sent, no restriction
+- 9-17, corroborating only: Warning (DNN) -- DNN activated, community@ email
+- 9-17, high-confidence present or prior Warning: Nourishment Pause -- DNN activated, T&S@ email, Zoom required
 - 18-24: Suspension (softer approach)
 - 25-39: Suspension (stricter approach)
 - 40+: Account Deactivation range (first instance rule applies)
@@ -557,9 +557,9 @@ Triggered when given an email address, Contact ID, or Campaign ID. Run Pass 2 di
 | Single geographic mismatch only | Watch flag | Internal monitoring note only |
 | Single low-confidence signal, innocent explanation plausible | Program Team Referral | Journey check-in by program team |
 | Single low-confidence signal, no innocent explanation | Warning | community@ email, auto-sent |
-| 2+ corroborating signals, no high-confidence, score 8-17, no prior Warning | Warning (DNN) | community@ email, DNN activated, reply-to T&S@ |
-| 2+ corroborating signals, score 8-17, prior Warning on record | Nourishment Pause | trustandsafety@ email, Zoom required |
-| Any high-confidence signal, score 8-17 | Nourishment Pause | trustandsafety@ email, Zoom required |
+| 2+ corroborating signals, no high-confidence, score 9-17, no prior Warning | Warning (DNN) | community@ email, DNN activated, reply-to T&S@ |
+| 2+ corroborating signals, score 9-17, prior Warning on record | Nourishment Pause | trustandsafety@ email, Zoom required |
+| Any high-confidence signal, score 9-17 | Nourishment Pause | trustandsafety@ email, Zoom required |
 | 1+ high-confidence signals, score 9-17 | Nourishment Pause | Written check-in if ambiguous; Zoom if stronger |
 | Multiple high-confidence signals, score 18-24, intent ambiguous | Suspension | Zoom; softer email |
 | Multiple high-confidence signals, score 25-39, deliberate fraud indicated | Suspension | Zoom; stricter email |
@@ -624,13 +624,13 @@ When staff approves a recommendation via the case review UI, the following actio
 - Set Flag_Reason__c = "See case from [run date]"
 - Create Gmail draft with consequence email to host (active now)
 
-**Warning (scores 1-7) -- Reminder and Support**
+**Warning (scores 1-8) -- Reminder and Support**
 - All of the above only
 - Email from: community@onetable.org
 - Tone: friendly, "heads up about guest emails"
 - Auto-sent, no human review required
 
-**Warning DNN (scores 8-17, corroborating signals only, no prior Warning)**
+**Warning DNN (scores 9-17, corroborating signals only, no prior Warning)**
 - All of the above
 - Set Do_Not_Nourish__c = true on Contact
 - Move all future dinners to Not Nourishing campaign status
@@ -638,7 +638,7 @@ When staff approves a recommendation via the case review UI, the following actio
 - Tone: friendly, adds note that Nourishment is paused until host connects with the team
 - No Zoom required yet
 
-**Nourishment Pause (scores 8-17, high-confidence signal present OR prior Warning on record)**
+**Nourishment Pause (scores 9-17, high-confidence signal present OR prior Warning on record)**
 - All of the above (DNN activation)
 - Email from: trustandsafety@onetable.org
 - Tone: more formal, Zoom required
