@@ -218,10 +218,8 @@ function runDate() { return state.current?.run?.run_date || state.current?.run?.
 function esc(s) { return (s||'').replace(/'/g,"&#39;").replace(/"/g,'&quot;'); }
 
 // ── file load ──────────────────────────────────────────────────────────────
-async function tryLoadFromFile() {
-  try { const r = await fetch('./ts_ui_data.json'); return r.ok ? r.json() : null; }
-  catch { return null; }
-}
+// Auto-load from same folder disabled -- paste JSON into the load screen instead
+async function tryLoadFromFile() { return null; }
 
 // ── render ─────────────────────────────────────────────────────────────────
 function render() {
