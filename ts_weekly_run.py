@@ -810,7 +810,10 @@ def build_case_json(cid, camp, scored_signals, score, tier, sf_data=None):
     return {
         'id': f"case-{cid}",
         'name': host_name,
+        'dinner_name': camp.get('name', ''),
+        'campaign_id': cid,
         'email': sf.get('Email', host.get('Campaign Member Email', '')) if sf_data else host.get('Campaign Member Email', ''),
+        'contact_id': host.get('Contact ID', '') if host else '',
         'tier': tier,
         'is_cluster': False,
         'score': score,
