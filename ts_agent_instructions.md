@@ -650,7 +650,15 @@ When staff approves a recommendation via the case review UI, the following actio
 - Alert Amalia before proceeding
 - Create Zendesk ticket for build team to action IP/account ban (manual platform action)
 
-**On Override**
+**Guest case protocol (Suspension level only)**
+When a host case reaches Suspension tier, guest accounts associated with the flagged dinner(s) also need to be actioned. Two categories:
+
+- **Clearly fake guests** (confirmed fabricated: hard bounce AND throwaway domain, or obviously fake identity confirmed): Create Salesforce Case linked to the guest Contact, set Coaching_Status__c = "Closed - Resolved". Add guest Contact ID to bulk ban CSV for upload to build team. Staff (Pammie) handles the CSV upload directly.
+- **Flagged but not confirmed fake** (shared device fingerprint, cross-host appearance, suspicious but unproven): Create Salesforce Case linked to the guest Contact, set Coaching_Status__c = "Closed - Resolved". Set Problem_Flag__c = true on Contact for monitoring.
+
+This protocol applies at Suspension level only. Do not create guest cases at Warning or Nourishment Pause level.
+
+
 - Staff selects tier from dropdown
 - Same steps fire as above for selected tier
 - Log override reason to Salesforce case note
@@ -672,7 +680,7 @@ When staff approves a recommendation via the case review UI, the following actio
 ## VERSION
 
 System prompt v5.7 | September 2026
-Changes from v5.6: New Warning (DNN) tier added (score 8-17, corroborating signals only, no prior Warning) -- DNN activated, community@ email with Nourishment pause note, reply-to T&S@, no Zoom required; Nourishment Pause now specifically for score 8-17 with high-confidence signal present OR prior Warning on record; five valid tier values updated (warning, warning_dnn, nourishment_pause, suspension, deactivation); consequence actions updated per new tier; signal combination quick reference updated; suspicious domain bounces noted as treated as hard bounces; existing_cases replaces prior_action_notes in JSON schema.
+Changes from v5.6: New Warning (DNN) tier added (score 8-17, corroborating signals only, no prior Warning) -- DNN activated, community@ email with Nourishment pause note, reply-to T&S@, no Zoom required; Nourishment Pause now specifically for score 8-17 with high-confidence signal present OR prior Warning on record; five valid tier values updated (warning, warning_dnn, nourishment_pause, suspension, deactivation); consequence actions updated per new tier; signal combination quick reference updated; suspicious domain bounces noted as treated as hard bounces; existing_cases replaces prior_action_notes in JSON schema; guest case protocol added (Suspension only) -- confirmed fake guests get Case + Coaching Status Closed-Resolved + bulk ban CSV; flagged-not-confirmed guests get Case + Coaching Status Closed-Resolved + Problem Flag.
 References: Trust and Safety Policy v3 (June 2026) | Signal Reference Addendum v1.3 (June 2026)
 
 
