@@ -332,7 +332,19 @@ function buildReviewView() {
       ${[['all','All'],['cluster','⚠ Cluster'],['suspension','Suspension'],['warning_dnn','Warning DNN'],['nourishment_pause','Nourishment Pause'],['warning','Warning']].map(([f,l])=>`<button class="filter-btn ${state.filter===f?'active':''}" onclick="setFilter('${f}')">${l}</button>`).join('')}
     </div>
     ${(state.current.field_alerts||[]).map(a=>{const crit=a.includes('CRITICAL');return `<div style="padding:10px 14px;border-radius:8px;margin-bottom:8px;font-size:13px;font-weight:500;background:${crit?'#FEF2F2':'#FFFBEB'};color:${crit?'#991B1B':'#633806'};border-left:3px solid ${crit?'#991B1B':'#F59E0B'}">${a.replace('⚠ CRITICAL: ','🚨 ').replace('⚠ WARNING: ','⚠️ ')}</div>`;}).join('')}
-    ${(state.current.existing_cases||[]).length>0?`<div style="background:#FFF7ED;border:0.5px solid #FED7AA;border-radius:8px;padding:14px 16px;margin-bottom:12px"><div style="font-weight:600;color:#C2410C;margin-bottom:8px;font-size:13px">⚠ Suspended hosts with active dinners (${state.current.existing_cases.length})</div>${(state.current.existing_cases||[]).map(c=>`<div style="display:flex;justify-content:space-between;align-items:baseline;padding:6px 0;border-top:0.5px solid #FED7AA;font-size:13px"><div><a href="${c.sf_url}" target="_blank" style="font-weight:500;color:#C2410C;text-decoration:underline">${c.host_name}</a> · ${c.dinner_name} · <strong>${c.campaign_status}</strong></div><span style="color:var(--text-sec);font-size:12px">${c.nourishment_received} received</span></div>`).join('')}</div>`:''}
+    ${(state.current.existing_cases||[]).length>0?`<div style="background:#FFF7ED;border:0.5px solid #FED7AA;border-radius:8px;padding:14px 16px;margin-bottom:12px">
+      <div style="font-weight:600;color:#C2410C;margin-bottom:8px;font-size:13px">⚠ Hosts with active flags posting this week (${state.current.existing_cases.length})</div>
+      ${(state.current.existing_cases||[]).map(c=>`
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:8px 0;border-top:0.5px solid #FED7AA;font-size:13px">
+          <div>
+            <a href="${c.sf_url}" target="_blank" style="font-weight:500;color:#C2410C;text-decoration:underline">${c.host_name}</a>
+            <span style="margin-left:8px;font-size:11px;padding:2px 6px;border-radius:4px;font-weight:600;${c.existing_case_type==='suspension'?'background:#FECACA;color:#991B1B':'background:#FAEEDA;color:#633806'}">${c.existing_case_type==='suspension'?'SUSPENDED':'DNN'}</span>
+            · ${c.dinner_name} · <strong>${c.campaign_status}</strong>
+            <div style="font-size:12px;color:#92400E;margin-top:3px">${c.note}</div>
+          </div>
+          <span style="color:var(--text-sec);font-size:12px;white-space:nowrap;margin-left:12px">${c.nourishment_received} received</span>
+        </div>`).join('')}
+    </div>`:''}
     ${(()=>{
       const actionableCases = filtered.filter(c => c.tier !== 'warning');
       const warnCases = filtered.filter(c => c.tier === 'warning');
