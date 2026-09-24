@@ -5,7 +5,15 @@ Produces ts_ui_data JSON directly from CSV + Salesforce queries.
 No manual transcription -- every JSON field is derived from structured data.
 
 Usage:
-  python3 ts_weekly_run.py <csv_path>
+  python3 ts_weekly_run.py <combined_csv_path> [--no-sf]
+  
+  Combined CSV contains both Contact and Lead guest rows in one file.
+  Contact rows are identified by populated Contact ID field.
+  Lead rows (plus-ones) are identified by populated Lead ID field and no Contact ID.
+  Lead rows never have Platform Profile IDs and are excluded from sequential PID calculations.
+  
+  Legacy two-file mode still supported:
+  python3 ts_weekly_run.py <contact_csv_path> <lead_csv_path> [--no-sf]
 
 Output:
   Prints a single ```ts_ui_data ... ``` block to stdout.
@@ -72,49 +80,61 @@ def sf_15_to_18(id15):
 
 
 def parse_csv(contact_path, lead_path=None):
-    """Parse Contact CSV (primary) and optional Lead CSV into campaigns dict."""
+    """Parse a single combined CSV (or Contact + Lead CSVs) into campaigns dict.
+    
+    Combined CSV: one report containing both Contact and Lead guest rows.
+    Contact guest rows have Contact ID populated; Lead guest rows have Lead ID populated.
+    Lead rows never have Platform Profile IDs -- they are always plus-ones.
+    
+    Legacy two-file mode still supported if lead_path is provided.
+    """
     KEEP = {
         "Campaign ID","Start Date","Campaign Status","Address","Member Status",
         "Platform Profile ID","First Name","Last Name","Host?","Campaign Member Email",
         "Mandrill Bounce Reason","Mandrill Bounce Time/Date","RSVP Device Fingerprint ID",
-        "RSVP IP","Contact ID","Do Not Nourish","Suspended Flag","Problem Flag",
+        "RSVP IP","Contact ID","Lead ID","Do Not Nourish","Suspended Flag","Problem Flag",
         "Problem Flag Reason","AI Not Pass Summary","Further Review Reason",
         "Unresolved Further Review Reason","Dinner Privacy","Host Application Date OLD",
         "Host Application Date","Campaign Name","FYI Flag Reason",
         "Dinner Created Device ID","Total Eligible Nourishment","Grant Application",
-        "Campaign Description","Total Nourishment Received","Requested Nourishment","Notes"
+        "Campaign Description","Total Nourishment Received","Requested Nourishment","Notes",
+        "Email","Lead: Created Date","Mandrill Bounce Time + Date"
     }
     ONETABLE_DOMAIN = 'onetable.org'
 
-    def read_csv(path, is_lead=False):
+    def read_and_classify(path):
+        """Read CSV rows and classify each as host, contact guest, or lead guest."""
         rows = []
         with open(path, encoding='latin1') as f:
             reader = csv.DictReader(f)
             for row in reader:
-                r = {k: row.get(k, '').strip() for k in reader.fieldnames if k in KEEP or k in {
-                    'Email','Lead ID','Lead: Created Date','Mandrill Bounce Time + Date'
-                }}
-                # Normalise Lead field names to Contact equivalents
-                if is_lead:
-                    if 'Email' in r:
-                        r['Campaign Member Email'] = r.pop('Email', '')
-                    if 'Lead: Created Date' in r:
-                        r['Created Date'] = r.pop('Lead: Created Date', '')
-                    if 'Mandrill Bounce Time + Date' in r:
-                        r['Mandrill Bounce Time/Date'] = r.pop('Mandrill Bounce Time + Date', '')
-                    r['Platform Profile ID'] = ''  # Leads never have Profile IDs
-                    r['is_lead'] = True
-                else:
-                    r['is_lead'] = False
+                r = {k: row.get(k, '').strip() for k in reader.fieldnames if k in KEEP}
+                # Normalise email field -- Lead rows may use 'Email' instead of 'Campaign Member Email'
+                if not r.get('Campaign Member Email') and r.get('Email'):
+                    r['Campaign Member Email'] = r.pop('Email', '')
+                # Classify as Lead if Lead ID present and no Contact ID
+                contact_id = r.get('Contact ID', '').strip()
+                lead_id = r.get('Lead ID', '').strip()
+                r['is_lead'] = bool(lead_id and not contact_id)
+                # Lead guests never have Profile IDs
+                if r['is_lead']:
+                    r['Platform Profile ID'] = ''
                 rows.append(r)
         return rows
 
-    contact_rows = read_csv(contact_path, is_lead=False)
-    lead_rows = read_csv(lead_path, is_lead=True) if lead_path else []
-    all_rows = contact_rows + lead_rows
+    all_rows = read_and_classify(contact_path)
+
+    # Legacy two-file mode
+    if lead_path:
+        lead_rows = read_and_classify(lead_path)
+        for r in lead_rows:
+            r['is_lead'] = True
+            r['Platform Profile ID'] = ''
+        all_rows += lead_rows
 
     campaigns = collections.defaultdict(lambda: {
-        'host': None, 'guests': [], 'name': '', 'address': '', 'description': ''
+        'host': None, 'guests': [], 'name': '', 'address': '', 'description': '',
+        '_skip': False, '_existing_case': False, '_suspended_status': ''
     })
 
     for row in all_rows:
@@ -122,12 +142,13 @@ def parse_csv(contact_path, lead_path=None):
         ms = row.get('Member Status', '')
 
         if ms == 'Host':
-            # Staff exclusion: skip @onetable.org hosts
+            # Staff exclusion
             host_email = row.get('Campaign Member Email', '').lower().strip()
             if host_email.endswith('@' + ONETABLE_DOMAIN):
+                campaigns[cid]['_skip'] = True
                 continue
 
-            # Suspended host filter: skip if Not Nourishing or Aborted
+            # Suspended host filter
             suspended = row.get('Suspended Flag', '').strip() in ('1', '1.0')
             status = row.get('Campaign Status', '').strip().lower()
             if suspended and status in ('not nourishing', 'aborted'):
@@ -139,7 +160,6 @@ def parse_csv(contact_path, lead_path=None):
             campaigns[cid]['address'] = row.get('Address', '')
             campaigns[cid]['description'] = row.get('Campaign Description', '')
 
-            # Flag suspended hosts with active dinners for Existing Cases section
             if suspended and status not in ('not nourishing', 'aborted'):
                 campaigns[cid]['_existing_case'] = True
                 campaigns[cid]['_suspended_status'] = row.get('Campaign Status', '')
@@ -150,7 +170,6 @@ def parse_csv(contact_path, lead_path=None):
         if not campaigns[cid]['description'] and row.get('Campaign Description', '').strip():
             campaigns[cid]['description'] = row.get('Campaign Description', '')
 
-    # Remove skipped campaigns
     filtered = {k: v for k, v in campaigns.items() if not v.get('_skip')}
     return dict(filtered), len(all_rows)
 
@@ -1505,16 +1524,21 @@ if __name__ == '__main__':
     import os
 
     if len(sys.argv) < 2:
-        print("Usage: python3 ts_weekly_run.py <contact_csv_path> [lead_csv_path] [--no-sf]", file=sys.stderr)
+        print("Usage: python3 ts_weekly_run.py <combined_csv_path> [--no-sf]", file=sys.stderr)
+        print("       Combined CSV contains both Contact and Lead guest rows.", file=sys.stderr)
+        print("       Legacy two-file mode: python3 ts_weekly_run.py <contact_csv> <lead_csv> [--no-sf]", file=sys.stderr)
         sys.exit(1)
 
     csv_path = sys.argv[1]
     lead_path = None
     skip_sf = '--no-sf' in sys.argv
 
-    # Second positional arg (not a flag) is the Lead CSV
+    # Legacy: second positional arg (not a flag) is a separate Lead CSV
     if len(sys.argv) >= 3 and not sys.argv[2].startswith('--'):
         lead_path = sys.argv[2]
+        print(f"[T&S] Legacy two-file mode: Contact={csv_path}, Lead={lead_path}", file=sys.stderr)
+    else:
+        print(f"[T&S] Single combined CSV mode: {csv_path}", file=sys.stderr)
 
     # Pass 1
     pass1_output = run(csv_path, lead_path)
