@@ -20,7 +20,7 @@ REVIEW_DATE = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0) 
 SUSPICIOUS_DOMAINS = {
     'atomicmail.io','mailshield.org','tutamail.com','otheremail.org',
     'bumpmail.io','simplelogin.com','membermail.net','freemail.is','ourisp.net',
-    'altaddress.org','dropons.com'
+    'altaddress.org','dropons.com','jourrapide.com','armyspy.com','teleworm.us','dayrep.com'
 }
 HIGH_VOLUME_THRESHOLD = 10   # FP on 10+ dinners = weekly insights only
 SIGNAL_WEIGHTS = {
@@ -31,15 +31,17 @@ SIGNAL_WEIGHTS = {
     'sig5': 3,   # VPN use (needs pairing) -- not reliably in CSV, skip
     'sig6': 0,   # Geographic mismatch (watch flag only)
     'sig7': 2,   # Same IP across guests (needs pairing, 80%+)
-    'sig8': 5,   # Clearly fake guest identities (needs pairing, 50%+)
-    'sig9': 4,   # Suspicious guest email patterns (needs pairing, 50%+)
+    'sig8': 0,   # Clearly fake guest identities -- anomaly note only, does not score
+    'sig9': 0,   # Suspicious guest email domains -- anomaly note only, does not score (only meaningful with bounce)
     'sig10': 4,  # Suspicious phone number patterns (needs pairing, 50%+)
     'sig11': 4,  # Host/guest email similarity (needs pairing)
-    'sig12': 8,  # Hard bounces (standalone, 50%+)
+    'sig12_low': 4,  # Hard bounces 50-74% (corroborating, Warning-range standalone)
+    'sig12': 8,  # Hard bounces 75%+ (standalone, DNN-range)
     'sig13': 5,  # Reject bounces (needs pairing, 50%+)
-    'sig14': 6,  # Sequential guest PIDs (needs pairing, 50%+, gap<=2, all guests denom)
-    'sig15': 1,  # Recycled guest lists (needs pairing)
-    'sig16': 2,  # Privacy domain no bounce (needs pairing)
+    'sig14_low': 3,  # Sequential guest PIDs 55-99% of profiled (corroborating, can score standalone)
+    'sig14': 6,  # Sequential guest PIDs 100% of profiled (Warning-eligible standalone)
+    'sig15': 3,  # Recycled bounced guest lists (needs pairing -- same exact email across 2+ dinners AND bounced)
+    'sig16': 1,  # Privacy domain no bounce (needs pairing)
     'sig17': 3,  # AI not pass (needs guest integrity signal)
     'sig18': 3,  # Description degradation (needs pairing)
     'sig19': 2,  # Privacy type mismatch (needs pairing)
@@ -48,8 +50,8 @@ SIGNAL_WEIGHTS = {
     'sig22': 10, # Deliberate fraud (standalone, staff judgment)
     'sig23': 8,  # Deliberate identity change (standalone, staff judgment)
 }
-STANDALONE = {'sig1', 'sig12', 'sig22', 'sig23'}  # sig21 standalone only for user reports, not problem flag alone; sig20 needs pairing
-GUEST_INTEGRITY_SIGNALS = {'sig12', 'sig13', 'sig14', 'sig9', 'sig8', 'sig10'}
+STANDALONE = {'sig1', 'sig12', 'sig22', 'sig23', 'sig14', 'sig14_low'}
+GUEST_INTEGRITY_SIGNALS = {'sig12', 'sig12_low', 'sig13', 'sig14', 'sig14_low', 'sig10'}
 SF_BASE = "https://onetable.lightning.force.com/lightning/r/Contact/{}/view"
 SF_CAMPAIGN_BASE = "https://onetable.lightning.force.com/lightning/r/Campaign/{}/view"
 TS_RECORD_TYPE_ID = '012PO000001F53dYAC'  # Trust and Safety record type for Salesforce Cases
@@ -69,43 +71,88 @@ def sf_15_to_18(id15):
     return id15 + suffix
 
 
-def parse_csv(path):
-    """Parse CSV into campaigns dict. Returns (campaigns, total_rows)."""
+def parse_csv(contact_path, lead_path=None):
+    """Parse Contact CSV (primary) and optional Lead CSV into campaigns dict."""
     KEEP = {
         "Campaign ID","Start Date","Campaign Status","Address","Member Status",
         "Platform Profile ID","First Name","Last Name","Host?","Campaign Member Email",
         "Mandrill Bounce Reason","Mandrill Bounce Time/Date","RSVP Device Fingerprint ID",
         "RSVP IP","Contact ID","Do Not Nourish","Suspended Flag","Problem Flag",
         "Problem Flag Reason","AI Not Pass Summary","Further Review Reason",
-        "Dinner Privacy","Host Application Date","Campaign Name","FYI Flag Reason",
+        "Unresolved Further Review Reason","Dinner Privacy","Host Application Date OLD",
+        "Host Application Date","Campaign Name","FYI Flag Reason",
         "Dinner Created Device ID","Total Eligible Nourishment","Grant Application",
-        "Campaign Description","Total Nourishment Received","Requested Nourishment"
+        "Campaign Description","Total Nourishment Received","Requested Nourishment","Notes"
     }
-    rows = []
-    with open(path, encoding='latin1') as f:
-        reader = csv.DictReader(f)
-        keep_headers = [h for h in reader.fieldnames if h in KEEP]
-        for row in reader:
-            rows.append({k: row.get(k, '').strip() for k in keep_headers})
+    ONETABLE_DOMAIN = 'onetable.org'
+
+    def read_csv(path, is_lead=False):
+        rows = []
+        with open(path, encoding='latin1') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                r = {k: row.get(k, '').strip() for k in reader.fieldnames if k in KEEP or k in {
+                    'Email','Lead ID','Lead: Created Date','Mandrill Bounce Time + Date'
+                }}
+                # Normalise Lead field names to Contact equivalents
+                if is_lead:
+                    if 'Email' in r:
+                        r['Campaign Member Email'] = r.pop('Email', '')
+                    if 'Lead: Created Date' in r:
+                        r['Created Date'] = r.pop('Lead: Created Date', '')
+                    if 'Mandrill Bounce Time + Date' in r:
+                        r['Mandrill Bounce Time/Date'] = r.pop('Mandrill Bounce Time + Date', '')
+                    r['Platform Profile ID'] = ''  # Leads never have Profile IDs
+                    r['is_lead'] = True
+                else:
+                    r['is_lead'] = False
+                rows.append(r)
+        return rows
+
+    contact_rows = read_csv(contact_path, is_lead=False)
+    lead_rows = read_csv(lead_path, is_lead=True) if lead_path else []
+    all_rows = contact_rows + lead_rows
 
     campaigns = collections.defaultdict(lambda: {
         'host': None, 'guests': [], 'name': '', 'address': '', 'description': ''
     })
-    for row in rows:
+
+    for row in all_rows:
         cid = row.get('Campaign ID', '')
         ms = row.get('Member Status', '')
+
         if ms == 'Host':
+            # Staff exclusion: skip @onetable.org hosts
+            host_email = row.get('Campaign Member Email', '').lower().strip()
+            if host_email.endswith('@' + ONETABLE_DOMAIN):
+                continue
+
+            # Suspended host filter: skip if Not Nourishing or Aborted
+            suspended = row.get('Suspended Flag', '').strip() in ('1', '1.0')
+            status = row.get('Campaign Status', '').strip().lower()
+            if suspended and status in ('not nourishing', 'aborted'):
+                campaigns[cid]['_skip'] = True
+                continue
+
             campaigns[cid]['host'] = row
             campaigns[cid]['name'] = row.get('Campaign Name', '')
             campaigns[cid]['address'] = row.get('Address', '')
             campaigns[cid]['description'] = row.get('Campaign Description', '')
+
+            # Flag suspended hosts with active dinners for Existing Cases section
+            if suspended and status not in ('not nourishing', 'aborted'):
+                campaigns[cid]['_existing_case'] = True
+                campaigns[cid]['_suspended_status'] = row.get('Campaign Status', '')
+
         elif ms in ('Attended', 'Applied', 'Pending', 'Guest of Guest'):
             campaigns[cid]['guests'].append(row)
-        # Capture description from any row -- it's not always on the host row
+
         if not campaigns[cid]['description'] and row.get('Campaign Description', '').strip():
             campaigns[cid]['description'] = row.get('Campaign Description', '')
 
-    return dict(campaigns), len(rows)
+    # Remove skipped campaigns
+    filtered = {k: v for k, v in campaigns.items() if not v.get('_skip')}
+    return dict(filtered), len(all_rows)
 
 
 def build_fp_maps(campaigns):
@@ -199,16 +246,34 @@ def score_campaign(cid, camp, cross_dinner, high_volume):
                     f"Same device fingerprint across guests: {top_count}/{n} ({round(100*pct)}%) [{top_fp}]",
                     f"{round(100*pct)}% ({top_count}/{n} guests)", "40%+ and ≥3 guests sharing (min 3 guests total)", met)
 
-    # ── Signal 12: Hard bounces (standalone, 50%+) ─────────────────────────
-    hard = [g for g in guests if
-            'hard_bounce' in g.get('Mandrill Bounce Reason', '').lower() or
-            'invalid' in g.get('Mandrill Bounce Reason', '').lower()]
+    # ── Signal 12: Hard bounces (75%+ standalone weight 8; 50-74% weight 4 needs pairing) ──
+    # Also treat any bounce on a known throwaway/suspicious domain as hard bounce
+    # regardless of Mandrill's classification -- these addresses are confirmed fake
+    def is_hard_bounce(g):
+        reason = g.get('Mandrill Bounce Reason', '').lower()
+        if not reason or reason == 'nan':
+            return False
+        email = g.get('Campaign Member Email', '').lower()
+        domain = email.split('@')[1] if '@' in email else ''
+        # Explicit hard bounce from Mandrill
+        if 'hard_bounce' in reason or 'invalid' in reason or 'earlier hard_bounce' in reason:
+            return True
+        # Any bounce on a known throwaway domain = treat as hard bounce
+        if domain in SUSPICIOUS_DOMAINS and ('bounce' in reason or 'reject' in reason):
+            return True
+        return False
+
+    hard = [g for g in guests if is_hard_bounce(g)]
     if n > 0:
         pct = len(hard) / n
-        met = pct >= 0.5
-        add_sig('sig12',
-                f"Hard bounces on guest emails: {len(hard)}/{n} ({round(100*pct)}%)",
-                f"{round(100*pct)}% ({len(hard)}/{n} guests)", "50%+", met)
+        if pct >= 0.75:
+            add_sig('sig12',
+                    f"Hard bounces on guest emails (75%+): {len(hard)}/{n} ({round(100*pct)}%)",
+                    f"{round(100*pct)}% ({len(hard)}/{n} guests)", "75%+", True)
+        elif pct >= 0.50:
+            add_sig('sig12_low',
+                    f"Hard bounces on guest emails (50-74%): {len(hard)}/{n} ({round(100*pct)}%)",
+                    f"{round(100*pct)}% ({len(hard)}/{n} guests)", "50-74% (needs pairing)", True)
 
     # ── Signal 13: Reject bounces (needs pairing, 50%+) ────────────────────
     reject = [g for g in guests if 'reject' in g.get('Mandrill Bounce Reason', '').lower()]
@@ -219,41 +284,45 @@ def score_campaign(cid, camp, cross_dinner, high_volume):
                 f"Reject bounces on guest emails: {len(reject)}/{n} ({round(100*pct)}%)",
                 f"{round(100*pct)}% ({len(reject)}/{n} guests)", "50%+", met)
 
-    # ── Signal 14: Sequential PIDs (needs pairing, 50%+, gap<=2, ALL guests denom) ──
+    # ── Signal 14: Sequential PIDs (profiled guests only as denominator) ────────
+    # 55-99% of profiled = weight 3 corroborating (sig14_low, can score standalone)
+    # 100% of profiled = weight 6 Warning-eligible standalone (sig14)
     pids = []
     for g in guests:
         try:
-            pids.append(int(float(g.get('Platform Profile ID', ''))))
+            pids.append((int(float(g.get('Platform Profile ID', ''))), g))
         except (ValueError, TypeError):
             pass
-    if len(pids) >= 2:
-        ps = sorted(pids)
-        cur = 1
-        max_seq = 1
-        for i in range(1, len(ps)):
-            if ps[i] - ps[i-1] <= 2:
-                cur += 1
-                max_seq = max(max_seq, cur)
-            else:
-                cur = 1
-        pct = max_seq / n  # denominator is ALL guests, not just profiled
-        met = pct >= 0.5
-        add_sig('sig14',
-                f"Sequential guest Profile IDs: {max_seq}/{n} ({round(100*pct)}%) gap≤2",
-                f"{round(100*pct)}% ({max_seq}/{n} guests, gap≤2)", "50%+ of all guests", met)
+    profiled_n = len(pids)  # denominator = profiled guests ONLY (plus-ones excluded)
+    if profiled_n >= 2:
+        ps = sorted(pids, key=lambda x: x[0])
+        pid_vals = [p[0] for p in ps]
+        sequential_pairs = sum(1 for i in range(len(pid_vals)-1) if pid_vals[i+1] - pid_vals[i] <= 2)
+        total_pairs = len(pid_vals) - 1
+        seq_pct = sequential_pairs / total_pairs if total_pairs > 0 else 0
+        if seq_pct >= 1.0:
+            add_sig('sig14',
+                    f"Sequential guest Profile IDs (100% of profiled): {profiled_n}/{profiled_n} profiled guests fully sequential (gap≤2). Plus-ones excluded from calculation.",
+                    f"100% ({profiled_n}/{profiled_n} profiled guests)", "100% of profiled guests", True)
+        elif seq_pct >= 0.55:
+            add_sig('sig14_low',
+                    f"Sequential guest Profile IDs (55-99% of profiled): {round(100*seq_pct)}% of {profiled_n} profiled guests sequential (gap≤2). Plus-ones excluded from calculation.",
+                    f"{round(100*seq_pct)}% ({profiled_n} profiled guests)", "55-99% of profiled guests", True)
 
-    # ── Signal 9: Suspicious email domains (needs pairing, 50%+) ───────────
+    # ── Signal 9: Suspicious email domains -- anomaly note only, does not score ──
+    # Without a confirmed bounce, domain alone is not sufficient evidence.
+    # Surfaced as context when bounces are also present.
     sus = [g for g in guests if
            any(g.get('Campaign Member Email', '').lower().endswith('@' + d)
                for d in SUSPICIOUS_DOMAINS)]
-    if n > 0:
+    if n > 0 and len(sus) > 0:
         pct = len(sus) / n
-        met = pct >= 0.5
         add_sig('sig9',
-                f"Suspicious guest email domains: {len(sus)}/{n} ({round(100*pct)}%)",
-                f"{round(100*pct)}% ({len(sus)}/{n} guests)", "50%+", met)
+                f"Suspicious guest email domains (anomaly note only -- does not score without confirmed bounce): {len(sus)}/{n} ({round(100*pct)}%)",
+                f"{round(100*pct)}% ({len(sus)}/{n} guests)", "Anomaly note only", False)
 
-    # ── Signal 8: Clearly fake guest identities (needs pairing, 50%+) ─────────
+    # ── Signal 8: Clearly fake guest identities -- anomaly note only, does not score ──
+    # Only meaningful when combined with bounces. Surfaced as context note.
     FAKE_NAMES = {
         'taylor swift', 'bing bong', 'mickey mouse', 'john doe', 'jane doe',
         'test user', 'test guest', 'asdf', 'qwerty', 'xxx', 'aaa', 'bbb',
@@ -266,21 +335,19 @@ def score_campaign(cid, camp, cross_dinner, high_volume):
         if full in FAKE_NAMES: return True
         if not first or not last: return True
         if first == last: return True
-        if len(first) <= 1 or len(last) <= 1: return True
         if all(c == first[0] for c in first) or all(c == last[0] for c in last): return True
         return False
     fake_guests = [g for g in guests if is_fake_name(g)]
-    if n > 0:
+    # Note: single-letter last names are NOT treated as fake
+    if n > 0 and len(fake_guests) >= 2:
         pct = len(fake_guests) / n
-        met = pct >= 0.5 and len(fake_guests) >= 2
-        if len(fake_guests) > 0:
-            examples = ', '.join(
-                f"{g.get('First Name','')} {g.get('Last Name','')}".strip()
-                for g in fake_guests[:3]
-            )
-            add_sig('sig8',
-                    f"Clearly fake guest identities: {len(fake_guests)}/{n} ({round(100*pct)}%) -- e.g. {examples}",
-                    f"{round(100*pct)}% ({len(fake_guests)}/{n} guests)", "50%+ and ≥2 fake guests", met)
+        examples = ', '.join(
+            f"{g.get('First Name','')} {g.get('Last Name','')}".strip()
+            for g in fake_guests[:3]
+        )
+        add_sig('sig8',
+                f"Possible fake guest identities (anomaly note only -- does not score): {len(fake_guests)}/{n} ({round(100*pct)}%) -- e.g. {examples}",
+                f"{round(100*pct)}% ({len(fake_guests)}/{n} guests)", "Anomaly note only", False)
 
     # ── Signal 16: Privacy email domain + no hard bounce (needs pairing) ──────
     # Guests using known privacy domains (not already in SUSPICIOUS_DOMAINS) with no bounce
@@ -324,7 +391,7 @@ def score_campaign(cid, camp, cross_dinner, high_volume):
                 "T&S-specific further review reason present", "Any", True)
     elif problem_flag:
         # Problem flag alone = does not score, surfaces as anomaly note only
-        anomaly_notes.append(f"Problem flag is set on this dinner -- review for context but does not score independently.")
+        pass  # anomaly note added in build_bullets
 
     # ── Signal 7: Same IP across guests (needs pairing, 80%+, min 3 guests) ──
     guest_ips = [g.get('RSVP IP', '').strip() for g in guests if g.get('RSVP IP', '').strip()]
@@ -433,24 +500,35 @@ def score_campaign(cid, camp, cross_dinner, high_volume):
     # ── Apply pairing rules ──────────────────────────────────────────────────
     # Step 1: which signals met their threshold?
     threshold_met = {k for k, v in raw.items() if v['threshold_met']}
+    guest_integrity_met = threshold_met & GUEST_INTEGRITY_SIGNALS
+    device_met = threshold_met & {'sig1', 'sig2', 'sig3'}
 
-    # Step 2: standalone signals score regardless
-    # Step 3: all others score only if at least one OTHER signal is also threshold_met
-    # Fix for circular dependency: compute total threshold_met count first,
-    # then score any signal that has at least one companion
     scored = {}
     for key, sig in raw.items():
         if not sig['threshold_met']:
             scored[key] = {**sig, 'score_contribution': 0}
             continue
         if key in STANDALONE:
-            scored[key] = sig  # score_contribution already set
-        elif len(threshold_met) >= 2:
-            # Has at least one other signal -- scores
             scored[key] = sig
+        elif key == 'sig11':
+            # Email similarity needs guest integrity or device signal
+            if guest_integrity_met or device_met:
+                scored[key] = sig
+            else:
+                scored[key] = {**sig, 'score_contribution': 0}
+        elif key in ('sig17', 'sig16'):
+            # AI description and privacy domain need at least one guest integrity signal
+            if guest_integrity_met:
+                scored[key] = sig
+            else:
+                scored[key] = {**sig, 'score_contribution': 0}
         else:
-            # Standalone non-eligible -- doesn't score
-            scored[key] = {**sig, 'score_contribution': 0}
+            # All other non-standalone signals: need at least one OTHER threshold_met signal
+            companions = threshold_met - {key}
+            if companions:
+                scored[key] = sig
+            else:
+                scored[key] = {**sig, 'score_contribution': 0}
 
     return scored
 
@@ -462,7 +540,7 @@ def compute_total_score(scored_signals):
 def tier_from_score(score):
     if score >= 18:
         return 'suspension'
-    elif score >= 9:
+    elif score >= 8:
         return 'nourishment_pause'
     elif score >= 1:
         return 'warning'
@@ -554,10 +632,12 @@ SIG_NAMES = {
     'sig9': 'Suspicious guest email patterns',
     'sig10': 'Suspicious phone number patterns',
     'sig11': 'Host/guest email similarity',
-    'sig12': 'Hard bounces on guest emails',
+    'sig12': 'Hard bounces on guest emails (75%+)',
+    'sig12_low': 'Hard bounces on guest emails (50-74%)',
     'sig13': 'Reject bounces on guest emails',
-    'sig14': 'Sequential guest Profile IDs',
-    'sig15': 'Recycled guest lists across dinners',
+    'sig14': 'Sequential guest Profile IDs (100%)',
+    'sig14_low': 'Sequential guest Profile IDs (55-99%)',
+    'sig15': 'Recycled bounced guest list',
     'sig16': 'Privacy domain, no bounce',
     'sig17': 'AI-generated or templated description',
     'sig18': 'Description quality degradation over time',
@@ -618,10 +698,40 @@ def build_case_json(cid, camp, scored_signals, score, tier, sf_data=None):
 
     sf_url = SF_BASE.format(host_id_18)
 
-    # Nourishment from SF Contact (canonical)
-    nourishment = 'pending Contact verification'
+    # Nourishment -- read from CSV first, fall back to SF Contact if available
+    nourishment_lifetime = None
+    nourishment_eligible = None
+    nourishment_requested = None
+
+    # Try CSV first (always available)
+    if host:
+        try:
+            csv_received = host.get('Total Nourishment Received', '')
+            if csv_received and str(csv_received).strip() not in ('', 'nan'):
+                nourishment_lifetime = float(str(csv_received).replace('$','').replace(',',''))
+        except (ValueError, TypeError):
+            pass
+        try:
+            csv_eligible = host.get('Total Eligible Nourishment', '')
+            if csv_eligible and str(csv_eligible).strip() not in ('', 'nan'):
+                nourishment_eligible = float(str(csv_eligible).replace('$','').replace(',',''))
+        except (ValueError, TypeError):
+            pass
+        try:
+            csv_requested = host.get('Requested Nourishment', '')
+            if csv_requested and str(csv_requested).strip() not in ('', 'nan'):
+                nourishment_requested = float(str(csv_requested).replace('$','').replace(',',''))
+        except (ValueError, TypeError):
+            pass
+
+    # SF Contact overrides CSV for lifetime figure (more reliable)
     if sf_data and sf_data.get('Total_Nourishment_Received__c') is not None:
-        nourishment = f"${sf_data['Total_Nourishment_Received__c']:,.0f} (Contact)"
+        nourishment_lifetime = sf_data['Total_Nourishment_Received__c']
+
+    # Format display strings
+    nourishment = f"${nourishment_lifetime:,.0f}" if nourishment_lifetime is not None else 'not available'
+    nourishment_eligible_str = f"${nourishment_eligible:,.0f}" if nourishment_eligible is not None else 'not available'
+    nourishment_requested_str = f"${nourishment_requested:,.0f}" if nourishment_requested is not None else 'not available'
 
     suspended = bool(sf_data.get('Suspended_Flag__c')) if sf_data else False
     dnn = bool(sf_data.get('Do_Not_Nourish__c')) if sf_data else False
@@ -697,12 +807,14 @@ def build_case_json(cid, camp, scored_signals, score, tier, sf_data=None):
     return {
         'id': f"case-{cid}",
         'name': host_name,
-        'email': sf.get('Email', host.get('Campaign Member Email', '')),
+        'email': sf.get('Email', host.get('Campaign Member Email', '')) if sf_data else host.get('Campaign Member Email', ''),
         'tier': tier,
         'is_cluster': False,
         'score': score,
         'sf_url': sf_url,
         'nourishment_received': nourishment,
+        'nourishment_eligible_this_dinner': nourishment_eligible_str,
+        'nourishment_requested': nourishment_requested_str,
         'future_dinners': future_dinners_str,
         'suspended': suspended,
         'dnn': dnn,
@@ -769,9 +881,11 @@ def detect_clusters(scored_cases, campaigns, cross_dinner_fps):
     return clusters
 
 
-def run(csv_path):
+def run(csv_path, lead_path=None):
     print(f"[T&S] Parsing {csv_path}...", file=sys.stderr)
-    campaigns, total_rows = parse_csv(csv_path)
+    if lead_path:
+        print(f"[T&S] Also merging Lead report: {lead_path}...", file=sys.stderr)
+    campaigns, total_rows = parse_csv(csv_path, lead_path)
     print(f"[T&S] {total_rows} rows, {len(campaigns)} campaigns", file=sys.stderr)
 
     high_volume, cross_dinner, all_cross, all_fps = build_fp_maps(campaigns)
@@ -1133,8 +1247,8 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns):
         } for k, v in d['signals'].items()}
 
         # Attach future dinner count to host row for sig20
-        if camp.get('host') and sf_data:
-            camp['host']['_future_dinner_count'] = len(sf_data.get('_future_dinners', []))
+        if camp.get('host') and sf:
+            camp['host']['_future_dinner_count'] = len(sf.get('_future_dinners', []))
         case = build_case_json(cid, camp, scored_signals, d['score'],
                                d['tier'] or 'watch', sf)
         cases.append(case)
@@ -1391,14 +1505,19 @@ if __name__ == '__main__':
     import os
 
     if len(sys.argv) < 2:
-        print("Usage: python3 ts_weekly_run.py <csv_path> [--no-sf]", file=sys.stderr)
+        print("Usage: python3 ts_weekly_run.py <contact_csv_path> [lead_csv_path] [--no-sf]", file=sys.stderr)
         sys.exit(1)
 
     csv_path = sys.argv[1]
+    lead_path = None
     skip_sf = '--no-sf' in sys.argv
 
+    # Second positional arg (not a flag) is the Lead CSV
+    if len(sys.argv) >= 3 and not sys.argv[2].startswith('--'):
+        lead_path = sys.argv[2]
+
     # Pass 1
-    pass1_output = run(csv_path)
+    pass1_output = run(csv_path, lead_path)
 
     # Pass 2
     sf_results = {}
@@ -1413,7 +1532,7 @@ if __name__ == '__main__':
 
     # Build final JSON
     # Reload campaigns for build step
-    campaigns, _ = parse_csv(csv_path)
+    campaigns, _ = parse_csv(csv_path, lead_path)
     ts_ui_data = build_ts_ui_data(pass1_output, sf_results, campaigns)
     ts_ui_data = add_agent_layer(ts_ui_data, pass1_output)
 
