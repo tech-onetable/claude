@@ -441,14 +441,6 @@ function buildReviewView() {
       }
       return html;
     })()}
-      let html = '';
-      if (actionableCases.length === 0 && state.filter === 'all') {
-        html += '<div style="font-size:14px;color:var(--text-sec);margin-bottom:16px;">No suspension or DNN cases this week.</div>';
-      } else {
-        html += actionableCases.map(buildCaseCard).join('');
-      }
-      return html;
-    })()}
     ${flags.length>0?`<div class="section-divider">Cross-host flags — program team</div>${flags.map(buildFlagCard).join('')}`:''}
     ${priorAction.length>0?`<div class="section-divider">Prior actions — no new consequence</div>${priorAction.map(c=>`<div class="prior-action-note">⚑ <strong>${c.name}</strong> — ${c.collapsed_summary||'Already suspended or DNN. No new action required this week.'}</div>`).join('')}`:''}
     ${buildInsights()}
