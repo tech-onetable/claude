@@ -103,10 +103,9 @@ Use neutral, observational language. Never describe a recurring guest group as s
 The recommended tier is determined by score and offense history. No exceptions.
 
 Score ranges:
-- Score 1-8 → Warning (Reminder and Support) -- first offense
-- Score 9-17 → Warning (DNN) -- first offense
-- Score 18-24 → Suspension (softer approach)
-- Score 25-39 → Suspension (stricter approach)
+- Score 1-8 → Warning (Reminder and Support)
+- Score 9-13 → Warning (DNN)
+- Score 14+ → Suspension (14-17 softer, 18+ stricter)
 - Score 40+ → Suspension (first instance rule applies -- never Deactivation on first consequence)
 
 **Warning (Reminder and Support) -- Score 1-8, first offense:**
@@ -247,8 +246,8 @@ Shared device fingerprint host and guest; Guest email bounces 75%+; Sequential g
 **Score ranges:**
 - 0: No action
 - 1-8: Warning (Reminder and Support) -- auto-sent, no restriction
-- 9-17: Warning (DNN) -- DNN activated, community@ email, Zoom required
-- 18-24: Suspension (softer approach)
+- 9-13: Warning (DNN) -- DNN activated, community@ email, Zoom required
+- 14-24: Suspension (14-17 softer approach, 18-24 stricter approach)
 - 25-39: Suspension (stricter approach)
 - 40+: Suspension (first instance rule applies)
 
