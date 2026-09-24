@@ -17,7 +17,19 @@
     --text: #1A1A1A; --text-sec: #666; --text-ter: #999;
     --border: #E8E2D9; --card: #fff;
   }
-  .header { background: var(--wine); padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; }
+  .signals-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 4px; }
+  .signal-row { display: flex; align-items: flex-start; gap: 10px; padding: 8px 10px; border-radius: 6px; background: #FAFAF8; }
+  .signal-row.signal-scored { background: var(--wine-light); }
+  .signal-row.signal-unscored { background: #F5F5F3; opacity: 0.7; }
+  .signal-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 4px; }
+  .dot-triggered { background: var(--wine); }
+  .dot-unscored { background: var(--text-ter); }
+  .signal-content { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+  .signal-name { font-size: 13px; font-weight: 500; color: var(--text); }
+  .signal-observed { font-size: 12px; color: var(--text-sec); }
+  .signal-contrib { font-size: 12px; font-weight: 600; color: var(--wine); flex-shrink: 0; padding-top: 2px; }
+  .signal-contrib-zero { font-size: 11px; color: var(--text-ter); flex-shrink: 0; padding-top: 3px; font-style: italic; }
+  .signal-row-header { font-size: 11px; font-weight: 600; color: var(--text-ter); text-transform: uppercase; letter-spacing: .05em; margin-top: 4px; padding: 0 2px; }
   .header-left { display: flex; align-items: center; gap: 12px; }
   .header-brand { color: #fff; font-weight: 600; font-size: 16px; }
   .header-sub { color: rgba(255,255,255,0.6); font-size: 14px; }
@@ -76,7 +88,6 @@
   .badge { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 6px; font-size: 12px; font-weight: 500; }
   .badge.suspension { background: var(--wine-light); color: var(--wine); }
   .badge.nourishment_pause { background: #FAEEDA; color: var(--amber-dark); }
-  .badge.warning_dnn { background: #FAEEDA; color: var(--amber-dark); }
   .badge.warning { background: var(--olive-light); color: #27500A; }
   .badge.dismiss { background: #F0F0EE; color: var(--text-sec); }
   .badge.program_team { background: var(--green-light); color: var(--green); }
@@ -161,7 +172,6 @@
 </style>
 </head>
 <body>
-<div id="field-alerts" style="display:none;max-width:900px;margin:12px auto 0;padding:0 16px"></div>
 <div id="app"></div>
 <script>
 // ── state ──────────────────────────────────────────────────────────────────
@@ -185,7 +195,7 @@ function saveRuns(r) { try { localStorage.setItem(STORE_KEY, JSON.stringify(r));
 state.runs = loadRuns();
 
 // ── helpers ────────────────────────────────────────────────────────────────
-const TIER_LABELS = { suspension:'Suspension', nourishment_pause:'Nourishment Pause', warning_dnn:'Warning (DNN)', warning:'Warning', dismiss:'Dismissed · No misuse', program_team:'Referred to program team' };
+const TIER_LABELS = { suspension:'Suspension', nourishment_pause:'Warning (DNN)', warning_dnn:'Warning (DNN)', warning:'Warning', dismiss:'Dismissed · No misuse', program_team:'Referred to program team' };
 const TIER_COLORS = { suspension:'var(--wine)', nourishment_pause:'var(--amber-dark)', warning_dnn:'var(--amber-dark)', warning:'var(--olive)' };
 const TIER_BGS = { suspension:'var(--wine-light)', nourishment_pause:'#FAEEDA', warning_dnn:'#FAEEDA', warning:'var(--olive-light)' };
 function tierLabel(t) { return TIER_LABELS[t] || t; }
@@ -214,20 +224,7 @@ async function tryLoadFromFile() {
 }
 
 // ── render ─────────────────────────────────────────────────────────────────
-  // Field alerts -- shown above everything when present
-  const alertsEl = document.getElementById('field-alerts');
-  if (alertsEl && state.current) {
-    const alerts = state.current.field_alerts || [];
-    alertsEl.style.display = alerts.length ? 'block' : 'none';
-    alertsEl.innerHTML = alerts.map(a => {
-      const critical = a.includes('CRITICAL');
-      return `<div style="padding:10px 14px;border-radius:8px;margin-bottom:8px;font-size:13px;font-weight:500;
-        background:${critical?'#FEF2F2':'#FFFBEB'};color:${critical?'#991B1B':'#633806'};
-        border-left:3px solid ${critical?'#991B1B':'#F59E0B'}">
-        ${a.replace('⚠ CRITICAL: ','🚨 ').replace('⚠ WARNING: ','⚠️ ')}
-      </div>`;
-    }).join('');
-  }
+function render() {
   document.getElementById('app').innerHTML = buildApp();
   const cm = document.getElementById('chat-messages');
   if (cm) cm.scrollTop = cm.scrollHeight;
@@ -314,8 +311,10 @@ function buildReviewView() {
       <button class="btn btn-secondary" onclick="switchView('load')" style="font-size:12px;padding:4px 10px;">+ Load new run</button>
     </div>
     <div class="filter-bar">
-      ${[['all','All'],['cluster','⚠ Cluster'],['suspension','Suspension'],['nourishment_pause','Nourishment Pause'],['warning_dnn','Warning DNN'],['warning','Warning']].map(([f,l])=>`<button class="filter-btn ${state.filter===f?'active':''}" onclick="setFilter('${f}')">${l}</button>`).join('')}
+      ${[['all','All'],['cluster','⚠ Cluster'],['suspension','Suspension'],['warning_dnn','Warning DNN'],['nourishment_pause','Nourishment Pause'],['warning','Warning']].map(([f,l])=>`<button class="filter-btn ${state.filter===f?'active':''}" onclick="setFilter('${f}')">${l}</button>`).join('')}
     </div>
+    ${(state.current.field_alerts||[]).map(a=>{const crit=a.includes('CRITICAL');return `<div style="padding:10px 14px;border-radius:8px;margin-bottom:8px;font-size:13px;font-weight:500;background:${crit?'#FEF2F2':'#FFFBEB'};color:${crit?'#991B1B':'#633806'};border-left:3px solid ${crit?'#991B1B':'#F59E0B'}">${a.replace('⚠ CRITICAL: ','🚨 ').replace('⚠ WARNING: ','⚠️ ')}</div>`;}).join('')}
+    ${(state.current.existing_cases||[]).length>0?`<div style="background:#FFF7ED;border:0.5px solid #FED7AA;border-radius:8px;padding:14px 16px;margin-bottom:12px"><div style="font-weight:600;color:#C2410C;margin-bottom:8px;font-size:13px">⚠ Suspended hosts with active dinners (${state.current.existing_cases.length})</div>${(state.current.existing_cases||[]).map(c=>`<div style="display:flex;justify-content:space-between;align-items:baseline;padding:6px 0;border-top:0.5px solid #FED7AA;font-size:13px"><div><a href="${c.sf_url}" target="_blank" style="font-weight:500;color:#C2410C;text-decoration:underline">${c.host_name}</a> · ${c.dinner_name} · <strong>${c.campaign_status}</strong></div><span style="color:var(--text-sec);font-size:12px">${c.nourishment_received} received</span></div>`).join('')}</div>`:''}
     ${filtered.length===0?'<div style="font-size:14px;color:var(--text-sec);margin-bottom:16px;">No cases match this filter.</div>':filtered.map(buildCaseCard).join('')}
     ${flags.length>0?`<div class="section-divider">Cross-host flags — program team</div>${flags.map(buildFlagCard).join('')}`:''}
     ${priorAction.length>0?`<div class="section-divider">Prior actions — no new consequence</div>${priorAction.map(c=>`<div class="prior-action-note">⚑ <strong>${c.name}</strong> — ${c.collapsed_summary||'Already suspended or DNN. No new action required this week.'}</div>`).join('')}`:''}
@@ -329,7 +328,28 @@ function buildCaseCard(c) {
   const actioned = !!a.tier;
   const displayTier = a.tier||c.tier;
   const isOpen = state.openCards.has(c.id);
+  const scoredSignals = (c.signals||[]).filter(s=>s.score_contribution>0);
+  const signalSummary = scoredSignals.map(s=>s.name).join(' · ');
 
+  // Warning cases: compact single-line row, expand on click for full detail
+  if (c.tier === 'warning' && !c.is_cluster) {
+    return `<div class="case-card" id="card-${c.id}" style="margin-bottom:4px">
+      <div class="case-header ${isOpen?'open':''}" onclick="toggleCard('${c.id}')" style="padding:10px 14px">
+        <div class="score-circle" style="background:${scoreBg(c.tier)};color:${scoreColor(c.tier)};width:32px;height:32px;font-size:13px">${c.score}</div>
+        <div class="case-meta" style="display:flex;align-items:center;gap:10px;flex:1;min-width:0">
+          <a class="case-name" href="${c.sf_url}" target="_blank" onclick="event.stopPropagation()" style="font-size:14px;white-space:nowrap">${c.name} ↗</a>
+          <span class="badge ${tierClass(displayTier)}" style="font-size:11px">${tierLabel(displayTier)}</span>
+          <span style="font-size:12px;color:var(--text-sec);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${signalSummary}</span>
+          ${actioned?'<span class="badge actioned" style="font-size:11px">✓ Reviewed</span>':''}
+        </div>
+        <span style="font-size:12px;color:var(--text-sec);white-space:nowrap">${c.nourishment_received}</span>
+        <span class="chevron ${isOpen?'open':''}">▾</span>
+      </div>
+      ${isOpen?buildCaseBody(c,a,actioned,displayTier):''}
+    </div>`;
+  }
+
+  // DNN and Suspension: full card
   return `<div class="case-card" id="card-${c.id}">
     <div class="case-header ${isOpen?'open':''}" onclick="toggleCard('${c.id}')">
       <div class="score-circle" style="background:${scoreBg(c.tier)};color:${scoreColor(c.tier)}">${c.score}</div>
@@ -340,19 +360,22 @@ function buildCaseCard(c) {
           ${actioned?'<span class="badge actioned">✓ Actioned</span>':''}
         </div>
         <div class="case-stats">
-          <span>${c.is_cluster?'Top score':'Score'} ${c.score}</span><span style="color:var(--border)">·</span>
-          <span>${c.nourishment_received}</span><span style="color:var(--border)">·</span>
-          <span>${c.future_dinners} future dinners</span>
-          ${caseEmail(c)?`<span style="color:var(--border)">·</span><span style="color:var(--text-sec)">${caseEmail(c)}</span>`:''}
+          <span>${c.dinner_name||''}</span>
+          ${c.dinner_name?`<span style="color:var(--border)">·</span>`:''}
+          <span>${c.nourishment_eligible ? `$${c.nourishment_eligible} eligible` : ''}</span>
+          ${c.nourishment_received?`<span style="color:var(--border)">·</span><span>${c.nourishment_received} received</span>`:''}
           ${c.suspended?'<span style="color:var(--border)">·</span><span style="color:var(--wine);font-weight:500">active suspension</span>':''}
           ${c.dnn&&!c.suspended?'<span style="color:var(--border)">·</span><span style="color:var(--amber-dark);font-weight:500">DNN</span>':''}
         </div>
-        <div class="case-summary">${c.collapsed_summary||''}</div>
+        <div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:4px">
+          ${scoredSignals.map(s=>`<span style="font-size:11px;padding:2px 7px;border-radius:4px;background:${c.tier==='suspension'?'var(--wine-light)':'#FAEEDA'};color:${c.tier==='suspension'?'var(--wine)':'var(--amber-dark)'}">● ${s.name}${s.observed?' · '+s.observed:''}</span>`).join('')}
+        </div>
       </div>
       <span class="chevron ${isOpen?'open':''}">▾</span>
     </div>
     ${isOpen?buildCaseBody(c,a,actioned,displayTier):''}
   </div>`;
+}
 }
 
 function buildCaseBody(c, a, actioned, displayTier) {
@@ -380,7 +403,28 @@ function buildCaseBody(c, a, actioned, displayTier) {
     <ul class="bullets">${(c.bullets||[]).map(b=>`<li>${md(b)}</li>`).join('')}</ul>
 
     <div class="section-label">Signals</div>
-    <div class="signals">${(c.signals||[]).map(s=>`<span class="signal-pill ${s.triggered?'triggered':'not-triggered'}" title="${s.triggered?s.observed||'':'Not triggered: '+s.threshold}">${s.name}</span>`).join('')}</div>
+    <div class="signals-list">
+      ${(c.signals||[]).filter(s=>s.triggered).map(s=>`
+        <div class="signal-row ${s.score_contribution>0?'signal-scored':'signal-unscored'}">
+          <div class="signal-dot ${s.score_contribution>0?'dot-triggered':'dot-unscored'}"></div>
+          <div class="signal-content">
+            <span class="signal-name">${s.name}</span>
+            ${s.observed?`<span class="signal-observed">${s.observed}</span>`:''}
+          </div>
+          ${s.score_contribution>0?`<span class="signal-contrib">+${s.score_contribution}</span>`:'<span class="signal-contrib-zero">context only</span>'}
+        </div>`).join('')}
+      ${(c.signals||[]).filter(s=>!s.triggered&&s.threshold_met===false).length > 0 ? `
+        <div class="signal-row-header">Not triggered</div>
+        ${(c.signals||[]).filter(s=>!s.triggered&&s.threshold_met===false).map(s=>`
+          <div class="signal-row signal-unscored">
+            <div class="signal-dot dot-unscored"></div>
+            <div class="signal-content">
+              <span class="signal-name" style="color:var(--text-ter)">${s.name}</span>
+              ${s.observed?`<span class="signal-observed">${s.observed}</span>`:''}
+            </div>
+            <span class="signal-contrib-zero">+0</span>
+          </div>`).join('')}`:''}
+    </div>
 
     ${c.score_breakdown?`
       <div class="collapsible">
@@ -913,12 +957,8 @@ function handleFileUpload(e) {
   reader.readAsText(file);
 }
 
-function normaliseCase(c) {
-  // Map fields from ts_weekly_run.py JSON output to UI expected format
-  const tier = c.tier === 'warning_dnn' ? 'warning_dnn' :
-               c.tier === 'suspension' ? 'suspension' :
-               c.tier === 'warning' ? 'warning' :
-               c.tier === 'nourishment_pause' ? 'nourishment_pause' : c.tier;
+function normaliseLoadedCase(c) {
+  const tier = c.tier;
   return {
     ...c,
     name: c.name || c.host_name || '',
@@ -928,15 +968,17 @@ function normaliseCase(c) {
     dinner_name: c.dinner_name || '',
     contact_id: c.contact_id || (c.sf_url||'').match(/Contact\/([^/]+)\/view/)?.[1] || '',
     campaign_id: c.campaign_id || (c.id||'').replace('case-',''),
-    host_context: c.host_context || {},
-    signals: (c.signals||[]).filter(s => s.score_contribution > 0 || s.triggered),
-    pattern_summary: c.collapsed_summary || c.pattern_summary || '',
+    host_context: c.host_context || null,
+    collapsed_summary: c.collapsed_summary || c.pattern_summary || '',
+    signals: (c.signals||[]),
+    bullets: (c.bullets||[]),
+    future_dinners: c.future_dinners || '0',
   };
 }
 
 function loadData(data) {
   // Normalise cases
-  if (data.cases) data.cases = data.cases.map(normaliseCase);
+  if (data.cases) data.cases = data.cases.map(normaliseLoadedCase);
   // Surface run-level fields
   if (data.run) {
     data.week_of = data.week_of || data.run.week_of;
@@ -950,7 +992,10 @@ function loadData(data) {
   saveRuns(state.runs);
   state.current = run;
   state.actionState = {};
-  state.openCards = new Set();
+  // Auto-open suspension cases, leave DNN and Warning collapsed
+  state.openCards = new Set(
+    (data.cases||[]).filter(c=>c.tier==='suspension').map(c=>c.id)
+  );
   state.filter = 'all';
   state.view = 'review';
   render();
