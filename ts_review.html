@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>OneTable Trust & Safety Review</title>
+<title>T+S Review · 9.24</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: system-ui, -apple-system, sans-serif; background: #FAFAF8; color: #1A1A1A; min-height: 100vh; }
@@ -244,7 +244,7 @@ function buildApp() {
 // ── header ─────────────────────────────────────────────────────────────────
 function buildHeader() {
   return `<div class="header">
-    <div class="header-left"><span class="header-brand">OneTable</span><span class="header-sub">Trust & Safety</span></div>
+    <div class="header-left"><span class="header-brand">T+S Review</span><span class="header-sub">9.24</span></div>
     <div class="header-tabs">
       ${['load','review','history'].map(v=>`<button class="tab-btn ${state.view===v?'active':''}" onclick="switchView('${v}')">${v==='load'?'Load Run':v==='review'?'Current Run':'History'}</button>`).join('')}
     </div>
