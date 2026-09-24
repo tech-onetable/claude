@@ -650,13 +650,13 @@ When staff approves a recommendation via the case review UI, the following actio
 - Alert Amalia before proceeding
 - Create Zendesk ticket for build team to action IP/account ban (manual platform action)
 
-**Guest case protocol (Suspension level only)**
-When a host case reaches Suspension tier, guest accounts associated with the flagged dinner(s) also need to be actioned. Two categories:
+**Guest case protocol (Suspension level only -- triggered when staff approves a Suspension recommendation)**
+When staff approves a host case at Suspension tier via the review UI, guest accounts associated with the flagged dinner(s) also need to be actioned at the same time. Two categories:
 
 - **Clearly fake guests** (confirmed fabricated: hard bounce AND throwaway domain, or obviously fake identity confirmed): Create Salesforce Case linked to the guest Contact, set Coaching_Status__c = "Closed - Resolved". Add guest Contact ID to bulk ban CSV for upload to build team. Staff (Pammie) handles the CSV upload directly.
 - **Flagged but not confirmed fake** (shared device fingerprint, cross-host appearance, suspicious but unproven): Create Salesforce Case linked to the guest Contact, set Coaching_Status__c = "Closed - Resolved". Set Problem_Flag__c = true on Contact for monitoring.
 
-This protocol applies at Suspension level only. Do not create guest cases at Warning or Nourishment Pause level.
+This protocol is triggered by staff approval of a Suspension -- not by the agent recommendation alone. Do not create guest cases at Warning or Nourishment Pause level, and do not create them until staff has explicitly approved the host case at Suspension tier.
 
 
 - Staff selects tier from dropdown
