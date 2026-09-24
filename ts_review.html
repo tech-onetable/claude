@@ -220,6 +220,19 @@ function md(s) {
     .replace(/\[([^\]]+)\]\((https?:\/\/[^\s\)]+)\)/g,'<a href="$2" target="_blank" style="color:var(--purple);text-decoration:underline">$1 ↗</a>')
     .replace(/\n/g,'<br>');
 }
+function copyLink(url, label) {
+  navigator.clipboard.writeText(url).then(() => {
+    const btn = event.target;
+    const orig = btn.textContent;
+    btn.textContent = '✓';
+    setTimeout(() => btn.textContent = orig, 1500);
+  });
+  event.stopPropagation();
+}
+function sfCampaignUrl(c) {
+  if (c.campaign_id) return `https://onetable.lightning.force.com/lightning/r/Campaign/${c.campaign_id}/view`;
+  return '';
+}
 function runDate() { return state.current?.run?.run_date || state.current?.run?.week_of || ''; }
 function esc(s) { return (s||'').replace(/'/g,"&#39;").replace(/"/g,'&quot;'); }
 
@@ -342,6 +355,8 @@ function buildCaseCard(c) {
         <div class="score-circle" style="background:${scoreBg(c.tier)};color:${scoreColor(c.tier)};width:32px;height:32px;font-size:13px">${c.score}</div>
         <div class="case-meta" style="display:flex;align-items:center;gap:10px;flex:1;min-width:0">
           <a class="case-name" href="${c.sf_url}" target="_blank" onclick="event.stopPropagation()" style="font-size:14px;white-space:nowrap">${c.name} ↗</a>
+          ${c.sf_url?`<button onclick="copyLink('${c.sf_url}')" style="font-size:11px;padding:2px 6px;border:0.5px solid var(--border);border-radius:4px;background:transparent;color:var(--text-sec);cursor:pointer">Contact</button>`:''}
+          ${sfCampaignUrl(c)?`<button onclick="copyLink('${sfCampaignUrl(c)}')" style="font-size:11px;padding:2px 6px;border:0.5px solid var(--border);border-radius:4px;background:transparent;color:var(--text-sec);cursor:pointer">Dinner</button>`:''}
           <span class="badge ${tierClass(displayTier)}" style="font-size:11px">${tierLabel(displayTier, c.score)}</span>
           <span style="font-size:12px;color:var(--text-sec);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${signalSummary}</span>
           ${actioned?'<span class="badge actioned" style="font-size:11px">✓ Reviewed</span>':''}
@@ -360,6 +375,8 @@ function buildCaseCard(c) {
       <div class="case-meta">
         <div class="case-name-row">
           <a class="case-name" href="${c.sf_url}" target="_blank" onclick="event.stopPropagation()">${c.name} ↗</a>
+          ${c.sf_url?`<button onclick="copyLink('${c.sf_url}')" style="font-size:11px;padding:2px 6px;border:0.5px solid var(--border);border-radius:4px;background:transparent;color:var(--text-sec);cursor:pointer" title="Copy Contact link">Contact</button>`:''}
+          ${sfCampaignUrl(c)?`<button onclick="copyLink('${sfCampaignUrl(c)}')" style="font-size:11px;padding:2px 6px;border:0.5px solid var(--border);border-radius:4px;background:transparent;color:var(--text-sec);cursor:pointer" title="Copy Campaign link">Dinner</button>`:''}
           <span class="badge ${tierClass(displayTier)}">${c.is_cluster?'⚠ Cluster · ':''}${tierLabel(displayTier, c.score)}</span>
           ${actioned?'<span class="badge actioned">✓ Actioned</span>':''}
         </div>
