@@ -149,6 +149,7 @@ def parse_csv(contact_path, lead_path=None):
 
             # Suspended host filter
             suspended = str(row.get('Suspended Flag', '')).strip() in ('1', '1.0', 'True', 'true')
+            dnn = str(row.get('Do Not Nourish', '')).strip() in ('1', '1.0', 'True', 'true')
             status = row.get('Campaign Status', '').strip().lower()
             if suspended and status in ('not nourishing', 'aborted'):
                 campaigns[cid]['_skip'] = True
@@ -159,9 +160,17 @@ def parse_csv(contact_path, lead_path=None):
             campaigns[cid]['address'] = row.get('Address', '')
             campaigns[cid]['description'] = row.get('Campaign Description', '')
 
+            # Suspended with active dinner → existing cases, high priority
             if suspended and status not in ('not nourishing', 'aborted'):
                 campaigns[cid]['_existing_case'] = True
                 campaigns[cid]['_suspended_status'] = row.get('Campaign Status', '')
+                campaigns[cid]['_existing_case_type'] = 'suspension'
+
+            # DNN (not suspended) with active dinner → existing cases, softer flag
+            elif dnn and not suspended and status not in ('not nourishing', 'aborted'):
+                campaigns[cid]['_existing_case'] = True
+                campaigns[cid]['_suspended_status'] = row.get('Campaign Status', '')
+                campaigns[cid]['_existing_case_type'] = 'dnn'
 
         elif ms in ('Attended', 'Applied', 'Pending', 'Guest of Guest'):
             campaigns[cid]['guests'].append(row)
@@ -1108,7 +1117,12 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns):
                 'campaign_status': camp.get('_suspended_status', ''),
                 'nourishment_received': f"${float(host.get('Total Nourishment Received', 0) or 0):,.0f}",
                 'nourishment_eligible': f"${float(host.get('Total Eligible Nourishment', 0) or 0):,.0f}",
-                'note': f"Suspended host with active dinner status: {camp.get('_suspended_status','')}. Review immediately -- Nourishment may have been sent while account was suspended."
+                'note': (
+                    f"Suspended host with active dinner status: {camp.get('_suspended_status','')}. Review immediately -- Nourishment may have been sent while account was suspended."
+                    if camp.get('_existing_case_type') == 'suspension'
+                    else f"DNN host posted a new dinner (status: {camp.get('_suspended_status','')}). Check in before approving Nourishment -- may be returning after a gap."
+                ),
+                'existing_case_type': camp.get('_existing_case_type', 'suspension'),
             })
     existing_case_cids = {c['campaign_id'] for c in existing_cases}
 
