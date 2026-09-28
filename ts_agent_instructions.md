@@ -923,3 +923,30 @@ The agent may then offer a conclusion, framed as:
 - Most likely explanation given the evidence
 - Alternative explanations that cannot yet be ruled out
 - What additional data would change the assessment
+
+---
+
+## PROPOSED SIGNAL UPDATES (September 2026 Post-Mortem)
+
+The following gaps were identified from the Hadas Moran / Ashley Stanford / NuRoots cluster investigation. These are detection misses that the weekly run would not have caught on its own. Each is flagged with build priority.
+
+**P0 -- Ready to build now:**
+
+1. **Cross-host shared exact IP pass (weekly).** Run a pass comparing all hosts' dinner creation IPs and guest RSVP IPs across the full week. Flag any IP appearing on 2+ dinners from different hosts. Cheapest change with highest ROI -- would have linked the NuRoots group by early July. Add to Pass 1A alongside the existing same-address and cross-dinner device fingerprint checks.
+
+2. **Cross-host account ID batch detection (weekly).** Check whether guest Profile IDs are sequential across hosts (not just within one dinner). If guests on Host A's dinner and guests on Host B's dinner have PIDs within a narrow range, flag as a cluster signal regardless of device match. Reference: this is the primary signal that would have caught the NuRoots group.
+
+3. **New host Salesforce lookups (under 90 days).** Currently warning-tier hosts are skipped in Pass 2. Exception: if a host is under 90 days old, always run Pass 2 Salesforce lookups regardless of tier. This whole group was under 90 days when they could have been caught.
+
+**P1 -- Needs design work:**
+
+4. **Privacy-domain guest share signal.** A dinner where 50%+ of guests have privacy-domain emails (proton.me, atomicmail.io, etc.) should score as a standalone signal or with lower pairing requirements. Currently scores weight 1 only when paired with a guest integrity signal. Standalone high-share (75%+) should score at weight 3-4. Also: look-alike domains (astermail.org, altaddress.com, atomicmail.com, etc.) need to be added to the list.
+
+5. **Host email domain check.** Currently the script only checks guest email domains. A host whose own email is on a suspicious or throwaway domain should add a signal. Hadas and Ashley both had atomicmail.io host emails.
+
+6. **Multi-week lookback for new hosts.** The weekly run starts from scratch each week and never looks back. New hosts (under 90 days) should be checked against the last 8 weeks of data to see if a pattern exists across their dinner history. Requires historical report access or Salesforce query.
+
+7. **Hosts attending each other's dinners.** If Host A appears as a guest on Host B's dinner, flag for review. Real social circles do this legitimately, so this is a soft signal (weight 1-2) that requires pairing. But it's one of the clearest coordination signals for manufactured clusters.
+
+**Standing rule added from this investigation:**
+Warning-tier cases should not be auto-dismissed just because they score low. When a host is new (under 90 days), even a score of 1-8 should trigger Pass 2 Salesforce lookups. The NuRoots cluster scored as low-Warning individually precisely because the cross-host patterns were invisible within a single dinner -- but tenure + low score + privacy domain is a meaningful combination.
