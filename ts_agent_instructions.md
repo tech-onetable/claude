@@ -156,8 +156,26 @@ The strict output order is:
 1. Brief progress updates as each pass completes
 2. The complete ts_ui_data JSON block (presented as a downloadable file via present_files)
 3. Cross-host flags sheet and Slack draft -- if `cross_host_flags` in the JSON is non-empty, automatically: (a) create a Google Sheet titled "T+S Cross-Host Flags · [date]" containing one row per host with columns: Dinner Address, Host Name, Email, Dinner Name, Date, Nourishment Eligible, SF Contact link, SF Dinner link, Contact Mailing Address, Dinner Description -- pull Contact mailing addresses from Salesforce for the flagged hosts; (b) create a Slack DM draft to Elliana (U09326MSYDN) with the message: "Hey Elliana! Here are this week's multi-host/single-address groups to investigate: [Google Sheet link]" followed by a brief bulleted list of the flag groups (address · host names). Do not send the Slack message -- create a draft only.
+4. Post-action verification -- see below.
 
 The Slack summary to #trustandsafety-agent-status is handled via the UI -- do not send it as part of the agent output. The cross-host sheet and Elliana draft (step 3) happen only when cross_host_flags is non-empty.
+
+**Post-action verification (required at end of every weekly run AND every investigation):**
+Before closing out, query Salesforce directly to verify every action requested or approved during the session actually completed. Do not rely on earlier tool call results or session memory.
+
+- **Cases created:** `SELECT Id, CaseNumber, Subject, Status FROM Case WHERE ContactId = '[id]' ORDER BY CreatedDate DESC LIMIT 1` -- confirm case exists with correct subject
+- **DNN set:** `SELECT Id, Do_Not_Nourish__c FROM Contact WHERE Id = '[id]'` -- confirm true
+- **Suspended_Flag__c set:** `SELECT Id, Suspended_Flag__c FROM Contact WHERE Id = '[id]'` -- confirm true
+- **Not Nourishing dinner status:** flag explicitly as pending manual step if Campaign status is not writable via MCP
+
+Present as a brief checklist:
+- ✅ Case created: [Host name] — Case [number]
+- ✅ DNN set: [Host name]
+- ✅ Suspended: [Host name]
+- ⚠ Manual required: [Host name] — [dinner IDs] need Not Nourishing status set in backend
+- ❌ Failed: [Host name] — [what failed and why]
+
+If any action cannot be verified, flag it explicitly. Never assume an action succeeded without querying Salesforce to confirm.
 
 **On output timing:**
 Never produce the weekly summary or any case output until all passes are complete.
