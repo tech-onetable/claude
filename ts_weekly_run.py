@@ -968,7 +968,96 @@ def run(csv_path, lead_path=None):
     print(f"[T&S] High-volume FPs (10+): {len(high_volume)}", file=sys.stderr)
     print(f"[T&S] Cross-dinner FPs (2-9): {len(cross_dinner)}", file=sys.stderr)
 
-    # ── Pass 1: Score all campaigns ──────────────────────────────────────────
+    # ── Pass 1A: Cross-host checks ────────────────────────────────────────────
+    # These checks compare hosts against each other -- invisible within a single dinner.
+
+    # 1. Cross-host shared exact IP
+    # Flag any IP appearing on 2+ dinners from different hosts this week.
+    # Uses dinner creation IP (Campaign) and guest RSVP IP (CampaignMember).
+    cross_host_ips = collections.defaultdict(list)  # ip -> [cid]
+    for cid, camp in campaigns.items():
+        host = camp['host']
+        if not host:
+            continue
+        # Dinner creation IP
+        dinner_ip = (host.get('Dinner Created IP', '') or '').strip()
+        if dinner_ip and dinner_ip not in ('nan', 'None', ''):
+            cross_host_ips[dinner_ip].append(cid)
+        # Guest RSVP IPs
+        for g in camp['guests']:
+            guest_ip = (g.get('RSVP IP', '') or '').strip()
+            if guest_ip and guest_ip not in ('nan', 'None', ''):
+                if cid not in cross_host_ips[guest_ip]:
+                    cross_host_ips[guest_ip].append(cid)
+    # Keep only IPs appearing on 2+ different campaigns
+    cross_host_ips = {ip: list(set(cids)) for ip, cids in cross_host_ips.items()
+                      if len(set(cids)) >= 2}
+    # Filter out high-volume IPs (likely NAT/shared infrastructure -- threshold 10+ campaigns)
+    cross_host_ips = {ip: cids for ip, cids in cross_host_ips.items()
+                      if len(cids) < 10}
+    print(f"[T&S] Cross-host shared IPs: {len(cross_host_ips)}", file=sys.stderr)
+
+    # 2. Cross-host guest Profile ID batch detection
+    # Check whether guest PIDs are sequential across different host dinners.
+    # This is the primary signal that links manufactured cluster members.
+    # Build pid -> [cid] map across all dinners
+    all_guest_pids = collections.defaultdict(list)  # pid -> [cid]
+    for cid, camp in campaigns.items():
+        if not camp['host']:
+            continue
+        for g in camp['guests']:
+            try:
+                pid = int(g.get('Platform Profile ID', ''))
+                all_guest_pids[pid].append(cid)
+            except (ValueError, TypeError):
+                pass
+
+    # Find groups of PIDs that are sequential and span multiple campaigns
+    def find_cross_host_pid_batches(pid_to_cids, gap=1, min_pids=3, min_hosts=2, max_span=20):
+        """
+        Find groups of PIDs that are:
+        - Sequential (gap <= `gap` between consecutive PIDs)
+        - Span at most `max_span` total range (filters out organic platform growth)
+        - Span at least `min_hosts` different campaigns
+        - Have at least `min_pids` PIDs in the batch
+        Returns list of {pids, cids, range} dicts.
+        """
+        all_pids = sorted(pid_to_cids.keys())
+        batches = []
+        current_batch = [all_pids[0]] if all_pids else []
+        for pid in all_pids[1:]:
+            if pid - current_batch[-1] <= gap:
+                current_batch.append(pid)
+            else:
+                span = current_batch[-1] - current_batch[0]
+                if len(current_batch) >= min_pids and span <= max_span:
+                    cids = set(c for p in current_batch for c in pid_to_cids[p])
+                    if len(cids) >= min_hosts:
+                        batches.append({
+                            'pids': current_batch,
+                            'cids': sorted(cids),
+                            'pid_range': f"{current_batch[0]}–{current_batch[-1]}",
+                            'span': span,
+                        })
+                current_batch = [pid]
+        # Check last batch
+        if current_batch:
+            span = current_batch[-1] - current_batch[0]
+            if len(current_batch) >= min_pids and span <= max_span:
+                cids = set(c for p in current_batch for c in pid_to_cids[p])
+                if len(cids) >= min_hosts:
+                    batches.append({
+                        'pids': current_batch,
+                        'cids': sorted(cids),
+                        'pid_range': f"{current_batch[0]}–{current_batch[-1]}",
+                        'span': span,
+                    })
+        return batches
+
+    cross_host_pid_batches = find_cross_host_pid_batches(
+        all_guest_pids, gap=1, min_pids=3, min_hosts=4, max_span=20
+    )
+    print(f"[T&S] Cross-host PID batches: {len(cross_host_pid_batches)}", file=sys.stderr)
     all_scored = {}  # cid -> {score, scored_signals, host_data}
     for cid, camp in campaigns.items():
         if not camp['host']:
@@ -1003,9 +1092,32 @@ def run(csv_path, lead_path=None):
     # For now, output the scored data with sf_data=None (pending SF query).
     # The agent will call run_pass2(all_scored, campaigns) after querying SF.
 
-    # Detect clusters
+    # Detect clusters -- from device fingerprints, cross-host IPs, and PID batches
     clusters = detect_clusters(all_scored, campaigns, cross_dinner)
     print(f"[T&S] Clusters identified: {len(clusters)}", file=sys.stderr)
+
+    # Also treat cross-host PID batch members as cluster candidates
+    for batch in cross_host_pid_batches:
+        scored_members = [cid for cid in batch['cids'] if cid in all_scored]
+        if len(scored_members) >= 2:
+            clusters.append({
+                'fp': None,
+                'members': scored_members,
+                'cross_dinner_pid_sequential': True,
+                'pid_range_note': f"Cross-host PID batch: PIDs {batch['pid_range']} ({len(batch['pids'])} accounts across {len(batch['cids'])} dinners)",
+            })
+
+    # Also flag hosts sharing a cross-host IP as a softer cluster signal
+    for ip, cids in cross_host_ips.items():
+        scored_members = [cid for cid in cids if cid in all_scored]
+        if len(scored_members) >= 2:
+            clusters.append({
+                'fp': None,
+                'members': scored_members,
+                'cross_dinner_pid_sequential': False,
+                'pid_range_note': None,
+                'shared_ip_note': f"Shared IP {ip} across {len(cids)} dinners this week",
+            })
 
     # Identify cluster members for suspension override rule
     cluster_cids = set()
@@ -1070,6 +1182,8 @@ def run(csv_path, lead_path=None):
         } for cid, d in all_scored.items()},
         'clusters': clusters,
         'same_address': {addr: hosts for addr, hosts in same_address.items()},
+        'cross_host_ips': cross_host_ips,
+        'cross_host_pid_batches': cross_host_pid_batches,
         'high_volume_fps': {fp: len(all_fps[fp]) for fp in high_volume},
         'total_dinners': len(campaigns),
         'field_alerts': field_alerts,
@@ -1430,15 +1544,88 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns):
             'similarity_pct': None,
         })
 
+    # Add cross-host IP flags to cross_host_flags
+    for ip, cids in pass1_output.get('cross_host_ips', {}).items():
+        flag_hosts = []
+        for cid in cids:
+            camp = campaigns.get(cid, {})
+            host = camp.get('host', {})
+            if not host:
+                continue
+            contact_id = host.get('Contact ID', '')
+            sf = sf_results.get(contact_id, {})
+            host_id_18 = sf.get('Id', sf_15_to_18(contact_id))
+            flag_hosts.append({
+                'name': (host.get('First Name','') + ' ' + host.get('Last Name','')).strip(),
+                'sf_url': SF_BASE.format(host_id_18),
+                'dinner': camp.get('name', ''),
+                'dinner_url': SF_CAMPAIGN_BASE.format(cid),
+                'description': (camp.get('description', '') or '')[:200],
+                'eligible': '—',
+            })
+        if len(flag_hosts) >= 2:
+            cross_host_flags.append({
+                'id': f"flag-ip-{ip.replace('.', '-')}",
+                'type': 'shared_ip',
+                'title': f"Shared IP · {ip}",
+                'hosts': flag_hosts,
+                'summary_bullets': [
+                    f"**{len(flag_hosts)} dinners share IP {ip} this week.** May indicate same person hosting under multiple accounts.",
+                    "**Review for coordinated fraud** -- check if hosts know each other or share device fingerprints.",
+                ],
+                'flags': [{'label': 'Shared IP', 'type': 'warning'}],
+                'similarity_pct': None,
+            })
+
+    # Note: cross-host PID batches are surfaced in insights, not cross_host_flags,
+    # because single-week false positive rate is too high for program team action.
+    # They become meaningful when the same batch recurs across multiple weeks.
+
     # High-volume device fingerprints for Weekly Insights
     known_bad = []
     for fp, count in sorted(pass1_output['high_volume_fps'].items(), key=lambda x: -x[1])[:5]:
-        # Only flag if they also appear in scored cases (known bad)
         known_bad.append({
             'fingerprint': fp,
             'url': FP_BASE.format(fp),
             'seen_on': f"{count} dinners (high-volume)",
         })
+
+    # Auto-generate basic pattern observations from Pass 1 data
+    sus_cases = [c for c in cases if c.get('tier') == 'suspension']
+    dnn_cases = [c for c in cases if c.get('tier') == 'warning_dnn']
+    all_signals = [s for c in cases for s in c.get('signals', []) if s.get('score_contribution', 0) > 0]
+    signal_counts = {}
+    for s in all_signals:
+        signal_counts[s['name']] = signal_counts.get(s['name'], 0) + 1
+    top_signals = sorted(signal_counts.items(), key=lambda x: -x[1])[:5]
+    bounce_cases = [c for c in cases if any('bounce' in (s.get('name','').lower()) and s.get('score_contribution',0) > 0 for s in c.get('signals',[]))]
+    pid_cases = [c for c in cases if any('profile id' in (s.get('name','').lower()) and s.get('score_contribution',0) > 0 for s in c.get('signals',[]))]
+    patterns = []
+    if sus_cases:
+        patterns.append(f"{len(sus_cases)} suspension case{'s' if len(sus_cases)>1 else ''} this week.")
+    if dnn_cases:
+        patterns.append(f"{len(dnn_cases)} Warning DNN case{'s' if len(dnn_cases)>1 else ''}.")
+    if bounce_cases:
+        patterns.append(f"Bounce signal present in {len(bounce_cases)}/{len(cases)} scored cases.")
+    if pid_cases:
+        patterns.append(f"Sequential Profile IDs in {len(pid_cases)} cases.")
+    pid_batch_flags = [f for f in cross_host_flags if f.get('type') == 'pid_batch']
+    ip_flags = [f for f in cross_host_flags if f.get('type') == 'shared_ip']
+    addr_flags = [f for f in cross_host_flags if f.get('type') in ('confirm_rule', 'program_policy')]
+    # Add cross-host PID batch findings to insights as observations (not cross_host_flags)
+    # Single-week PID batches have high false-positive rate; they become meaningful over multiple weeks.
+    # Surface as an observation in patterns for staff awareness.
+    if cross_host_pid_batches:
+        top_batch = sorted(cross_host_pid_batches, key=lambda x: -len(x['cids']))[0]
+        patterns.append(
+            f"⚠ {len(cross_host_pid_batches)} cross-host PID batch{'es' if len(cross_host_pid_batches)>1 else ''} detected "
+            f"(e.g. PIDs {top_batch['pid_range']} across {len(top_batch['cids'])} dinners). "
+            f"Single-week batches may be coincidental -- flag for tracking across multiple weeks before escalating."
+        )
+    if ip_flags:
+        patterns.append(f"{len(ip_flags)} cross-host shared IP group{'s' if len(ip_flags)>1 else ''} flagged.")
+    if addr_flags:
+        patterns.append(f"{len(addr_flags)} same-address group{'s' if len(addr_flags)>1 else ''} routed to program team.")
 
     ts_ui_data = {
         'run': {
@@ -1451,34 +1638,9 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns):
         'existing_cases': existing_cases,
         'cases': cases,
         'cross_host_flags': cross_host_flags,
-        # Auto-generate basic pattern observations from Pass 1 data
-        sus_cases = [c for c in cases if c.get('tier') == 'suspension']
-        dnn_cases = [c for c in cases if c.get('tier') == 'warning_dnn']
-        warn_cases = [c for c in cases if c.get('tier') == 'warning']
-        all_signals = [s for c in cases for s in c.get('signals', []) if s.get('score_contribution', 0) > 0]
-        signal_counts = {}
-        for s in all_signals:
-            signal_counts[s['name']] = signal_counts.get(s['name'], 0) + 1
-        top_signals = sorted(signal_counts.items(), key=lambda x: -x[1])[:5]
-
-        bounce_cases = [c for c in cases if any('bounce' in (s.get('name','').lower()) and s.get('score_contribution',0) > 0 for s in c.get('signals',[]))]
-        pid_cases = [c for c in cases if any('profile id' in (s.get('name','').lower()) and s.get('score_contribution',0) > 0 for s in c.get('signals',[]))]
-
-        patterns = []
-        if sus_cases:
-            patterns.append(f"{len(sus_cases)} suspension case{'s' if len(sus_cases)>1 else ''} this week -- all scoring on 100% bounce + 100% sequential PIDs combination.")
-        if dnn_cases:
-            patterns.append(f"{len(dnn_cases)} Warning DNN case{'s' if len(dnn_cases)>1 else ''} -- predominantly bounce signals on standard email domains. Device data not yet populating so device signals cannot score.")
-        if bounce_cases:
-            patterns.append(f"Bounce signal present in {len(bounce_cases)}/{len(cases)} scored cases. Mandrill data populating at 12% -- signals likely underscoring.")
-        if pid_cases:
-            patterns.append(f"Sequential Profile IDs appearing in {len(pid_cases)} cases -- consistent with bulk account creation pattern.")
-        if cross_host_flags:
-            patterns.append(f"{len(cross_host_flags)} same-address flag group{'s' if len(cross_host_flags)>1 else ''} routed to program team for household confirmation.")
-
         'insights': {
             'patterns': ' '.join(patterns),
-            'emerging_trends': 'RSVP Device Fingerprint ID and RSVP IP fields at 0% population -- flagged to ImagineX and Idealist. When resolved, device signals will significantly improve detection accuracy.' if not patterns else '',
+            'emerging_trends': '',
             'proposed_signal_updates': [],
             'open_questions': [],
             'known_bad_devices': known_bad,
