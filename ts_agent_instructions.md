@@ -294,7 +294,7 @@ The weekly run always requires two CSV reports uploaded to the conversation:
 Full field set: all campaign-level fields (Campaign ID, name, start date, address, status, Nourishment fields, AI review flags, privacy type) plus Contact-type guest rows with all guest fields.
 
 **Report 2 -- Campaigns with Leads (guest supplement)**
-Lead-type guest rows only. Required fields: Campaign ID, Lead ID or email, First Name, Last Name, Mandrill Bounce Reason, Mandrill Bounce Time/Date, Platform Profile ID, RSVP Device Fingerprint ID, RSVP IP, Device ID, IP Address Reservation, Created Date, Member Status. Campaign-level fields (address, start date, Nourishment, etc.) are not needed -- those come from Report 1 via Campaign ID join.
+Lead-type guest rows only. Required fields: Campaign ID, Lead ID or email, First Name, Last Name, Mandrill Bounce Reason, Mandrill Bounce Time/Date, Platform Profile ID, RSVP Device Fingerprint ID, RSVP IP, Created Date, Member Status. Campaign-level fields (address, start date, Nourishment, etc.) are not needed -- those come from Report 1 via Campaign ID join.
 
 **Why two reports:**
 Plus-ones who are not already Contacts in Salesforce come in as Leads. Campaign_Member_Email__c and other guest fields are blank on Lead-linked CampaignMember records. The Lead report supplies the guest-level data (bounce status, device fingerprint, Profile ID) that the Contact report cannot provide for Lead-type guests.
@@ -352,8 +352,6 @@ Leave blank if there is genuinely nothing notable. Do not pad.
 
 Fields monitored: RSVP Device Fingerprint ID, RSVP IP, Mandrill Bounce Reason, Platform Profile ID. Do not surface these in any section of the output.
 
-**Device and IP field migration (NEW, September 2026):** From dinners dated 2026-08-21 onward, device and IP data is stored in `Device_ID__c` (report column "Device ID") and `IP_Address_Reservation__c` (report column "IP Address Reservation") on CampaignMember. The legacy fields `RSVP_Device_Fingerprint_ID__c` and `RSVP_IP__c` are empty from that date. Both report columns must be included in the Salesforce report. The script coalesces them: the legacy value is used when present, otherwise the new field. Field health for device fingerprint and IP is measured on the coalesced value. Device IDs in the new field use the same fingerprint format and link to the same device activity page.
-
 **Suspended host display rule:** For hosts where Suspended Flag = 1:
 - Campaign Status = 'Not Nourishing' or 'Aborted' → skip entirely, do not surface anywhere in the output. These are already handled.
 - Any other Campaign Status → surface in a dedicated "Existing Cases -- Active While Suspended" section at the top of the output, above all scored cases. Flag that a new dinner is active while the host is suspended. Do not re-score these hosts -- note the existing suspension and the active campaign status only.
@@ -407,9 +405,7 @@ Note: Total_Nourishment_Received__c on Contact is the canonical Nourishment tota
 Id, Name, StartDate, Status, Dinner_Privacy__c, Description, Event_Name__c, Do_Not_Nourish__c, Suspended_Flag__c, Total_Nourishment_Received__c, Total_Nourishment__c, Total_Eligible_Nourishment__c, Nourishment_Per_Person__c, Unique_Guests__c, AI_Not_Pass_Summary__c, Further_Review_Reason__c, Dynamite_Description__c, Dinner_Created_IP__c, Dinner_Created_Device_ID__c, Problem_Flag__c, host_abuse__c, Flag__c, Flag_Reason__c, FYI_Flagged_By__c, Nourishmentplus__c, Platform_Create_Date__c
 
 **CampaignMember query (active dinners, non-host members):**
-ContactId, Contact.FirstName, Contact.LastName, Campaign_Member_Email__c, Platform_Profile_ID_Member__c, RSVP_IP__c, RSVP_Device_Fingerprint_ID__c, IP_Address_Reservation__c, Device_ID__c, CreatedDate, Platform__c, Contact.Mandrill_Bounce_Reason__c, Contact.Mandrill_Bounce_Time_Date__c, Contact.Host__c
-
-When querying device or IP data on CampaignMember, always select both the legacy and new fields and use whichever is populated (see Device and IP field migration above).
+ContactId, Contact.FirstName, Contact.LastName, Campaign_Member_Email__c, Platform_Profile_ID_Member__c, RSVP_IP__c, RSVP_Device_Fingerprint_ID__c, CreatedDate, Platform__c, Contact.Mandrill_Bounce_Reason__c, Contact.Mandrill_Bounce_Time_Date__c, Contact.Host__c
 
 **Case history query:** All Cases linked to this Contact.
 
@@ -419,8 +415,8 @@ When querying device or IP data on CampaignMember, always select both the legacy
 
 **Guest pool reappearance check:** If new host (within 90 days), check whether any guest Profile IDs appeared on a recently deactivated host's dinners in the prior 90 days.
 
-**Cluster rule:**
-Any host identified as part of a cluster receives Suspension (soft) minimum regardless of individual score. Cluster membership itself is sufficient evidence of coordinated behavior. The script applies this automatically. The agent flags any cluster member that appears to be an outlier (e.g. very low score, plausible innocent explanation for shared fingerprint, no corroborating signals beyond the cluster FP) and notes this for staff review -- staff decides whether to downgrade. Prior formal consequence on any cluster member → flag for Suspension (strict) or Deactivation review.
+**Cross-dinner sequential Profile ID check (cluster signal):**
+When a confirmed cluster is identified via shared device fingerprint, check whether guest Profile IDs are sequential *across* cluster member dinners -- not just within a single dinner. If guests on Dinner A and guests on Dinner B have PIDs within a narrow range of each other (gap ≤ 5 across all cluster dinners combined), this is high-confidence evidence the guest accounts were created in the same batch by the same operator. This is a stronger signal than within-dinner PID sequentiality alone. Note the full PID range across the cluster in the cluster_note field. Reference investigation: March 2026 cluster (PIDs 305320-305342 appearing across 7 host accounts and 20+ dinners). Cluster membership itself is sufficient evidence of coordinated behavior. The script applies this automatically. The agent flags any cluster member that appears to be an outlier (e.g. very low score, plausible innocent explanation for shared fingerprint, no corroborating signals beyond the cluster FP) and notes this for staff review -- staff decides whether to downgrade. Prior formal consequence on any cluster member → flag for Suspension (strict) or Deactivation review.
 
 Clusters surface at the top of the weekly output before all other cases. All cluster members receive the same consequence unless staff overrides per member.
 
