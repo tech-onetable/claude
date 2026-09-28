@@ -997,67 +997,11 @@ def run(csv_path, lead_path=None):
                       if len(cids) < 10}
     print(f"[T&S] Cross-host shared IPs: {len(cross_host_ips)}", file=sys.stderr)
 
-    # 2. Cross-host guest Profile ID batch detection
-    # Check whether guest PIDs are sequential across different host dinners.
-    # This is the primary signal that links manufactured cluster members.
-    # Build pid -> [cid] map across all dinners
-    all_guest_pids = collections.defaultdict(list)  # pid -> [cid]
-    for cid, camp in campaigns.items():
-        if not camp['host']:
-            continue
-        for g in camp['guests']:
-            try:
-                pid = int(g.get('Platform Profile ID', ''))
-                all_guest_pids[pid].append(cid)
-            except (ValueError, TypeError):
-                pass
-
-    # Find groups of PIDs that are sequential and span multiple campaigns
-    def find_cross_host_pid_batches(pid_to_cids, gap=1, min_pids=3, min_hosts=2, max_span=20):
-        """
-        Find groups of PIDs that are:
-        - Sequential (gap <= `gap` between consecutive PIDs)
-        - Span at most `max_span` total range (filters out organic platform growth)
-        - Span at least `min_hosts` different campaigns
-        - Have at least `min_pids` PIDs in the batch
-        Returns list of {pids, cids, range} dicts.
-        """
-        all_pids = sorted(pid_to_cids.keys())
-        batches = []
-        current_batch = [all_pids[0]] if all_pids else []
-        for pid in all_pids[1:]:
-            if pid - current_batch[-1] <= gap:
-                current_batch.append(pid)
-            else:
-                span = current_batch[-1] - current_batch[0]
-                if len(current_batch) >= min_pids and span <= max_span:
-                    cids = set(c for p in current_batch for c in pid_to_cids[p])
-                    if len(cids) >= min_hosts:
-                        batches.append({
-                            'pids': current_batch,
-                            'cids': sorted(cids),
-                            'pid_range': f"{current_batch[0]}–{current_batch[-1]}",
-                            'span': span,
-                        })
-                current_batch = [pid]
-        # Check last batch
-        if current_batch:
-            span = current_batch[-1] - current_batch[0]
-            if len(current_batch) >= min_pids and span <= max_span:
-                cids = set(c for p in current_batch for c in pid_to_cids[p])
-                if len(cids) >= min_hosts:
-                    batches.append({
-                        'pids': current_batch,
-                        'cids': sorted(cids),
-                        'pid_range': f"{current_batch[0]}–{current_batch[-1]}",
-                        'span': span,
-                    })
-        return batches
-
-    cross_host_pid_batches = find_cross_host_pid_batches(
-        all_guest_pids, gap=1, min_pids=3, min_hosts=4, max_span=20
-    )
-    print(f"[T&S] Cross-host PID batches: {len(cross_host_pid_batches)}", file=sys.stderr)
+    # Cross-host PID batch detection is handled in Pass 2 by the agent on confirmed clusters.
+    # Single-week population-level PID batches have too high a false-positive rate to be
+    # useful in Pass 1. The agent checks PIDs across cluster members after cluster confirmation.
+    cross_host_pid_batches = []
+    print(f"[T&S] Cross-host PID check: deferred to Pass 2 (agent-executed on confirmed clusters)", file=sys.stderr)
     all_scored = {}  # cid -> {score, scored_signals, host_data}
     for cid, camp in campaigns.items():
         if not camp['host']:
@@ -1095,17 +1039,6 @@ def run(csv_path, lead_path=None):
     # Detect clusters -- from device fingerprints, cross-host IPs, and PID batches
     clusters = detect_clusters(all_scored, campaigns, cross_dinner)
     print(f"[T&S] Clusters identified: {len(clusters)}", file=sys.stderr)
-
-    # Also treat cross-host PID batch members as cluster candidates
-    for batch in cross_host_pid_batches:
-        scored_members = [cid for cid in batch['cids'] if cid in all_scored]
-        if len(scored_members) >= 2:
-            clusters.append({
-                'fp': None,
-                'members': scored_members,
-                'cross_dinner_pid_sequential': True,
-                'pid_range_note': f"Cross-host PID batch: PIDs {batch['pid_range']} ({len(batch['pids'])} accounts across {len(batch['cids'])} dinners)",
-            })
 
     # Also flag hosts sharing a cross-host IP as a softer cluster signal
     for ip, cids in cross_host_ips.items():
@@ -1612,18 +1545,8 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns):
     pid_batch_flags = [f for f in cross_host_flags if f.get('type') == 'pid_batch']
     ip_flags = [f for f in cross_host_flags if f.get('type') == 'shared_ip']
     addr_flags = [f for f in cross_host_flags if f.get('type') in ('confirm_rule', 'program_policy')]
-    # Add cross-host PID batch findings to insights as observations (not cross_host_flags)
-    # Single-week PID batches have high false-positive rate; they become meaningful over multiple weeks.
-    # Surface as an observation in patterns for staff awareness.
-    if cross_host_pid_batches:
-        top_batch = sorted(cross_host_pid_batches, key=lambda x: -len(x['cids']))[0]
-        patterns.append(
-            f"⚠ {len(cross_host_pid_batches)} cross-host PID batch{'es' if len(cross_host_pid_batches)>1 else ''} detected "
-            f"(e.g. PIDs {top_batch['pid_range']} across {len(top_batch['cids'])} dinners). "
-            f"Single-week batches may be coincidental -- flag for tracking across multiple weeks before escalating."
-        )
     if ip_flags:
-        patterns.append(f"{len(ip_flags)} cross-host shared IP group{'s' if len(ip_flags)>1 else ''} flagged.")
+        patterns.append(f"{len(ip_flags)} cross-host shared IP group{'s' if len(ip_flags)>1 else ''} flagged for review.")
     if addr_flags:
         patterns.append(f"{len(addr_flags)} same-address group{'s' if len(addr_flags)>1 else ''} routed to program team.")
 
