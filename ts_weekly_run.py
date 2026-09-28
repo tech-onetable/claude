@@ -97,7 +97,9 @@ def parse_csv(contact_path, lead_path=None):
         "Host Application Date","Campaign Name","FYI Flag Reason",
         "Dinner Created Device ID","Total Eligible Nourishment","Grant Application",
         "Campaign Description","Total Nourishment Received","Requested Nourishment","Notes",
-        "Email","Lead: Created Date","Mandrill Bounce Time + Date"
+        "Email","Lead: Created Date","Mandrill Bounce Time + Date",
+        # New device/IP fields (populated from 2026-08-21 onward; legacy RSVP fields empty from that date)
+        "Device ID","IP Address Reservation"
     }
     ONETABLE_DOMAIN = 'onetable.org'
 
@@ -111,6 +113,13 @@ def parse_csv(contact_path, lead_path=None):
                 # Normalise email field -- Lead rows may use 'Email' instead of 'Campaign Member Email'
                 if not r.get('Campaign Member Email') and r.get('Email'):
                     r['Campaign Member Email'] = r.pop('Email', '')
+                # Device/IP field migration: Device_ID__c and IP_Address_Reservation__c replaced
+                # RSVP_Device_Fingerprint_ID__c and RSVP_IP__c from 2026-08-21. Coalesce so every
+                # downstream signal reads one field. Legacy field wins when both are populated.
+                if not r.get('RSVP Device Fingerprint ID') and r.get('Device ID'):
+                    r['RSVP Device Fingerprint ID'] = r['Device ID']
+                if not r.get('RSVP IP') and r.get('IP Address Reservation'):
+                    r['RSVP IP'] = r['IP Address Reservation']
                 # Classify as Lead if Lead ID present and no Contact ID
                 contact_id = r.get('Contact ID', '').strip()
                 lead_id = r.get('Lead ID', '').strip()
@@ -1414,6 +1423,32 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns):
             'seen_on': f"{count} dinners (high-volume)",
         })
 
+    # Auto-generate basic pattern observations from Pass 1 data
+    sus_cases = [c for c in cases if c.get('tier') == 'suspension']
+    dnn_cases = [c for c in cases if c.get('tier') == 'warning_dnn']
+    warn_cases = [c for c in cases if c.get('tier') == 'warning']
+    all_signals = [s for c in cases for s in c.get('signals', []) if s.get('score_contribution', 0) > 0]
+    signal_counts = {}
+    for s in all_signals:
+        signal_counts[s['name']] = signal_counts.get(s['name'], 0) + 1
+    top_signals = sorted(signal_counts.items(), key=lambda x: -x[1])[:5]
+
+    bounce_cases = [c for c in cases if any('bounce' in (s.get('name','').lower()) and s.get('score_contribution',0) > 0 for s in c.get('signals',[]))]
+    pid_cases = [c for c in cases if any('profile id' in (s.get('name','').lower()) and s.get('score_contribution',0) > 0 for s in c.get('signals',[]))]
+
+    patterns = []
+    if sus_cases:
+        patterns.append(f"{len(sus_cases)} suspension case{'s' if len(sus_cases)>1 else ''} this week -- all scoring on 100% bounce + 100% sequential PIDs combination.")
+    if dnn_cases:
+        patterns.append(f"{len(dnn_cases)} Warning DNN case{'s' if len(dnn_cases)>1 else ''} -- predominantly bounce signals on standard email domains. Device data not yet populating so device signals cannot score.")
+    if bounce_cases:
+        patterns.append(f"Bounce signal present in {len(bounce_cases)}/{len(cases)} scored cases. Mandrill data populating at 12% -- signals likely underscoring.")
+    if pid_cases:
+        patterns.append(f"Sequential Profile IDs appearing in {len(pid_cases)} cases -- consistent with bulk account creation pattern.")
+    if cross_host_flags:
+        patterns.append(f"{len(cross_host_flags)} same-address flag group{'s' if len(cross_host_flags)>1 else ''} routed to program team for household confirmation.")
+
+
     ts_ui_data = {
         'run': {
             'week_of': REVIEW_DATE.strftime('%Y-%m-%d'),
@@ -1425,31 +1460,6 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns):
         'existing_cases': existing_cases,
         'cases': cases,
         'cross_host_flags': cross_host_flags,
-        # Auto-generate basic pattern observations from Pass 1 data
-        sus_cases = [c for c in cases if c.get('tier') == 'suspension']
-        dnn_cases = [c for c in cases if c.get('tier') == 'warning_dnn']
-        warn_cases = [c for c in cases if c.get('tier') == 'warning']
-        all_signals = [s for c in cases for s in c.get('signals', []) if s.get('score_contribution', 0) > 0]
-        signal_counts = {}
-        for s in all_signals:
-            signal_counts[s['name']] = signal_counts.get(s['name'], 0) + 1
-        top_signals = sorted(signal_counts.items(), key=lambda x: -x[1])[:5]
-
-        bounce_cases = [c for c in cases if any('bounce' in (s.get('name','').lower()) and s.get('score_contribution',0) > 0 for s in c.get('signals',[]))]
-        pid_cases = [c for c in cases if any('profile id' in (s.get('name','').lower()) and s.get('score_contribution',0) > 0 for s in c.get('signals',[]))]
-
-        patterns = []
-        if sus_cases:
-            patterns.append(f"{len(sus_cases)} suspension case{'s' if len(sus_cases)>1 else ''} this week -- all scoring on 100% bounce + 100% sequential PIDs combination.")
-        if dnn_cases:
-            patterns.append(f"{len(dnn_cases)} Warning DNN case{'s' if len(dnn_cases)>1 else ''} -- predominantly bounce signals on standard email domains. Device data not yet populating so device signals cannot score.")
-        if bounce_cases:
-            patterns.append(f"Bounce signal present in {len(bounce_cases)}/{len(cases)} scored cases. Mandrill data populating at 12% -- signals likely underscoring.")
-        if pid_cases:
-            patterns.append(f"Sequential Profile IDs appearing in {len(pid_cases)} cases -- consistent with bulk account creation pattern.")
-        if cross_host_flags:
-            patterns.append(f"{len(cross_host_flags)} same-address flag group{'s' if len(cross_host_flags)>1 else ''} routed to program team for household confirmation.")
-
         'insights': {
             'patterns': ' '.join(patterns),
             'emerging_trends': 'RSVP Device Fingerprint ID and RSVP IP fields at 0% population -- flagged to ImagineX and Idealist. When resolved, device signals will significantly improve detection accuracy.' if not patterns else '',
