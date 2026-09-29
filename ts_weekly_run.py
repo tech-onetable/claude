@@ -923,12 +923,22 @@ def detect_clusters(scored_cases, campaigns, cross_dinner_fps):
     return clusters
 
 
-def run(csv_path, lead_path=None):
+def run(csv_path, lead_path=None, wednesday_mode=False):
     print(f"[T&S] Parsing {csv_path}...", file=sys.stderr)
     if lead_path:
         print(f"[T&S] Also merging Lead report: {lead_path}...", file=sys.stderr)
     campaigns, total_rows = parse_csv(csv_path, lead_path)
     print(f"[T&S] {total_rows} rows, {len(campaigns)} campaigns", file=sys.stderr)
+
+    if wednesday_mode:
+        # Wednesday mode: only score campaigns that are Ready to Nourish
+        READY_STATUSES = {'ready to nourish', 'ready to nourish - pending review'}
+        before = len(campaigns)
+        campaigns = {
+            cid: camp for cid, camp in campaigns.items()
+            if str(camp.get('host', {}).get('Campaign Status', '') or '').strip().lower() in READY_STATUSES
+        }
+        print(f"[T&S] Wednesday filter: {len(campaigns)} Ready to Nourish campaigns (of {before} total)", file=sys.stderr)
 
     # ── FIELD POPULATION HEALTH CHECK ────────────────────────────────────────
     # Alert immediately if key scoring fields are unexpectedly empty
@@ -1169,7 +1179,7 @@ def normalize_address(addr):
     return addr.lower()
 
 
-def build_ts_ui_data(pass1_output, sf_results, campaigns):
+def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
     """
     Build final ts_ui_data JSON from Pass 1 results + Salesforce data.
     sf_results: dict of contact_id_15 -> SF Contact record
@@ -1445,6 +1455,20 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns):
                                d['tier'] or 'watch', sf)
         cases.append(case)
 
+    # Wednesday mode: surface Warning DNN and above only
+    if wednesday_mode:
+        cases = [c for c in cases if c.get('tier') in ('warning_dnn', 'suspension', 'deactivation')]
+        print(f"[T&S] Wednesday mode: {len(cases)} cases at Warning DNN or above", file=sys.stderr)
+
+        # Build list of campaign IDs to move to Not Approved
+        not_approved_ids = [c.get('campaign_id', '') for c in cases if c.get('campaign_id')]
+        if not_approved_ids:
+            print(f"[T&S] Campaigns to move to Not Approved:", file=sys.stderr)
+            for cid in not_approved_ids:
+                camp = campaigns.get(cid, {})
+                name = camp.get('name', cid)
+                print(f"[T&S]   {cid} -- {name}", file=sys.stderr)
+
     # Cross-host flags
     cross_host_flags = []
     for addr, hosts in pass1_output['same_address'].items():
@@ -1557,6 +1581,8 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns):
             'dinners_reviewed': pass1_output['total_dinners'],
             'summary': pass1_output['summary'],
             'field_alerts': pass1_output.get('field_alerts', []),
+            'wednesday_mode': wednesday_mode,
+            'not_approved_pending': [c.get('campaign_id') for c in cases if wednesday_mode and c.get('campaign_id')],
         },
         'existing_cases': existing_cases,
         'cases': cases,
@@ -1799,14 +1825,19 @@ if __name__ == '__main__':
     import os
 
     if len(sys.argv) < 2:
-        print("Usage: python3 ts_weekly_run.py <combined_csv_path> [--no-sf]", file=sys.stderr)
+        print("Usage: python3 ts_weekly_run.py <combined_csv_path> [--no-sf] [--wednesday]", file=sys.stderr)
         print("       Combined CSV contains both Contact and Lead guest rows.", file=sys.stderr)
-        print("       Legacy two-file mode: python3 ts_weekly_run.py <contact_csv> <lead_csv> [--no-sf]", file=sys.stderr)
+        print("       Legacy two-file mode: python3 ts_weekly_run.py <contact_csv> <lead_csv> [--no-sf] [--wednesday]", file=sys.stderr)
+        print("       --wednesday: pre-Nourishment gate run -- only scores Ready to Nourish campaigns, surfaces Warning DNN+ only", file=sys.stderr)
         sys.exit(1)
 
     csv_path = sys.argv[1]
     lead_path = None
     skip_sf = '--no-sf' in sys.argv
+    wednesday_mode = '--wednesday' in sys.argv
+
+    if wednesday_mode:
+        print("[T&S] Wednesday pre-Nourishment mode -- filtering to Ready to Nourish campaigns, Warning DNN+ only", file=sys.stderr)
 
     # Legacy: second positional arg (not a flag) is a separate Lead CSV
     if len(sys.argv) >= 3 and not sys.argv[2].startswith('--'):
@@ -1816,7 +1847,7 @@ if __name__ == '__main__':
         print(f"[T&S] Single combined CSV mode: {csv_path}", file=sys.stderr)
 
     # Pass 1
-    pass1_output = run(csv_path, lead_path)
+    pass1_output = run(csv_path, lead_path, wednesday_mode=wednesday_mode)
 
     # Pass 2
     sf_results = {}
@@ -1830,9 +1861,8 @@ if __name__ == '__main__':
         print("[T&S] Skipping Pass 2 (--no-sf flag)", file=sys.stderr)
 
     # Build final JSON
-    # Reload campaigns for build step
     campaigns, _ = parse_csv(csv_path, lead_path)
-    ts_ui_data = build_ts_ui_data(pass1_output, sf_results, campaigns)
+    ts_ui_data = build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=wednesday_mode)
     ts_ui_data = add_agent_layer(ts_ui_data, pass1_output)
 
     # Save and print
