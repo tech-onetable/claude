@@ -152,7 +152,16 @@ Produce one unified assessment per case incorporating all data from all passes. 
 
 **Output discipline -- critical:** Brief progress updates are fine (e.g. "Running Pass 1...", "Querying Salesforce for flagged hosts...", "Building output..."). What is not allowed: internal reasoning, observations, findings, or narration in the chat. No "I found X", no "critical observations to incorporate", no intermediate scores or case summaries. All analytical work happens silently. Surface findings in the JSON only.
 
-The strict output order is:
+**Wednesday pre-Nourishment run (separate from Thursday weekly run):**
+Run manually on Wednesdays before Dov processes Nourishment. Separate mode from the Thursday run.
+
+- **Filter:** only campaigns with status "Ready to Nourish" (pass `--wednesday` flag to script)
+- **Scoring:** full signal scoring as normal
+- **Surface:** Warning DNN and above only -- Warning cases are not shown at all
+- **Action:** auto-move Warning DNN+ campaigns to Not Approved status (requires Campaign status write via MCP -- pending Amalia build). Until available, output a list of campaign IDs to move manually.
+- **Thursday re-review:** Wednesday cases that were approved (moved back to Ready to Nourish) re-surface on Thursday flagged as "Reviewed Wed [date] · approved". Wednesday cases left at Not Approved appear in the Existing Cases banner on Thursday, not as new scored cases.
+
+Script command: `python3 ts_weekly_run.py <csv> --wednesday`
 1. Brief progress updates as each pass completes
 2. The complete ts_ui_data JSON block (presented as a downloadable file via present_files)
 3. Cross-host flags sheet and Slack draft -- if `cross_host_flags` in the JSON is non-empty, automatically: (a) create a Google Sheet titled "T+S Cross-Host Flags · [date]" containing one row per host with columns: Dinner Address, Host Name, Email, Dinner Name, Date, Nourishment Eligible, SF Contact link, SF Dinner link, Contact Mailing Address, Dinner Description -- pull Contact mailing addresses from Salesforce for the flagged hosts; (b) create a Slack DM draft to Elliana (U09326MSYDN) with the message: "Hey Elliana! Here are this week's multi-host/single-address groups to investigate: [Google Sheet link]" followed by a brief bulleted list of the flag groups (address · host names). Do not send the Slack message -- create a draft only.
