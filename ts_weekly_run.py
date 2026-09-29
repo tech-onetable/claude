@@ -97,7 +97,9 @@ def parse_csv(contact_path, lead_path=None):
         "Host Application Date","Campaign Name","FYI Flag Reason",
         "Dinner Created Device ID","Total Eligible Nourishment","Grant Application",
         "Campaign Description","Total Nourishment Received","Requested Nourishment","Notes",
-        "Email","Lead: Created Date","Mandrill Bounce Time + Date"
+        "Email","Lead: Created Date","Mandrill Bounce Time + Date",
+        # New device/IP fields (populated from 2026-08-21 onward; legacy RSVP fields empty from that date)
+        "Device ID","IP Address Reservation"
     }
     ONETABLE_DOMAIN = 'onetable.org'
 
@@ -111,6 +113,13 @@ def parse_csv(contact_path, lead_path=None):
                 # Normalise email field -- Lead rows may use 'Email' instead of 'Campaign Member Email'
                 if not r.get('Campaign Member Email') and r.get('Email'):
                     r['Campaign Member Email'] = r.pop('Email', '')
+                # Device/IP field migration: Device_ID__c and IP_Address_Reservation__c replaced
+                # RSVP_Device_Fingerprint_ID__c and RSVP_IP__c from 2026-08-21. Coalesce so every
+                # downstream signal reads one field. Legacy field wins when both are populated.
+                if not r.get('RSVP Device Fingerprint ID') and r.get('Device ID'):
+                    r['RSVP Device Fingerprint ID'] = r['Device ID']
+                if not r.get('RSVP IP') and r.get('IP Address Reservation'):
+                    r['RSVP IP'] = r['IP Address Reservation']
                 # Classify as Lead if Lead ID present and no Contact ID
                 contact_id = r.get('Contact ID', '').strip()
                 lead_id = r.get('Lead ID', '').strip()
@@ -1228,6 +1237,9 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
         if len(members) < 2:
             continue
         fp = cluster['fp']
+        # IP-based clusters (from cross_host_ips) have no device fingerprint
+        ip_note = cluster.get('shared_ip_note') or 'Shared IP across cluster dinners'
+        cluster_key = fp[:8] if fp else 'ip-' + '-'.join(sorted(members))[:20]
         cluster_hosts = []
         total_nourishment = 0
         nourishment_verified = True
@@ -1329,7 +1341,7 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
         cluster_signals = build_signals_array_from_dict(top_d['signals'])
 
         # Determine who is sharing the device (hosts, guests, or both)
-        fp_link = FP_BASE.format(fp)
+        fp_link = FP_BASE.format(fp) if fp else ''
         host_fps_in_cluster = []
         guest_fps_in_cluster = []
         for cid in members:
@@ -1364,7 +1376,7 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
         )
 
         cases.append({
-            'id': f"cluster-{fp[:8]}",
+            'id': f"cluster-{cluster_key}",
             'name': ' / '.join(d['host_name'].split()[-1] for d in [pass1_output['campaigns'][c] for c in members]),
             'email': ', '.join(h.get('email','') for h in cluster_hosts if h.get('email','')),
             'tier': tier,
@@ -1377,7 +1389,7 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
             'dnn': False,
             'collapsed_summary': f"{len(members)}-host cluster · top score {top_score} · {combined_n}",
             'bullets': [
-                f"**{len(members)}-host cluster.** Device fingerprint [{fp}]({fp_link}) detected across {len(members)} dinners. {host_device_str}.",
+                (f"**{len(members)}-host cluster.** Device fingerprint [{fp}]({fp_link}) detected across {len(members)} dinners. {host_device_str}." if fp else f"**{len(members)}-host cluster.** {ip_note}."),
                 f"**Guest device breakdown:** {guest_breakdown}.",
                 f"**Individual scores:** {scores_str}. Score shown is the highest individual score, not a combined total.",
                 f"**Combined Nourishment: {combined_n}.**",
@@ -1397,7 +1409,7 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
                 'new_host': 'see individual cases below',
                 'unique_guests_12mo': 'see individual cases below',
             },
-            'cluster_note': f"Device [{fp}]({fp_link}) · {host_device_str.replace('**Host accounts on device:**', 'hosts on device:').replace('**Host accounts:**', '')} · {guest_breakdown}" + (f" · {cluster.get('pid_range_note','')}" if cluster.get('pid_range_note') else ''),
+            'cluster_note': (f"{ip_note} · " if not fp else f"Device [{fp}]({fp_link}) · ") + f"{host_device_str.replace('**Host accounts on device:**', 'hosts on device:').replace('**Host accounts:**', '')} · {guest_breakdown}" + (f" · {cluster.get('pid_range_note','')}" if cluster.get('pid_range_note') else ''),
             'cluster_hosts': cluster_hosts,
         })
 
