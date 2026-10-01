@@ -106,7 +106,7 @@ def parse_csv(contact_path, lead_path=None):
     def read_and_classify(path):
         """Read CSV rows and classify each as host, contact guest, or lead guest."""
         rows = []
-        with open(path, encoding='latin1') as f:
+        with open(path, encoding='utf-8-sig') as f:
             reader = csv.DictReader(f)
             for row in reader:
                 r = {k: row.get(k, '').strip() for k in reader.fieldnames if k in KEEP}
