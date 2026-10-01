@@ -28,7 +28,9 @@ REVIEW_DATE = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0) 
 SUSPICIOUS_DOMAINS = {
     'atomicmail.io','mailshield.org','tutamail.com','otheremail.org',
     'bumpmail.io','simplelogin.com','membermail.net','freemail.is','ourisp.net',
-    'altaddress.org','dropons.com','jourrapide.com','armyspy.com','teleworm.us','dayrep.com'
+    'altaddress.org','dropons.com','jourrapide.com','armyspy.com','teleworm.us','dayrep.com',
+    # Added 2026-10-01 from Alfie Elliott case
+    'hudzer.com','flakeian.com','cwsgear.com','mail2usa.com',
 }
 HIGH_VOLUME_THRESHOLD = 20   # FP on 20+ dinners = shared infrastructure, not scored
 SIGNAL_WEIGHTS = {
