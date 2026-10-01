@@ -30,7 +30,7 @@ SUSPICIOUS_DOMAINS = {
     'bumpmail.io','simplelogin.com','membermail.net','freemail.is','ourisp.net',
     'altaddress.org','dropons.com','jourrapide.com','armyspy.com','teleworm.us','dayrep.com'
 }
-HIGH_VOLUME_THRESHOLD = 10   # FP on 10+ dinners = weekly insights only
+HIGH_VOLUME_THRESHOLD = 20   # FP on 20+ dinners = shared infrastructure, not scored
 SIGNAL_WEIGHTS = {
     'sig1': 7,   # Shared device FP host+guest (standalone)
     'sig2': 7,   # Cross-dinner device FP match (needs pairing)
@@ -205,7 +205,7 @@ def build_fp_maps(campaigns):
                 all_fps[fp].add(cid)
     high_volume = {fp for fp, cids in all_fps.items() if len(cids) >= HIGH_VOLUME_THRESHOLD}
     cross_dinner = {fp: list(cids) for fp, cids in all_fps.items()
-                    if 2 <= len(cids) < HIGH_VOLUME_THRESHOLD}
+                    if 3 <= len(cids) < HIGH_VOLUME_THRESHOLD}
     all_cross = {fp: list(cids) for fp, cids in all_fps.items() if len(cids) >= 2}
     return high_volume, cross_dinner, all_cross, all_fps
 
@@ -984,7 +984,7 @@ def run(csv_path, lead_path=None, wednesday_mode=False):
     field_alerts = alerts if total_guests > 0 else []
 
     high_volume, cross_dinner, all_cross, all_fps = build_fp_maps(campaigns)
-    print(f"[T&S] High-volume FPs (10+): {len(high_volume)}", file=sys.stderr)
+    print(f"[T&S] High-volume FPs (20+, not scored): {len(high_volume)}", file=sys.stderr)
     print(f"[T&S] Cross-dinner FPs (2-9): {len(cross_dinner)}", file=sys.stderr)
 
     # ── Pass 1A: Cross-host checks ────────────────────────────────────────────
