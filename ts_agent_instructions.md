@@ -222,6 +222,12 @@ Requires at least one other triggered signal to score. Standalone -- even above 
 **AI-generated or templated description signal:**
 Does not score in T&S without at least one guest integrity signal also triggered (bounces, sequential guest Profile IDs, or suspicious guest email domains). Standalone AI Not Pass routes to program team as a program quality flag, not a T&S finding. Do not include standalone AI Not Pass cases in T&S output -- route to program team instead.
 
+**Description anomaly notes (no score, surface as context only):**
+When reviewing descriptions alongside other signals, flag the following as anomaly notes if present -- they don't score independently but add context:
+- **Partiful reference + wrong date language:** phrases like "ignore the date", "refer to partiful for the real date", "had to put [date] to make the event" suggest the dinner date on OneTable may not match the actual event. Surface as a note if the host also has guest integrity signals.
+- **OneTable as funding vehicle only:** phrases like "RSVP here for the funding supplement", "this is just a backup", "you saw it on Partiful, now we're on OneTable too" indicate the real event lives elsewhere and OneTable is being used purely to collect Nourishment. Surface as a note if combined with low OneTable guest count relative to the described event size.
+- These are extremely common in legitimate hosting (Moishe House, social circles) -- never flag as standalone and never score. Only surface when they appear alongside other T&S signals.
+
 **Same IP across guests signal:**
 Requires 80%+ AND must combine with at least one other signal. Never scores on its own.
 
@@ -321,7 +327,7 @@ The weekly run always requires two CSV reports uploaded to the conversation:
 Full field set: all campaign-level fields (Campaign ID, name, start date, address, status, Nourishment fields, AI review flags, privacy type) plus Contact-type guest rows with all guest fields.
 
 **Report 2 -- Campaigns with Leads (guest supplement)**
-Lead-type guest rows only. Required fields: Campaign ID, Lead ID or email, First Name, Last Name, Mandrill Bounce Reason, Mandrill Bounce Time/Date, Platform Profile ID, RSVP Device Fingerprint ID, RSVP IP, Device ID, IP Address Reservation, Created Date, Member Status. Campaign-level fields (address, start date, Nourishment, etc.) are not needed -- those come from Report 1 via Campaign ID join.
+Lead-type guest rows only. Required fields: Campaign ID, Lead ID or email, First Name, Last Name, Mandrill Bounce Reason, Mandrill Bounce Time/Date, Platform Profile ID, RSVP Device Fingerprint ID, RSVP IP, Created Date, Member Status. Campaign-level fields (address, start date, Nourishment, etc.) are not needed -- those come from Report 1 via Campaign ID join.
 
 **Why two reports:**
 Plus-ones who are not already Contacts in Salesforce come in as Leads. Campaign_Member_Email__c and other guest fields are blank on Lead-linked CampaignMember records. The Lead report supplies the guest-level data (bounce status, device fingerprint, Profile ID) that the Contact report cannot provide for Lead-type guests.
@@ -379,8 +385,6 @@ Leave blank if there is genuinely nothing notable. Do not pad.
 
 Fields monitored: RSVP Device Fingerprint ID, RSVP IP, Mandrill Bounce Reason, Platform Profile ID. Do not surface these in any section of the output.
 
-**Device and IP field migration (NEW, September 2026):** From dinners dated 2026-08-21 onward, device and IP data is stored in `Device_ID__c` (report column "Device ID") and `IP_Address_Reservation__c` (report column "IP Address Reservation") on CampaignMember. The legacy fields `RSVP_Device_Fingerprint_ID__c` and `RSVP_IP__c` are empty from that date. Both report columns must be included in the Salesforce report. The script coalesces them: the legacy value is used when present, otherwise the new field. Field health for device fingerprint and IP is measured on the coalesced value.
-
 **Suspended host display rule:** For hosts where Suspended Flag = 1:
 - Campaign Status = 'Not Nourishing' or 'Aborted' → skip entirely, do not surface anywhere in the output. These are already handled.
 - Any other Campaign Status → surface in a dedicated "Existing Cases -- Active While Suspended" section at the top of the output, above all scored cases. Flag that a new dinner is active while the host is suspended. Do not re-score these hosts -- note the existing suspension and the active campaign status only.
@@ -434,7 +438,7 @@ Note: Total_Nourishment_Received__c on Contact is the canonical Nourishment tota
 Id, Name, StartDate, Status, Dinner_Privacy__c, Description, Event_Name__c, Do_Not_Nourish__c, Suspended_Flag__c, Total_Nourishment_Received__c, Total_Nourishment__c, Total_Eligible_Nourishment__c, Nourishment_Per_Person__c, Unique_Guests__c, AI_Not_Pass_Summary__c, Further_Review_Reason__c, Dynamite_Description__c, Dinner_Created_IP__c, Dinner_Created_Device_ID__c, Problem_Flag__c, host_abuse__c, Flag__c, Flag_Reason__c, FYI_Flagged_By__c, Nourishmentplus__c, Platform_Create_Date__c
 
 **CampaignMember query (active dinners, non-host members):**
-ContactId, Contact.FirstName, Contact.LastName, Campaign_Member_Email__c, Platform_Profile_ID_Member__c, RSVP_IP__c, RSVP_Device_Fingerprint_ID__c, IP_Address_Reservation__c, Device_ID__c, CreatedDate, Platform__c, Contact.Mandrill_Bounce_Reason__c, Contact.Mandrill_Bounce_Time_Date__c, Contact.Host__c
+ContactId, Contact.FirstName, Contact.LastName, Campaign_Member_Email__c, Platform_Profile_ID_Member__c, RSVP_IP__c, RSVP_Device_Fingerprint_ID__c, CreatedDate, Platform__c, Contact.Mandrill_Bounce_Reason__c, Contact.Mandrill_Bounce_Time_Date__c, Contact.Host__c
 
 **Case history query:** All Cases linked to this Contact.
 
