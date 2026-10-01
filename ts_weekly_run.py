@@ -1062,24 +1062,41 @@ def run(csv_path, lead_path=None, wednesday_mode=False):
     # Build set of all member pairs already covered by device FP clusters
     fp_cluster_pairs = set()
     for cl in clusters:
-        members = cl['members']
-        for i in range(len(members)):
-            for j in range(i+1, len(members)):
-                fp_cluster_pairs.add(frozenset([members[i], members[j]]))
+        mems = cl['members']
+        for i in range(len(mems)):
+            for j in range(i+1, len(mems)):
+                fp_cluster_pairs.add(frozenset([mems[i], mems[j]]))
 
     # Also flag hosts sharing a cross-host IP as a softer cluster signal
-    # Skip if all scored member pairs are already covered by a device FP cluster
+    # IP-only clusters require corroboration: at least one member must have a non-IP
+    # scored signal (bounce, device FP, sequential PIDs), or both must be Warning DNN+.
+    # IP alone is not sufficient to form a cluster case.
+    NON_IP_SIGNALS = {'Guest email bounces (75%+)', 'Guest email bounces (50-74%)',
+                      'Same device fingerprint across guests', 'Cross-dinner device fingerprint match',
+                      'Sequential guest Profile IDs (100%)', 'Sequential guest Profile IDs (55-99%)'}
+
     for ip, cids in cross_host_ips.items():
         scored_members = [cid for cid in cids if cid in all_scored]
         if len(scored_members) < 2:
             continue
-        # Check if every pair in this IP group is already in a device FP cluster
+        # Check if every pair is already covered by a device FP cluster
         all_pairs_covered = all(
             frozenset([scored_members[i], scored_members[j]]) in fp_cluster_pairs
             for i in range(len(scored_members))
             for j in range(i+1, len(scored_members))
         )
         if all_pairs_covered:
+            continue
+        # Require at least one member to have a non-IP corroborating signal
+        has_corroboration = False
+        for cid in scored_members:
+            d = all_scored.get(cid, {})
+            member_signals = {v['name'] for v in d.get('scored_signals', {}).values()
+                              if v.get('score_contribution', 0) > 0}
+            if member_signals & NON_IP_SIGNALS:
+                has_corroboration = True
+                break
+        if not has_corroboration:
             continue
         clusters.append({
             'fp': None,
@@ -1089,7 +1106,74 @@ def run(csv_path, lead_path=None, wednesday_mode=False):
             'shared_ip_note': f"Shared IP {ip} across {len(cids)} dinners this week",
         })
 
-    # Identify cluster members for suspension override rule
+    # Merge overlapping IP-only clusters into single clusters using union-find
+    # Also: if an IP cluster overlaps with an FP cluster, add new members to the FP cluster
+    # rather than creating a separate entry.
+    ip_clusters_raw = [cl for cl in clusters if not cl.get('fp')]
+    fp_clusters = [cl for cl in clusters if cl.get('fp')]
+
+    # For each IP cluster, check if its members overlap with an FP cluster
+    for ip_cl in ip_clusters_raw:
+        ip_members = set(ip_cl['members'])
+        for fp_cl in fp_clusters:
+            fp_members = set(fp_cl['members'])
+            overlap = ip_members & fp_members
+            if overlap:
+                # Add any new members from IP cluster to the FP cluster
+                new_members = ip_members - fp_members
+                if new_members:
+                    fp_cl['members'] = sorted(fp_members | new_members)
+                    existing_note = fp_cl.get('shared_ip_note', '')
+                    fp_cl['shared_ip_note'] = (existing_note + '; ' if existing_note else '') + \
+                        f"Extended via {ip_cl.get('shared_ip_note','shared IP')} -- added: {', '.join(sorted(new_members))}"
+                ip_cl['_merged_into_fp'] = True
+                break
+
+    # Keep only IP clusters that weren't merged into an FP cluster
+    ip_clusters_remaining = [cl for cl in ip_clusters_raw if not cl.get('_merged_into_fp')]
+
+    if ip_clusters_remaining:
+        # Union-find to merge overlapping IP clusters
+        parent = {}
+        def find(x):
+            parent.setdefault(x, x)
+            if parent[x] != x: parent[x] = find(parent[x])
+            return parent[x]
+        def union(x, y):
+            parent[find(x)] = find(y)
+
+        ip_notes = {}
+        for cl in ip_clusters_remaining:
+            mems = cl['members']
+            note = cl.get('shared_ip_note', '')
+            for m in mems: find(m)
+            for i in range(len(mems)): union(mems[0], mems[i])
+            root = find(mems[0])
+            ip_notes.setdefault(root, []).append(note)
+
+        merged = {}
+        for cl in ip_clusters_remaining:
+            root = find(cl['members'][0])
+            if root not in merged:
+                merged[root] = {'members': set(), 'notes': ip_notes.get(root, [])}
+            merged[root]['members'].update(cl['members'])
+
+        ip_clusters_final = [
+            {
+                'fp': None,
+                'members': sorted(v['members']),
+                'cross_dinner_pid_sequential': False,
+                'pid_range_note': None,
+                'shared_ip_note': '; '.join(dict.fromkeys(v['notes'])),
+            }
+            for v in merged.values()
+            if len(v['members']) >= 2
+        ]
+    else:
+        ip_clusters_final = []
+
+    clusters = fp_clusters + ip_clusters_final
+    print(f"[T&S] Clusters after merge: {len(clusters)}", file=sys.stderr)
     cluster_cids = set()
     for cl in clusters:
         cluster_cids.update(cl['members'])
