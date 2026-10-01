@@ -562,7 +562,7 @@ def compute_total_score(scored_signals):
 
 
 def tier_from_score(score):
-    if score >= 14:
+    if score >= 18:
         return 'suspension'
     elif score >= 9:
         return 'warning_dnn'
@@ -1046,7 +1046,7 @@ def run(csv_path, lead_path=None, wednesday_mode=False):
                 'dnn': dnn,
             }
 
-    sus_cases = {c: d for c, d in all_scored.items() if d['score'] >= 14}
+    sus_cases = {c: d for c, d in all_scored.items() if d['score'] >= 18}
     pause_cases = {c: d for c, d in all_scored.items() if 9 <= d['score'] < 14}
     warn_cases = {c: d for c, d in all_scored.items() if 1 <= d['score'] < 9}
 
@@ -1181,10 +1181,12 @@ def run(csv_path, lead_path=None, wednesday_mode=False):
     for cl in clusters:
         cluster_cids.update(cl['members'])
 
-    # Apply cluster rule: any host in a cluster gets Suspension (soft) minimum
+    # Apply cluster rule: any host in a cluster gets Warning DNN minimum
+    # Suspension still requires score 18+ -- cluster membership alone is not sufficient
+    # for the more serious consequence tier and email language
     for cid in cluster_cids:
-        if cid in all_scored and all_scored[cid]['score'] < 14:
-            all_scored[cid]['tier'] = 'suspension'
+        if cid in all_scored and all_scored[cid]['tier'] == 'warning':
+            all_scored[cid]['tier'] = 'warning_dnn'
             all_scored[cid]['_cluster_override'] = True
 
     # Remove existing cases (suspended + active status) from scored output
@@ -1443,7 +1445,10 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
             })
 
         top_score = max(d['score'] for d in [pass1_output['campaigns'][c] for c in members])
-        tier = tier_from_score(top_score) or 'suspension'
+        tier = tier_from_score(top_score) or 'warning_dnn'
+        # Cluster minimum is warning_dnn -- never just warning
+        if tier == 'warning':
+            tier = 'warning_dnn'
         combined_n = f"${total_nourishment:,.0f} combined (Contact)" if nourishment_verified else "pending Contact verification"
 
         # Build cluster signals from highest-scoring member
