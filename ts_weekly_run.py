@@ -1338,9 +1338,12 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
     for cluster in pass1_output['clusters']:
         cluster_members.update(cluster['members'])
 
-    # Build cluster cases first -- deduplicate by member set (prefer FP clusters over IP clusters)
+    # Build cluster cases -- device FP clusters only
+    # IP-only clusters surface in cross_host_flags for program team, not as scored cases
     seen_cluster_member_sets = set()
     for cluster in pass1_output['clusters']:
+        if not cluster.get('fp'):
+            continue  # IP-only clusters go to cross_host_flags, not case cards
         members = [m for m in cluster['members'] if m in pass1_output['campaigns']]
         if len(members) < 2:
             continue
