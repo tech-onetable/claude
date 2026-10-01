@@ -75,7 +75,7 @@ Signal 10 does not score when a shared last name between host and guest already 
 Note when guests share the host's last name -- useful context for staff. Does not affect score.
 
 **High-volume device fingerprints:**
-A device fingerprint appearing across 10 or more dinners in a single week is considered a high-volume device. High-volume devices are flagged in the Weekly Insights section for staff review but do not trigger individual host flags on their own. If a host is flagged for other reasons and one of their signals involves a high-volume device fingerprint, include a note in their case summary stating that this signal is associated with a high-volume device (seen on N dinners) and should be weighted accordingly. Never suppress the signal entirely -- surface it with the caveat. The 10-dinner threshold applies to cross-dinner fingerprint match (Signal 2) and same device fingerprint across guests (Signal 3). A fingerprint seen on 10+ dinners does not score Signal 2 for any individual dinner unless it also triggers other signals on that dinner.
+A device fingerprint appearing across 20 or more dinners in a single week is considered a high-volume device. High-volume devices are flagged in the Weekly Insights section for staff review but do not trigger individual host flags on their own. If a host is flagged for other reasons and one of their signals involves a high-volume device fingerprint, include a note in their case summary stating that this signal is associated with a high-volume device (seen on N dinners) and should be weighted accordingly. Never suppress the signal entirely -- surface it with the caveat. The 20-dinner threshold applies to cross-dinner fingerprint match (Signal 2) and same device fingerprint across guests (Signal 3). A fingerprint seen on 20+ dinners does not score Signal 2 for any individual dinner unless it also triggers other signals on that dinner.
 
 **On framing guest list patterns:**
 Use neutral, observational language. Never describe a recurring guest group as suspicious without corroborating email integrity signals.
@@ -336,7 +336,7 @@ The script:
   - Sequential PIDs: gap ≤ 2, denominator = guests WITH Profile IDs only (plus-ones excluded)
   - Hard bounces: 50-74% = weight 4, 75%+ = weight 8
   - Circular dependency fix: all raw signals computed first, then pairing applied
-  - High-volume FPs (10+ dinners): Weekly Insights only, not scored
+  - High-volume FPs (20+ dinners): Weekly Insights only, not scored
   - Pairing: all signals except 1, 12, 21, 22, 23 require at least one other signal
 - Detects clusters (2+ scored hosts sharing a cross-dinner FP)
 - Identifies same-address cross-host flags
