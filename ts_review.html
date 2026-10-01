@@ -597,9 +597,9 @@ function buildCaseBody(c, a, actioned, displayTier) {
               const hid = `${c.id}__${h.name.replace(/\s+/g,'_')}`;
               const ha = state.actionState[hid];
               const happroved = !!ha?.tier;
-              // Cluster members always get Suspension minimum regardless of individual score
-              const hBaseTier = h.score >= 25 ? 'suspension' : h.score >= 18 ? 'suspension' : h.score >= 9 ? 'nourishment_pause' : 'warning';
-              const hEffectiveTier = ha?.tier || (c.is_cluster ? 'suspension' : hBaseTier);
+              // Cluster members get Warning DNN minimum; suspension requires score 18+
+              const hBaseTier = h.score >= 25 ? 'suspension' : h.score >= 18 ? 'suspension' : h.score >= 9 ? 'nourishment_pause' : 'warning_dnn';
+              const hEffectiveTier = ha?.tier || (c.is_cluster && hBaseTier === 'warning' ? 'warning_dnn' : hBaseTier);
               const htier = hEffectiveTier;
               return `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
                 <span style="font-size:13px;min-width:120px"><a class="purple-link" href="${h.sf_url}" target="_blank">${h.name}</a></span>
