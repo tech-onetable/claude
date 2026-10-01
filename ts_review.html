@@ -530,6 +530,11 @@ function buildCaseBody(c, a, actioned, displayTier) {
     <div class="section-label">Summary</div>
     <ul class="bullets">${(c.bullets||[]).map(b=>`<li>${md(b)}</li>`).join('')}</ul>
 
+    ${!c.is_cluster && c.dinner_description ? `
+      <div class="section-label" style="margin-top:8px">Dinner description</div>
+      <div style="font-size:13px;color:var(--text-sec);line-height:1.5;padding:8px 10px;background:#FAFAF8;border-radius:6px;margin-bottom:8px">${c.dinner_description}</div>
+    ` : ''}
+
     ${c.score_breakdown?`
       <div class="collapsible">
         <div class="collapsible-header" onclick="toggleCollapsible(this)">Signals &amp; Score <span class="chevron">▾</span></div>
