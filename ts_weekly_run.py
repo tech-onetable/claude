@@ -1047,7 +1047,7 @@ def run(csv_path, lead_path=None, wednesday_mode=False):
             }
 
     sus_cases = {c: d for c, d in all_scored.items() if d['score'] >= 18}
-    pause_cases = {c: d for c, d in all_scored.items() if 9 <= d['score'] < 14}
+    pause_cases = {c: d for c, d in all_scored.items() if 9 <= d['score'] < 18}
     warn_cases = {c: d for c, d in all_scored.items() if 1 <= d['score'] < 9}
 
     print(f"[T&S] Suspension: {len(sus_cases)} | Warning DNN: {len(pause_cases)} | Warning: {len(warn_cases)}", file=sys.stderr)
@@ -1300,6 +1300,16 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
     Build final ts_ui_data JSON from Pass 1 results + Salesforce data.
     sf_results: dict of contact_id_15 -> SF Contact record
     """
+    # Build shared IP partner lookup: cid -> list of (ip, partner_cids)
+    # Used to note IP connections on individual case cards without creating IP cluster cases
+    shared_ip_partners = {}
+    for ip, cids in pass1_output.get('cross_host_ips', {}).items():
+        scored_cids = [c for c in cids if c in pass1_output.get('campaigns', {})]
+        if len(scored_cids) >= 2:
+            for cid in scored_cids:
+                partners = [c for c in scored_cids if c != cid]
+                if partners:
+                    shared_ip_partners.setdefault(cid, []).append((ip, partners))
     # Build existing cases FIRST so we can exclude them from scored cases
     existing_cases = []
     for cid, camp in campaigns.items():
@@ -1333,10 +1343,12 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
     all_cids = sorted(pass1_output['campaigns'].keys(),
                       key=lambda c: -pass1_output['campaigns'][c]['score'])
 
-    # Mark cluster members
+    # Mark cluster members -- device FP clusters only
+    # IP-only cluster members still appear as individual cases with a shared IP note
     cluster_members = set()
     for cluster in pass1_output['clusters']:
-        cluster_members.update(cluster['members'])
+        if cluster.get('fp'):  # device FP clusters only
+            cluster_members.update(cluster['members'])
 
     # Build cluster cases -- device FP clusters only
     # IP-only clusters surface in cross_host_flags for program team, not as scored cases
@@ -1584,6 +1596,21 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
             camp['host']['_future_dinner_count'] = len(sf.get('_future_dinners', []))
         case = build_case_json(cid, camp, scored_signals, d['score'],
                                d['tier'] or 'watch', sf)
+        # Add shared IP partner note if this host shares an IP with another scored host
+        if cid in shared_ip_partners and not case.get('is_cluster'):
+            ip_notes = []
+            for ip, partner_cids in shared_ip_partners[cid]:
+                partner_names = []
+                for pcid in partner_cids:
+                    pcamp = campaigns.get(pcid, {})
+                    phost = pcamp.get('host', {})
+                    if phost:
+                        pname = f"{phost.get('First Name','')} {phost.get('Last Name','')}".strip()
+                        partner_names.append(pname)
+                if partner_names:
+                    ip_notes.append(f"Shares IP {ip} with {', '.join(partner_names)} -- possible coordination, review together.")
+            if ip_notes:
+                case['bullets'] = case.get('bullets', []) + [f"**Shared IP:** {n}" for n in ip_notes]
         cases.append(case)
 
     # Wednesday mode: surface Warning DNN and above only
