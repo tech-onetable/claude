@@ -833,7 +833,7 @@ def build_case_json(cid, camp, scored_signals, score, tier, sf_data=None):
         'dinner_name': camp.get('name', ''),
         'dinner_description': (camp.get('description', '') or '')[:400],
         'campaign_id': cid,
-        'email': sf.get('Email', host.get('Campaign Member Email', '')) if sf_data else host.get('Campaign Member Email', ''),
+        'email': sf_data.get('Email', host.get('Campaign Member Email', '')) if sf_data else host.get('Campaign Member Email', ''),
         'contact_id': host.get('Contact ID', '') if host else '',
         'tier': tier,
         'is_cluster': False,
