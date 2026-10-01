@@ -536,7 +536,13 @@ function buildCaseBody(c, a, actioned, displayTier) {
         <div class="collapsible-body">
           ${(c.signals||[]).filter(s=>s.triggered&&s.score_contribution>0).sort((a,b)=>b.score_contribution-a.score_contribution).map(s=>`
             <div class="breakdown-row"><span style="color:var(--text-sec)">${s.name} <span style="font-size:12px;color:var(--text-ter)">${s.observed||''}</span></span><span class="breakdown-contrib">+${s.score_contribution}</span></div>`).join('')}
-          ${(c.signals||[]).filter(s=>!s.triggered).map(s=>`
+          ${(()=>{
+            // Ensure sequential PID signals always appear even if not evaluated for this dinner
+            const sigs = c.signals||[];
+            const hasPID = sigs.some(s=>s.name&&s.name.toLowerCase().includes('profile id'));
+            const extras = hasPID ? [] : [{name:'Sequential guest Profile IDs',triggered:false,score_contribution:0,observed:'not evaluated for this dinner',threshold:'55-99% or 100% of profiled guests'}];
+            return [...sigs.filter(s=>!s.triggered),...extras];
+          })().map(s=>`
             <div class="breakdown-row dimmed"><span style="color:var(--text-ter)">${s.name} — ${s.observed||s.threshold||'not triggered'}</span><span style="color:var(--text-ter)">+0</span></div>`).join('')}
           <div class="breakdown-total"><span>Total</span><span style="color:var(--wine)">${c.score}</span></div>
         </div>
@@ -586,11 +592,14 @@ function buildCaseBody(c, a, actioned, displayTier) {
               const hid = `${c.id}__${h.name.replace(/\s+/g,'_')}`;
               const ha = state.actionState[hid];
               const happroved = !!ha?.tier;
-              const htier = ha?.tier || h.score >= 18 ? 'suspension' : h.score >= 9 ? 'nourishment_pause' : 'warning';
+              // Cluster members always get Suspension minimum regardless of individual score
+              const hBaseTier = h.score >= 25 ? 'suspension' : h.score >= 18 ? 'suspension' : h.score >= 9 ? 'nourishment_pause' : 'warning';
+              const hEffectiveTier = ha?.tier || (c.is_cluster ? 'suspension' : hBaseTier);
+              const htier = hEffectiveTier;
               return `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
                 <span style="font-size:13px;min-width:120px"><a class="purple-link" href="${h.sf_url}" target="_blank">${h.name}</a></span>
-                <span class="badge ${htier}" style="font-size:11px">${TIER_LABELS[h.score >= 18 ? 'suspension' : h.score >= 9 ? 'nourishment_pause' : 'warning']}</span>
-                <button class="btn btn-primary" style="font-size:12px;padding:4px 10px" ${happroved?'disabled':''} onclick="approveHost('${c.id}','${h.name}','${h.score >= 18 ? 'suspension' : h.score >= 9 ? 'nourishment_pause' : 'warning'}')">${happroved?'✓ Approved':'Approve'}</button>
+                <span class="badge ${htier}" style="font-size:11px">${tierLabel(htier, h.score)}</span>
+                <button class="btn btn-primary" style="font-size:12px;padding:4px 10px" ${happroved?'disabled':''} onclick="approveHost('${c.id}','${h.name}','${hEffectiveTier}')">${happroved?'✓ Approved':'Approve'}</button>
                 ${!happroved?`<button class="btn btn-secondary" style="font-size:12px;padding:4px 10px" onclick="overrideHost('${c.id}','${h.name}')">Override</button>`:''}
                 ${state.hostOverrideOpen===hid?`<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:4px">
                   <select id="host-override-tier-${hid}" style="font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:4px">
