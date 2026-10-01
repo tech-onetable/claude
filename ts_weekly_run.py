@@ -1059,17 +1059,35 @@ def run(csv_path, lead_path=None, wednesday_mode=False):
     clusters = detect_clusters(all_scored, campaigns, cross_dinner)
     print(f"[T&S] Clusters identified: {len(clusters)}", file=sys.stderr)
 
+    # Build set of all member pairs already covered by device FP clusters
+    fp_cluster_pairs = set()
+    for cl in clusters:
+        members = cl['members']
+        for i in range(len(members)):
+            for j in range(i+1, len(members)):
+                fp_cluster_pairs.add(frozenset([members[i], members[j]]))
+
     # Also flag hosts sharing a cross-host IP as a softer cluster signal
+    # Skip if all scored member pairs are already covered by a device FP cluster
     for ip, cids in cross_host_ips.items():
         scored_members = [cid for cid in cids if cid in all_scored]
-        if len(scored_members) >= 2:
-            clusters.append({
-                'fp': None,
-                'members': scored_members,
-                'cross_dinner_pid_sequential': False,
-                'pid_range_note': None,
-                'shared_ip_note': f"Shared IP {ip} across {len(cids)} dinners this week",
-            })
+        if len(scored_members) < 2:
+            continue
+        # Check if every pair in this IP group is already in a device FP cluster
+        all_pairs_covered = all(
+            frozenset([scored_members[i], scored_members[j]]) in fp_cluster_pairs
+            for i in range(len(scored_members))
+            for j in range(i+1, len(scored_members))
+        )
+        if all_pairs_covered:
+            continue
+        clusters.append({
+            'fp': None,
+            'members': scored_members,
+            'cross_dinner_pid_sequential': False,
+            'pid_range_note': None,
+            'shared_ip_note': f"Shared IP {ip} across {len(cids)} dinners this week",
+        })
 
     # Identify cluster members for suspension override rule
     cluster_cids = set()
@@ -1231,12 +1249,18 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
     for cluster in pass1_output['clusters']:
         cluster_members.update(cluster['members'])
 
-    # Build cluster cases first
+    # Build cluster cases first -- deduplicate by member set (prefer FP clusters over IP clusters)
+    seen_cluster_member_sets = set()
     for cluster in pass1_output['clusters']:
         members = [m for m in cluster['members'] if m in pass1_output['campaigns']]
         if len(members) < 2:
             continue
+        member_set = frozenset(members)
         fp = cluster['fp']
+        # Skip IP-only cluster if an identical or superset member set already appeared via device FP
+        if not fp and member_set in seen_cluster_member_sets:
+            continue
+        seen_cluster_member_sets.add(member_set)
         # IP-based clusters (from cross_host_ips) have no device fingerprint
         ip_note = cluster.get('shared_ip_note') or 'Shared IP across cluster dinners'
         cluster_key = fp[:8] if fp else 'ip-' + '-'.join(sorted(members))[:20]
