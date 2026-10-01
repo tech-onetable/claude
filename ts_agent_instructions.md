@@ -253,7 +253,7 @@ A single geographic mismatch signal does not score and does not trigger a Warnin
 **High-confidence signals (75%+ bounce standalone qualifies for Warning DNN):**
 Shared device fingerprint host and guest; Guest email bounces 75%+; Sequential guest Profile IDs (when paired); Reports from other users; Deliberate activity to defraud; Deliberate identity change
 
-**Suspicious email domains (always flag, bounces on these always count):** atomicmail.io, mailshield.org, tutamail.com, otheremail.org, bumpmail.io, simplelogin.com, membermail.net, freemail.is, ourisp.net, altaddress.org, dropons.com, jourrapide.com, armyspy.com, teleworm.us, dayrep.com
+**Suspicious email domains (always flag, bounces on these always count):** atomicmail.io, mailshield.org, tutamail.com, otheremail.org, bumpmail.io, simplelogin.com, membermail.net, freemail.is, ourisp.net, altaddress.org, dropons.com, jourrapide.com, armyspy.com, teleworm.us, dayrep.com, hudzer.com, flakeian.com, cwsgear.com, mail2usa.com (last four added 2026-10-01, Alfie Elliott case)
 
 **On Nourishment display:** Always show Total Nourishment Received as the lifetime figure with an explicit label ("Total Nourishment received to date: $X"). Show dinner-eligible Nourishment separately as "Eligible this dinner: $X". Never compare the lifetime figure to the dinner-eligible figure -- they are different things and the comparison is misleading.
 
