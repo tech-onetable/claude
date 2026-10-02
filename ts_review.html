@@ -505,7 +505,16 @@ function buildCaseCard(c) {
           ${c.sf_url?`<button onclick="copyLink('${c.sf_url}')" style="font-size:11px;padding:2px 6px;border:0.5px solid var(--border);border-radius:4px;background:transparent;color:var(--text-sec);cursor:pointer" title="Copy Contact link">Contact</button>`:''}
           ${sfCampaignUrl(c)?`<button onclick="copyLink('${sfCampaignUrl(c)}')" style="font-size:11px;padding:2px 6px;border:0.5px solid var(--border);border-radius:4px;background:transparent;color:var(--text-sec);cursor:pointer" title="Copy Campaign link">Dinner</button>`:''}
           <span class="badge ${tierClass(displayTier)}">${c.is_cluster?'⚠ Cluster · ':''}${tierLabel(displayTier, c.score)}</span>
-          ${(()=>{ const cb = (c.bullets||[]).find(b=>b.startsWith('**Confidence:')); if(!cb) return ''; const m=cb.match(/\*\*Confidence:\s*([\w]+)\.\*\*/); if(!m) return ''; const lvl=m[1]; const col=lvl==='High'?'var(--wine)':lvl==='Medium'?'var(--amber-dark)':'var(--text-sec)'; return `<span style="font-size:11px;font-weight:600;color:${col}">● ${lvl} confidence</span>`; })()}
+          ${(()=>{
+            // Try bullets first, then narrative summary
+            const cb = (c.bullets||[]).find(b=>b.startsWith('**Confidence:'));
+            const src = cb || c.narrative_summary || '';
+            const m = src.match(/\*\*Confidence:\s*([\w]+)[\.\*]/);
+            if(!m) return '';
+            const lvl=m[1];
+            const col=lvl==='High'?'var(--wine)':lvl==='Medium'?'var(--amber-dark)':'var(--text-sec)';
+            return `<span style="font-size:11px;font-weight:600;color:${col}">● ${lvl} confidence</span>`;
+          })()}
           ${actioned?'<span class="badge actioned">✓ Actioned</span>':''}
         </div>
         <div class="case-stats">
