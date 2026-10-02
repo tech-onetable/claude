@@ -1089,10 +1089,20 @@ function handleFileUpload(e) {
   if (!file) return;
   const reader = new FileReader();
   reader.onload = ev => {
-    try { loadData(JSON.parse(ev.target.result)); }
-    catch { const el=document.getElementById('load-status'); if(el) el.innerHTML='<div class="load-status error">Could not parse JSON file.</div>'; }
+    try {
+      const text = ev.target.result;
+      const data = JSON.parse(text);
+      loadData(data);
+    } catch(err) {
+      const el=document.getElementById('load-status');
+      if(el) el.innerHTML=`<div class="load-status error">Could not parse JSON file: ${err.message}</div>`;
+    }
   };
-  reader.readAsText(file);
+  reader.onerror = () => {
+    const el=document.getElementById('load-status');
+    if(el) el.innerHTML='<div class="load-status error">Could not read file.</div>';
+  };
+  reader.readAsText(file, 'UTF-8');
 }
 
 function normaliseLoadedCase(c) {
@@ -1115,6 +1125,7 @@ function normaliseLoadedCase(c) {
 }
 
 function loadData(data) {
+  try {
   // Normalise cases
   if (data.cases) data.cases = data.cases.map(normaliseLoadedCase);
   // Surface run-level fields
@@ -1139,6 +1150,11 @@ function loadData(data) {
   state.highNourWarningsExpanded = false;
   state.view = 'review';
   render();
+  } catch(err) {
+    const el = document.getElementById('load-status');
+    if(el) el.innerHTML = `<div class="load-status error">Error loading data: ${err.message}</div>`;
+    console.error('loadData error:', err);
+  }
 }
 
 // ── boot ───────────────────────────────────────────────────────────────────
