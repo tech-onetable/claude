@@ -1536,25 +1536,27 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
 
         # Build device sharing detail bullets -- frame positively (what IS happening)
         host_on_device_names = [h['name'].split()[0] for h in cluster_hosts if h['host_on_device']]
-        if host_on_device_names:
-            host_device_str = f"**Host accounts also used this device:** {', '.join(host_on_device_names)}"
-        else:
-            host_device_str = f"**Guest RSVPs only** -- this device appears in guest RSVPs across {len(cluster_hosts)} dinners"
-
-        # Guest breakdown -- only show hosts where device actually appears in guests
+        # Build TL;DR cluster note -- what IS happening, concisely
+        # Guest device concentration per host
         guest_breakdown_parts = []
         for h in cluster_hosts:
             pct = h['guest_device_pct']
             reason = h.get('cluster_reason', 'device fingerprint')
             if pct > 0:
                 guest_breakdown_parts.append(
-                    f"{h['name'].split()[0]}: {h['guests_on_device']}/{h['total_guests']} guests ({pct}%) via {reason}"
+                    f"{h['name'].split()[0]}: {pct}% of guests ({h['guests_on_device']}/{h['total_guests']})"
                 )
             else:
                 guest_breakdown_parts.append(
                     f"{h['name'].split()[0]}: linked via {reason}"
                 )
         guest_breakdown = ' · '.join(guest_breakdown_parts)
+
+        # Host on device
+        if host_on_device_names:
+            host_device_str = f"Host accounts also on device: {', '.join(host_on_device_names)}."
+        else:
+            host_device_str = ""
 
         cases.append({
             'id': f"cluster-{cluster_key}",
@@ -1571,8 +1573,8 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
             'collapsed_summary': f"{len(members)}-host cluster · top score {top_score} · {combined_n}",
             'narrative_summary': None,  # Populated by agent during Pass 2 investigation
             'bullets': [
-                (f"**{len(members)}-host cluster.** Device fingerprint [{fp}]({fp_link}) detected across {len(members)} dinners. {host_device_str}." if fp else f"**{len(members)}-host cluster.** {ip_note}."),
-                f"**Guest device breakdown:** {guest_breakdown}.",
+                (f"**{len(members)}-host cluster** linked by device [{fp}]({fp_link})." if fp else f"**{len(members)}-host cluster** linked by {ip_note}."),
+                f"**Guest device concentration:** {guest_breakdown}." + (f" {host_device_str}" if host_device_str else ""),
                 f"**Individual scores:** {scores_str}. Score shown is the highest individual score, not a combined total.",
                 f"**Combined Nourishment: {combined_n}.**",
             ],
@@ -1591,7 +1593,12 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
                 'new_host': 'see individual cases below',
                 'unique_guests_12mo': 'see individual cases below',
             },
-            'cluster_note': (f"{ip_note} · " if not fp else f"Device [{fp}]({fp_link}) · ") + f"{host_device_str.replace('**Host accounts on device:**', 'hosts on device:').replace('**Host accounts:**', '')} · {guest_breakdown}" + (f" · {cluster.get('pid_range_note','')}" if cluster.get('pid_range_note') else ''),
+            'cluster_note': (
+                (f"Device [{fp}]({fp_link}) used across {len(members)} dinners. " if fp else f"{ip_note}. ") +
+                f"Guest overlap: {guest_breakdown}. " +
+                (f"{host_device_str} " if host_device_str else "") +
+                f"Combined Nourishment: {combined_n}."
+            ),
             'cluster_hosts': cluster_hosts,
         })
 
