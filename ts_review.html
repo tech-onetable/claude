@@ -534,6 +534,7 @@ function buildCaseBody(c, a, actioned, displayTier) {
 
   return `<div class="case-body">
     ${c.is_cluster&&c.cluster_note?`<div class="cluster-banner" style="font-size:13px;line-height:1.6">${md(c.cluster_note)}</div>`:''}
+    ${c.is_cluster&&c.connected_unscored?`<div style="background:#FEF3C7;border-left:3px solid #D97706;border-radius:0 6px 6px 0;padding:10px 14px;margin:8px 0;font-size:13px;line-height:1.6;color:#92400E"><strong>🔍 Unscored hosts tied to this network:</strong> ${md(c.connected_unscored)}</div>`:''}
     ${c.is_cluster?`<div style="font-size:12px;color:var(--text-sec);margin:4px 0 8px;padding:0 2px">Score shown is the highest individual score — not a combined total.</div>`:''}
     ${c.is_cluster&&c.cluster_hosts?.length?`
       <div class="section-label">Hosts</div>
