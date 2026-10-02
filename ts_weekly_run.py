@@ -57,6 +57,7 @@ SIGNAL_WEIGHTS = {
     'sig18': 3,  # Description degradation (needs pairing)
     'sig19': 2,  # Privacy type mismatch (needs pairing)
     'sig20': 2,  # Multiple future dinners (needs pairing)
+    'sig_pending': 2,  # Pending guests on manual approve dinner (needs pairing)
     'sig21': 6,  # Reports from users (standalone)
     'sig22': 10, # Deliberate fraud (standalone, staff judgment)
     'sig23': 8,  # Deliberate identity change (standalone, staff judgment)
@@ -172,6 +173,7 @@ def parse_csv(contact_path, lead_path=None):
             campaigns[cid]['name'] = row.get('Campaign Name', '')
             campaigns[cid]['address'] = row.get('Address', '')
             campaigns[cid]['description'] = row.get('Campaign Description', '')
+            campaigns[cid]['privacy'] = row.get('Dinner Privacy', '')
 
             # Suspended with active dinner → existing cases, high priority
             if suspended and status not in ('not nourishing', 'aborted'):
@@ -229,7 +231,7 @@ def build_fp_maps(campaigns):
     return high_volume, cross_dinner, all_cross, all_fps
 
 
-def score_campaign(cid, camp, cross_dinner, high_volume):
+def score_campaign(cid, camp, cross_dinner, high_volume, campaigns=None):
     """
     Score a single campaign. Returns dict of raw signals keyed by signal ID.
     Pairing is applied AFTER all raw signals are computed to avoid circular deps.
@@ -440,6 +442,22 @@ def score_campaign(cid, camp, cross_dinner, high_volume):
             add_sig('sig20',
                     f"Multiple future dinners posted: {future_count} upcoming dinners",
                     f"{future_count} future dinners", "3+ future dinners posted", True)
+
+    # ── Signal: Pending guests on manual approve dinner (needs pairing) ─────────
+    # Only applies to Manual Approve dinners that have at least one Attended guest.
+    # A host who manually approved some guests but left 50%+ pending is concerning --
+    # pattern seen in fraud cases where fake guests are accepted and real ones ignored.
+    is_manual_approve = str(camp.get('privacy', '')).strip().lower() == 'manual approve'
+    if is_manual_approve and n >= 3:
+        attended_guests = [g for g in guests if g.get('Member Status', '').lower() == 'attended']
+        pending_guests = [g for g in guests if g.get('Member Status', '').lower() == 'pending']
+        if len(attended_guests) >= 1 and len(pending_guests) >= 1:
+            pending_pct = len(pending_guests) / n
+            if pending_pct >= 0.50:
+                add_sig('sig_pending',
+                        f"Manual approve dinner: {len(pending_guests)}/{n} guests left Pending while {len(attended_guests)} were accepted ({round(100*pending_pct)}% pending). Needs pairing.",
+                        f"{round(100*pending_pct)}% ({len(pending_guests)}/{n} guests pending)",
+                        "50%+ pending on manual approve dinner with at least 1 accepted", True)
 
     # ── Signal 21: Reports from other users / user reports (standalone) ─────────
     # Problem flag alone does NOT score -- surfaces as context only
@@ -706,7 +724,10 @@ SIG_NAMES = {
     'sig17': 'AI-generated or templated description',
     'sig18': 'Description quality degradation over time',
     'sig19': 'Privacy type mismatch',
+    'sig14_watch': 'Sequential guest Profile IDs (below threshold)',
+    'sig14_none': 'Sequential guest Profile IDs (no profiled guests)',
     'sig20': 'Multiple future dinners posted immediately',
+    'sig_pending': 'Pending guests on manual approve dinner',
     'sig21': 'Reports from other users',
     'sig22': 'Deliberate activity to defraud the program',
     'sig23': 'Deliberate identity change',
@@ -1083,7 +1104,7 @@ def run(csv_path, lead_path=None, wednesday_mode=False):
     for cid, camp in campaigns.items():
         if not camp['host']:
             continue
-        scored_signals = score_campaign(cid, camp, cross_dinner, high_volume)
+        scored_signals = score_campaign(cid, camp, cross_dinner, high_volume, campaigns=campaigns)
         score = compute_total_score(scored_signals)
         tier = tier_from_score(score)
 
