@@ -1118,19 +1118,21 @@ def run(csv_path, lead_path=None, wednesday_mode=False):
     fp_clusters = [cl for cl in clusters if cl.get('fp')]
 
     # For each IP cluster, check if its members overlap with an FP cluster
+    # IP-adjacent hosts (connected via IP only to a device FP cluster member) are NOT added
+    # as full cluster members -- they surface as individual cases with a connection note instead.
+    # They need their own scored signals to appear at all; IP alone is not sufficient.
     for ip_cl in ip_clusters_raw:
         ip_members = set(ip_cl['members'])
         for fp_cl in fp_clusters:
             fp_members = set(fp_cl['members'])
             overlap = ip_members & fp_members
             if overlap:
-                # Add any new members from IP cluster to the FP cluster
                 new_members = ip_members - fp_members
                 if new_members:
-                    fp_cl['members'] = sorted(fp_members | new_members)
-                    existing_note = fp_cl.get('shared_ip_note', '')
-                    fp_cl['shared_ip_note'] = (existing_note + '; ' if existing_note else '') + \
-                        f"Extended via {ip_cl.get('shared_ip_note','shared IP')} -- added: {', '.join(sorted(new_members))}"
+                    # Don't add to cluster -- track as ip_adjacent on the FP cluster for reference
+                    fp_cl.setdefault('ip_adjacent', {})
+                    for cid in new_members:
+                        fp_cl['ip_adjacent'][cid] = ip_cl.get('shared_ip_note', 'shared IP')
                 ip_cl['_merged_into_fp'] = True
                 break
 
@@ -1312,6 +1314,19 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
                 partners = [c for c in scored_cids if c != cid]
                 if partners:
                     shared_ip_partners.setdefault(cid, []).append((ip, partners))
+
+    # Build ip_adjacent lookup: cid -> {cluster_name, ip_note}
+    # Hosts connected to a device FP cluster via IP only -- surface as connection note on individual case
+    ip_adjacent_lookup = {}
+    for cluster in pass1_output.get('clusters', []):
+        if not cluster.get('fp'):
+            continue
+        for cid, ip_note in cluster.get('ip_adjacent', {}).items():
+            cluster_name = ' / '.join(
+                pass1_output['campaigns'].get(m, {}).get('host_name', '').split()[-1]
+                for m in cluster['members']
+            )
+            ip_adjacent_lookup[cid] = {'cluster_name': cluster_name, 'ip_note': ip_note}
     # Build existing cases FIRST so we can exclude them from scored cases
     existing_cases = []
     for cid, camp in campaigns.items():
@@ -1612,8 +1627,17 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
             camp['host']['_future_dinner_count'] = len(sf.get('_future_dinners', []))
         case = build_case_json(cid, camp, scored_signals, d['score'],
                                d['tier'] or 'watch', sf)
-        # Add shared IP partner note if this host shares an IP with another scored host
-        if cid in shared_ip_partners and not case.get('is_cluster'):
+        # Add ip_adjacent cluster connection note (soft link to a device FP cluster via shared IP)
+        if cid in ip_adjacent_lookup and not case.get('is_cluster'):
+            adj = ip_adjacent_lookup[cid]
+            case['bullets'] = case.get('bullets', []) + [
+                f"**Soft cluster connection:** Shares IP with member(s) of the {adj['cluster_name']} cluster ({adj['ip_note']}). "
+                f"This host has their own scored signals and should be reviewed alongside that cluster, but is not a confirmed member."
+            ]
+            case['ip_adjacent_cluster'] = adj['cluster_name']
+
+        # Add shared IP partner note if this host shares an IP with another scored host (non-cluster)
+        elif cid in shared_ip_partners and not case.get('is_cluster'):
             ip_notes = []
             for ip, partner_cids in shared_ip_partners[cid]:
                 partner_names = []
