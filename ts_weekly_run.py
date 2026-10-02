@@ -1615,16 +1615,33 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
 
         # Determine who is sharing the device (hosts, guests, or both)
         fp_link = FP_BASE.format(fp) if fp else ''
+        # Collect all unique device FPs appearing across cluster members
+        all_cluster_fps = set()
+        if fp:
+            all_cluster_fps.add(fp)
         host_fps_in_cluster = []
         guest_fps_in_cluster = []
         for cid in members:
             camp = campaigns[cid]
-            if camp['host'] and camp['host'].get('RSVP Device Fingerprint ID','').strip() == fp:
+            host_row = camp.get('host') or {}
+            for fp_field in ('RSVP Device Fingerprint ID', 'Dinner Created Device ID', 'Profile Created Device ID', 'Device ID'):
+                val = host_row.get(fp_field, '').strip()
+                if val and val not in ('nan', 'None') and len(val) > 8:
+                    all_cluster_fps.add(val)
+            for g in camp.get('guests', []):
+                for fp_field in ('RSVP Device Fingerprint ID', 'Device ID'):
+                    val = g.get(fp_field, '').strip()
+                    if val and val not in ('nan', 'None') and len(val) > 8:
+                        all_cluster_fps.add(val)
+            if host_row.get('RSVP Device Fingerprint ID','').strip() == fp:
                 host_fps_in_cluster.append(pass1_output['campaigns'][cid]['host_name'])
-            for g in camp['guests']:
+            for g in camp.get('guests', []):
                 if g.get('RSVP Device Fingerprint ID','').strip() == fp:
                     guest_fps_in_cluster.append(pass1_output['campaigns'][cid]['host_name'])
                     break
+        # Build linked device list for cluster note
+        all_cluster_fps.discard('')
+        fp_links_str = ' · '.join(f"[{f[:8]}...]({FP_BASE.format(f)})" for f in sorted(all_cluster_fps))
         has_host_fp = len(host_fps_in_cluster) > 0
         has_guest_fp = len(guest_fps_in_cluster) > 0
         if has_host_fp and has_guest_fp:
@@ -1662,7 +1679,7 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
             'collapsed_summary': f"{len(members)}-host cluster · top score {top_score} · {combined_n}",
             'narrative_summary': None,  # Populated by agent during Pass 2 investigation
             'bullets': [
-                (f"**{len(members)}-host cluster** linked by device [{fp}]({fp_link})." if fp else f"**{len(members)}-host cluster** linked by {ip_note}."),
+                (f"**{len(members)}-host cluster** linked by device{('s' if len(all_cluster_fps)>1 else '')} {fp_links_str}." if fp else f"**{len(members)}-host cluster** linked by {ip_note}."),
                 f"**Guest device concentration:** {guest_breakdown}." + (f" {host_device_str}" if host_device_str else ""),
                 f"**Individual scores:** {scores_str}. Score shown is the highest individual score, not a combined total.",
                 f"**Combined Nourishment: {combined_n}.**",
@@ -1686,7 +1703,7 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
                 (lambda: (
                     # Build a specific description of what the device did
                     (lambda created, rsvpd: 
-                        f"Device [{fp}]({fp_link}) " +
+                        f"Device{('s' if len(all_cluster_fps) > 1 else '')} {fp_links_str} " +
                         ("created all {n} dinners and appears in guest RSVPs. ".format(n=len(members)) if created and rsvpd else
                          "created all {n} dinners. ".format(n=len(members)) if created else
                          "appears in guest RSVPs across {n} dinners. ".format(n=len(members)))
