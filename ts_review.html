@@ -491,6 +491,7 @@ function buildCaseCard(c) {
         <div class="case-stats">
           <span>${c.dinner_name||''}</span>
           ${c.dinner_name?`<span style="color:var(--border)">·</span>`:''}
+          ${c.guest_count!=null?`<span style="font-weight:600">${c.guest_count} guest${c.guest_count!==1?'s':''}</span><span style="color:var(--border)">·</span>`:''}
           <span>${c.nourishment_eligible ? `$${c.nourishment_eligible} eligible` : ''}</span>
           ${c.nourishment_received?`<span style="color:var(--border)">·</span><span>${c.nourishment_received} received</span>`:''}
           ${c.suspended?'<span style="color:var(--border)">·</span><span style="color:var(--wine);font-weight:500">active suspension</span>':''}
