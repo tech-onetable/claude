@@ -87,7 +87,7 @@
   .cluster-banner { background: #FAEEDA; border-left: 3px solid #BA7517; padding: 8px 12px; font-size: 13px; color: var(--amber-dark); border-radius: 0 6px 6px 0; margin: 12px 0 4px; }
   .badge { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 6px; font-size: 12px; font-weight: 500; }
   .badge.suspension { background: var(--wine-light); color: var(--wine); }
-  .badge.nourishment_pause { background: #FAEEDA; color: var(--amber-dark); }
+  .badge.warning_dnn { background: #FAEEDA; color: var(--amber-dark); }
   .badge.warning { background: var(--olive-light); color: #27500A; }
   .badge.dismiss { background: #F0F0EE; color: var(--text-sec); }
   .badge.program_team { background: var(--green-light); color: var(--green); }
@@ -199,12 +199,12 @@ function saveRuns(r) { try { localStorage.setItem(STORE_KEY, JSON.stringify(r));
 state.runs = loadRuns();
 
 // ── helpers ────────────────────────────────────────────────────────────────
-const TIER_LABELS = { suspension:'Suspension (Soft)', nourishment_pause:'Warning (DNN)', warning_dnn:'Warning (DNN)', warning:'Warning', dismiss:'Dismissed · No misuse', program_team:'Referred to program team' };
-const TIER_COLORS = { suspension:'var(--wine)', nourishment_pause:'var(--amber-dark)', warning_dnn:'var(--amber-dark)', warning:'var(--olive)' };
-const TIER_BGS = { suspension:'var(--wine-light)', nourishment_pause:'#FAEEDA', warning_dnn:'#FAEEDA', warning:'var(--olive-light)' };
+const TIER_LABELS = { suspension:'Suspension', warning_dnn:'Warning (DNN)', warning:'Warning', deactivation:'Deactivation', dismiss:'Dismissed · No misuse', program_team:'Referred to program team' };
+const TIER_COLORS = { suspension:'var(--wine)', warning_dnn:'var(--amber-dark)', warning_dnn:'var(--amber-dark)', warning:'var(--olive)' };
+const TIER_BGS = { suspension:'var(--wine-light)', warning_dnn:'#FAEEDA', warning_dnn:'#FAEEDA', warning:'var(--olive-light)' };
 
 function tierLabel(t, score) {
-  if (t === 'suspension') return (score >= 25) ? 'Suspension (Strict)' : 'Suspension (Soft)';
+  if (t === 'suspension') return 'Suspension';
   return TIER_LABELS[t] || t;
 }
 function tierClass(t) { return t || 'warning'; }
@@ -288,8 +288,8 @@ function buildLoadView() {
 function buildReviewView() {
   if (!state.current) return `<div class="empty"><div class="empty-icon">📭</div><div style="font-size:16px;margin-bottom:8px;">No run loaded</div><button class="btn btn-primary" onclick="switchView('load')">Load a run</button></div>`;
 
-  const cases = (state.current.cases||[]).filter(c => ['warning','warning_dnn','nourishment_pause','suspension','deactivation'].includes(c.tier));
-  const priorAction = (state.current.cases||[]).filter(c => !['warning','warning_dnn','nourishment_pause','suspension','deactivation'].includes(c.tier));
+  const cases = (state.current.cases||[]).filter(c => ['warning','warning_dnn','warning_dnn','suspension','deactivation'].includes(c.tier));
+  const priorAction = (state.current.cases||[]).filter(c => !['warning','warning_dnn','warning_dnn','suspension','deactivation'].includes(c.tier));
   const flags = state.current.cross_host_flags || [];
   const allActioned = cases.length>0 && cases.every(c=>state.actionState[c.id]) && flags.every(f=>state.actionState[f.id]);
 
@@ -302,7 +302,7 @@ function buildReviewView() {
     if (a.is_cluster&&!b.is_cluster) return -1;
     if (!a.is_cluster&&b.is_cluster) return 1;
     // Then by tier severity
-    const tierOrder = {suspension:0, deactivation:0, nourishment_pause:1, warning_dnn:1, warning:2};
+    const tierOrder = {suspension:0, deactivation:0, warning_dnn:1, warning_dnn:1, warning:2};
     const tA = tierOrder[a.tier]??3;
     const tB = tierOrder[b.tier]??3;
     if (tA!==tB) return tA-tB;
@@ -311,17 +311,17 @@ function buildReviewView() {
   });
 
   // Derive counts from actual cases, not the summary object which may be stale
-  const validCases = (state.current.cases||[]).filter(c => ['warning','warning_dnn','nourishment_pause','suspension','deactivation'].includes(c.tier));
+  const validCases = (state.current.cases||[]).filter(c => ['warning','warning_dnn','warning_dnn','suspension','deactivation'].includes(c.tier));
   const countSuspension = validCases.filter(c => ['suspension','deactivation'].includes(c.tier) && !c.is_cluster).length +
     (state.current.cases||[]).filter(c => c.is_cluster && ['suspension','deactivation'].includes(c.tier)).length;
-  const countPause = validCases.filter(c => c.tier === 'nourishment_pause' && !c.is_cluster).length +
-    (state.current.cases||[]).filter(c => c.is_cluster && c.tier === 'nourishment_pause').length;
+  const countPause = validCases.filter(c => c.tier === 'warning_dnn' && !c.is_cluster).length +
+    (state.current.cases||[]).filter(c => c.is_cluster && c.tier === 'warning_dnn').length;
   const countWarning = validCases.filter(c => c.tier === 'warning').length;
   const countClusters = (state.current.cases||[]).filter(c => c.is_cluster).length;
   return `
     <div class="summary-bar">
       <div class="summary-card"><div class="summary-num" style="color:var(--wine)">${countSuspension}</div><div class="summary-label">Suspension</div></div>
-      <div class="summary-card"><div class="summary-num" style="color:var(--amber-dark)">${countPause}</div><div class="summary-label">Nourishment Pause</div></div>
+      <div class="summary-card"><div class="summary-num" style="color:var(--amber-dark)">${countPause}</div><div class="summary-label">Warning (DNN)</div></div>
       <div class="summary-card"><div class="summary-num" style="color:var(--olive)">${countWarning}</div><div class="summary-label">Warning</div></div>
       <div class="summary-card"><div class="summary-num" style="color:var(--text-sec)">${countClusters}</div><div class="summary-label">Clusters</div></div>
     </div>
@@ -330,7 +330,7 @@ function buildReviewView() {
       <button class="btn btn-secondary" onclick="switchView('load')" style="font-size:12px;padding:4px 10px;">+ Load new run</button>
     </div>
     <div class="filter-bar">
-      ${[['all','All'],['cluster','⚠ Cluster'],['suspension','Suspension'],['warning_dnn','Warning DNN'],['nourishment_pause','Nourishment Pause'],['warning','Warning']].map(([f,l])=>`<button class="filter-btn ${state.filter===f?'active':''}" onclick="setFilter('${f}')">${l}</button>`).join('')}
+      ${[['all','All'],['cluster','⚠ Cluster'],['suspension','Suspension'],['warning_dnn','Warning DNN'],['warning_dnn','Warning (DNN)'],['warning','Warning']].map(([f,l])=>`<button class="filter-btn ${state.filter===f?'active':''}" onclick="setFilter('${f}')">${l}</button>`).join('')}
     </div>
     ${(state.current.field_alerts||[]).map(a=>{const crit=a.includes('CRITICAL');return `<div style="padding:10px 14px;border-radius:8px;margin-bottom:8px;font-size:13px;font-weight:500;background:${crit?'#FEF2F2':'#FFFBEB'};color:${crit?'#991B1B':'#633806'};border-left:3px solid ${crit?'#991B1B':'#F59E0B'}">${a.replace('⚠ CRITICAL: ','🚨 ').replace('⚠ WARNING: ','⚠️ ')}</div>`;}).join('')}
     ${(state.current.existing_cases||[]).length>0?`<div style="background:#FFF7ED;border:0.5px solid #FED7AA;border-radius:8px;padding:14px 16px;margin-bottom:12px">
@@ -553,7 +553,7 @@ function buildCaseBody(c, a, actioned, displayTier) {
         </div>
       </div>`:''}
 
-    ${['warning_dnn','nourishment_pause','suspension','deactivation'].includes(c.tier) ? buildHostContextPanels(c) : ''}
+    ${['warning_dnn','warning_dnn','suspension','deactivation'].includes(c.tier) ? buildHostContextPanels(c) : ''}
 
     ${clusterWarn?`<div class="cluster-warning">⚠ This is a cluster case. Consult Amalia before proceeding.
       <div style="margin-top:8px;display:flex;gap:8px;">
@@ -573,10 +573,10 @@ function buildCaseBody(c, a, actioned, displayTier) {
       <select id="override-tier-${c.id}">
         <option value="">-- select --</option>
         <optgroup label="Override tier">
-          <option value="warning">Warning (1-8)</option>
-          <option value="nourishment_pause">Nourishment Pause (9-17)</option>
-          <option value="suspension">Suspension (18-39)</option>
-          <option value="deactivation">Deactivation (40+)</option>
+          <option value="warning">Warning</option>
+          <option value="warning_dnn">Warning (DNN)</option>
+          <option value="suspension">Suspension</option>
+          <option value="deactivation">Deactivation</option>
         </optgroup>
         <optgroup label="Close without consequence">
           <option value="dismiss">Dismiss -- no misuse</option>
@@ -598,7 +598,7 @@ function buildCaseBody(c, a, actioned, displayTier) {
               const ha = state.actionState[hid];
               const happroved = !!ha?.tier;
               // Cluster members get Warning DNN minimum; suspension requires score 18+
-              const hBaseTier = h.score >= 25 ? 'suspension' : h.score >= 18 ? 'suspension' : h.score >= 9 ? 'nourishment_pause' : 'warning_dnn';
+              const hBaseTier = h.score >= 18 ? 'suspension' : h.score >= 9 ? 'warning_dnn' : 'warning';
               const hEffectiveTier = ha?.tier || (c.is_cluster && hBaseTier === 'warning' ? 'warning_dnn' : hBaseTier);
               const htier = hEffectiveTier;
               return `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
@@ -609,10 +609,10 @@ function buildCaseBody(c, a, actioned, displayTier) {
                 ${state.hostOverrideOpen===hid?`<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:4px">
                   <select id="host-override-tier-${hid}" style="font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:4px">
                     <option value="warning">Warning</option>
-                    <option value="nourishment_pause">Nourishment Pause</option>
+                    <option value="warning_dnn">Warning (DNN)</option>
                     <option value="suspension">Suspension</option>
                     <option value="deactivation">Deactivation</option>
-                    <option value="dismissed">Dismiss</option>
+                    <option value="dismiss">Dismiss</option>
                   </select>
                   <input id="host-override-reason-${hid}" placeholder="Reason..." style="font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;width:160px">
                   <button class="btn" style="font-size:12px;padding:4px 8px;background:var(--amber-dark);color:#fff" onclick="confirmHostOverride('${c.id}','${h.name}')">Confirm</button>
@@ -700,7 +700,7 @@ function buildActionChecklist(tier, hosts, rd, type, note) {
     {l:'Create Gmail draft with consequence email',r:true},
   ];
   if (note) items.push({l:`Add note: "${note.slice(0,80)}${note.length>80?'...':''}"`,r:false});
-  if (['nourishment_pause','suspension','deactivation'].includes(tier)) {
+  if (['warning_dnn','suspension','deactivation'].includes(tier)) {
     items.push({l:'Set Do_Not_Nourish__c = true',r:false});
     items.push({l:'Move future dinners to Not Nourishing',r:false});
   }
@@ -793,7 +793,7 @@ function buildSlack(allActioned) {
   const sl = state.current?.slack_summary||{};
   const t = sl.totals||{};
   const draft = [`*Trust and Safety · Week of ${sl.week_of||runDate()}*`,
-    `${t.suspension||0} suspensions · ${t.nourishment_pause||0} Nourishment pauses · ${t.warning||0} warnings · ${t.clusters||0} clusters`,
+    `${t.suspension||0} suspensions · ${t.warning_dnn||0} Nourishment pauses · ${t.warning||0} warnings · ${t.clusters||0} clusters`,
     sl.actioned?.length?`\n*Actioned this week:*\n${sl.actioned.map(a=>`• ${a.name} · ${a.tier}${a.note?' · '+a.note:''}`).join('\n')}`:null,
     sl.trends?`\n*Trends:* ${sl.trends}`:null,
     sl.urgent?`\n⚠ *Urgent:* ${sl.urgent}`:null,
@@ -811,7 +811,7 @@ function buildHistoryView() {
     ${state.runs.length===0?'<div style="font-size:14px;color:var(--text-sec)">No runs saved yet.</div>':
       state.runs.map((r,i)=>`<div class="history-item" onclick="loadRun(${i})">
         <div><div style="font-weight:500;font-size:14px">Week of ${r.run?.week_of||'unknown'}</div>
-          <div style="font-size:12px;color:var(--text-sec);margin-top:2px">${r.run?.summary?.suspension||0} suspension · ${r.run?.summary?.nourishment_pause||0} pause · ${r.run?.summary?.warning||0} warning · ${r.run?.dinners_reviewed||0} dinners</div>
+          <div style="font-size:12px;color:var(--text-sec);margin-top:2px">${r.run?.summary?.suspension||0} suspension · ${r.run?.summary?.warning_dnn||0} pause · ${r.run?.summary?.warning||0} warning · ${r.run?.dinners_reviewed||0} dinners</div>
         </div><span style="font-size:12px;color:var(--text-sec)">View →</span>
       </div>`).join('')}`;
 }
@@ -820,7 +820,7 @@ function buildHistoryView() {
 const CHAT_SYSTEM = `You are the OneTable Trust and Safety case advisor. You help staff review individual host cases flagged during the weekly T&S review. You know the full signal definitions, scoring rules, consequence framework, and policy.
 
 Key rules:
-- Warning: 1-8 | Nourishment Pause: 9-17 | Suspension: 18-39 | Deactivation: 40+
+- Warning: 1-8 | Warning (DNN): 9-17 | Suspension: 18+ | Deactivation: post-reinstatement only
 - First instance rule: even at 40+, first consequence is Suspension not Deactivation
 - Every signal requires pairing except: Shared device FP host+guest (Signal 1), Hard bounces (Signal 12), Reports from users (Signal 21), Deliberate fraud (Signal 22), Deliberate identity change (Signal 23)
 - Sequential PIDs: gap ≤ 2, denominator = ALL guests not just profiled guests
