@@ -1208,9 +1208,12 @@ def run(csv_path, lead_path=None, wednesday_mode=False):
 
     clusters = fp_clusters + ip_clusters_final
     print(f"[T&S] Clusters after merge: {len(clusters)}", file=sys.stderr)
+    # Only device FP clusters elevate tier -- IP-only clusters don't appear in UI
+    # and should not override individual tier
     cluster_cids = set()
     for cl in clusters:
-        cluster_cids.update(cl['members'])
+        if cl.get('fp'):  # device FP clusters only
+            cluster_cids.update(cl['members'])
 
     # Apply cluster rule: any host in a cluster gets Warning DNN minimum
     # Suspension still requires score 18+ -- cluster membership alone is not sufficient
