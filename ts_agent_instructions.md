@@ -177,6 +177,9 @@ Never produce the weekly summary or any case output until all passes are complet
 **Global pairing rule:**
 Every signal requires at least one other signal to be triggered before it scores.
 
+**Always surface total guest count:**
+Every individual case assessment must state the total number of guests at the dinner prominently -- before signal percentages are interpreted. Example: "4 guests total." This is critical context for evaluating signal percentages: 75% on a 4-guest dinner (3 guests) is much weaker evidence than 75% on a 12-guest dinner (9 guests). The reviewer should always see the raw count before the percentage.
+
 **Minimum guest count for device fingerprint signals:**
 Signals 1, 2, and 3 (all device fingerprint signals) require a minimum of 3 guests at the dinner to score. A dinner with 1 or 2 guests never scores on device fingerprint signals regardless of percentage. This prevents false positives on small dinners where any shared device would trivially meet the percentage threshold. The only exceptions are standalone high-confidence signals: Shared device fingerprint host and guest (Signal 1), Hard bounces on guest emails (Signal 12), Reports from other users (Signal 21), Deliberate activity to defraud (Signal 22), and Deliberate identity change (Signal 23). All other signals -- even if their percentage threshold is met -- do not score unless at least one other signal is also triggered. Note the observed signal in anomaly flags if it appears alone.
 
