@@ -495,7 +495,7 @@ function buildCaseCard(c) {
           ${actioned?'<span class="badge actioned">✓ Actioned</span>':''}
         </div>
         <div class="case-stats">
-          ${c.dinner_name ? `<a class="purple-link" href="${campaignUrl(c)}" target="_blank" style="font-size:inherit">${c.dinner_name}</a>` : ''}
+          ${c.dinner_name && c.campaign_id ? `<a class="purple-link" href="https://onetable.lightning.force.com/lightning/r/Campaign/${c.campaign_id}/view" target="_blank" style="font-size:inherit">${c.dinner_name}</a>` : `<span>${c.dinner_name||''}</span>`}
           ${c.dinner_name?`<span style="color:var(--border)">·</span>`:''}
           ${c.guest_count!=null?`<span style="font-weight:600">${c.guest_count} guest${c.guest_count!==1?'s':''}</span><span style="color:var(--border)">·</span>`:''}
           <span>${c.nourishment_eligible ? `$${c.nourishment_eligible} eligible` : ''}</span>
