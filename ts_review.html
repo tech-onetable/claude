@@ -539,19 +539,30 @@ function buildCaseBody(c, a, actioned, displayTier) {
     ${c.is_cluster&&c.cluster_hosts?.length?`
       <div class="section-label">Hosts</div>
       <table class="cluster-table">
-        <thead><tr><th>Host</th><th>Email</th><th>Score</th><th>Nourishment</th><th>Dinner</th><th>Address</th><th>Linked via</th><th>Key signals</th></tr></thead>
+        <thead><tr><th>Host</th><th>Email</th><th>Score</th><th>Nourishment</th><th>Dinner</th><th>Address</th><th>Location type</th><th>Linked via</th><th>Key signals</th></tr></thead>
         <tbody>${c.cluster_hosts.map(h=>{
-          const addrLabel = h.address_type === 'full' ? h.address : h.address_type === 'city-only' ? `${h.address} <span style="color:#b45309;font-size:11px">(city only)</span>` : '<span style="color:#b45309;font-size:11px">no address</span>';
           const dinnerLinks = [
             h.campaign_url ? `<a class="purple-link" href="${h.campaign_url}" target="_blank">SF</a>` : '',
             h.be_url ? `<a class="purple-link" href="${h.be_url}" target="_blank">BE</a>` : ''
           ].filter(Boolean).join(' · ');
+          const addrKey = `addr_${c.id}_${h.contact_id||h.name}`;
+          const savedAddr = state.actionState[addrKey] || h.address_assessment || '';
+          const addrColor = savedAddr.includes('not real') ? '#b91c1c' : savedAddr.includes('real') ? '#166534' : 'var(--text-sec)';
           return `<tr>
           <td><a class="purple-link" href="${h.sf_url}" target="_blank">${h.name}</a></td>
           <td style="font-size:12px;color:var(--text-sec)">${h.email||'—'}</td>
           <td>${h.score}</td><td>${h.nourishment_received}</td>
           <td style="font-size:12px">${dinnerLinks||'—'}</td>
-          <td style="font-size:12px;color:var(--text-sec)">${addrLabel}</td>
+          <td style="font-size:12px;color:var(--text-sec)">${h.address||'—'}</td>
+          <td style="font-size:11px">
+            <select onchange="state.actionState['${addrKey}']=this.value;saveRuns(state.runs);this.style.color=this.value.includes('not real')?'#b91c1c':this.value.includes('real')?'#166534':'var(--text-sec)'" style="font-size:11px;border:0.5px solid var(--border);border-radius:4px;padding:2px 4px;background:var(--card);color:${addrColor};max-width:140px">
+              <option value="">— select —</option>
+              <option value="likely real - residential" ${savedAddr==='likely real - residential'?'selected':''}>✓ Residential</option>
+              <option value="likely real - park/restaurant" ${savedAddr==='likely real - park/restaurant'?'selected':''}>✓ Park / restaurant</option>
+              <option value="likely not real - business" ${savedAddr==='likely not real - business'?'selected':''}>⚠ Business</option>
+              <option value="likely not real - bad address" ${savedAddr==='likely not real - bad address'?'selected':''}>⚠ Bad address</option>
+            </select>
+          </td>
           <td style="font-size:12px;color:var(--text-sec)">${h.device_action_str||h.cluster_reason||'—'}</td>
           <td style="font-size:12px;color:var(--text-sec)">${h.key_signals||''}</td>
         </tr>`;}).join('')}</tbody>
