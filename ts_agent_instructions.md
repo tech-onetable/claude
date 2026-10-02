@@ -156,13 +156,13 @@ Before closing out, query Salesforce directly to verify every action requested o
 - **Cases created:** `SELECT Id, CaseNumber, Subject, Status FROM Case WHERE ContactId = '[id]' ORDER BY CreatedDate DESC LIMIT 1` -- confirm case exists with correct subject
 - **DNN set:** `SELECT Id, Do_Not_Nourish__c FROM Contact WHERE Id = '[id]'` -- confirm true
 - **Suspended_Flag__c set:** `SELECT Id, Suspended_Flag__c FROM Contact WHERE Id = '[id]'` -- confirm true
-- **Future dinners moved to Not Nourishing:** query `SELECT Id, Name, Status FROM Campaign WHERE ContactId = '[id]' AND StartDate >= TODAY` and confirm all show Status = 'Not Nourishing'. This is now automated via sf_update_campaign but verify it landed.
+- **Future dinners moved to Not Approved:** query `SELECT Id, Name, Status FROM Campaign WHERE ContactId = '[id]' AND StartDate >= TODAY` and confirm all show Status = 'Not Approved' and Further_Review_Reason__c = 'Trust and Safety'. This is now automated via sf_update_campaign but verify it landed.
 
 Present as a brief checklist:
 - ✅ Case created: [Host name] — Case [number]
 - ✅ DNN set: [Host name]
 - ✅ Suspended: [Host name]
-- ⚠ Manual required: [Host name] — [dinner IDs] need Not Nourishing status set in backend
+- ⚠ Manual required: [Host name] — [dinner IDs] need Not Approved status set in backend
 - ❌ Failed: [Host name] — [what failed and why]
 
 If any action cannot be verified, flag it explicitly. Never assume an action succeeded without querying Salesforce to confirm.
@@ -370,7 +370,7 @@ Leave blank if there is genuinely nothing notable. Do not pad.
 Fields monitored: RSVP Device Fingerprint ID, RSVP IP, Mandrill Bounce Reason, Platform Profile ID. Do not surface these in any section of the output.
 
 **Suspended host display rule:** For hosts where Suspended Flag = 1:
-- Campaign Status = 'Not Nourishing' or 'Aborted' → skip entirely, do not surface anywhere in the output. These are already handled.
+- Campaign Status = 'Not Approved' or 'Aborted' → skip entirely, do not surface anywhere in the output. These are already handled.
 - Any other Campaign Status → surface in a dedicated "Existing Cases -- Active While Suspended" section at the top of the output, above all scored cases. Flag that a new dinner is active while the host is suspended. Do not re-score these hosts -- note the existing suspension and the active campaign status only.
 
 **Step 3 -- Auto-include check**
@@ -647,7 +647,7 @@ When staff approves a recommendation via the case review UI, the following actio
 **Warning DNN (scores 9-17, first offense)**
 - All of the above
 - Set Do_Not_Nourish__c = true on Contact via sf_update_contact_flags
-- Move all future dinners to Not Nourishing campaign status via sf_update_campaign (status = "Not Nourishing") -- query future campaigns first: SELECT Id, Name, Status, StartDate FROM Campaign WHERE ContactId = '[id]' AND StartDate >= TODAY AND Status NOT IN ('Not Nourishing', 'Aborted')
+- Move all future dinners to Not Approved campaign status via sf_update_campaign (status = "Not Approved", further_review_reason = "Trust and Safety") -- query future campaigns first: SELECT Id, Name, Status, StartDate FROM Campaign WHERE ContactId = '[id]' AND StartDate >= TODAY AND Status NOT IN ('Not Approved', 'Aborted')
 - Email from: community@onetable.org, reply-to: trustandsafety@onetable.org
 - Tone: friendly, adds note that Nourishment is paused until host connects
 - Zoom required (camera on)
@@ -662,7 +662,7 @@ When staff approves a recommendation via the case review UI, the following actio
 - All of the above
 - Set Do_Not_Nourish__c = true on Contact via sf_update_contact_flags
 - Set Suspended_Flag__c = true on Contact via sf_update_contact_flags
-- Move all future dinners to Not Nourishing campaign status via sf_update_campaign (same query as DNN above)
+- Move all future dinners to Not Approved campaign status via sf_update_campaign (same query as DNN above)
 - Set Grant Application status = "Suspended" (requires Workbench -- flag as manual pending MCP access)
 
 **Deactivation (scores 40+, post-reinstatement or second formal consequence only)**
@@ -693,7 +693,7 @@ This protocol is triggered by staff approval of a Suspension -- not by the agent
 The following actions require manual backend access or are pending build. The UI displays these as a checklist after DNN is approved:
 
 - [ ] Check DNN checkbox on host user record in backend (manual until bulk upload is built)
-- [ ] Confirm future dinners updated to Not Nourishing via sf_update_campaign (automated -- verify landed)
+- [ ] Confirm future dinners updated to Not Approved via sf_update_campaign (automated -- verify landed)
 
 **DNN bulk upload output (pending ImagineX build)**
 When a DNN case is approved, add the host Contact ID to a weekly DNN bulk upload CSV. This mirrors the guest ban CSV pattern and will be used to mark hosts as "not eligible for Nourishment" in bulk once the backend upload tool is available. Until then, the DNN checkbox is checked manually per the checklist above.
@@ -704,7 +704,7 @@ The following actions require manual backend access and cannot be automated via 
 - [ ] Check "Banned" checkbox on host user record in backend (prevents platform access)
 - [ ] Deactivate any known device IDs associated with the host account in backend
 - [ ] Confirm DNN checkbox is checked on host user record in backend
-- [ ] Confirm future dinners updated to Not Nourishing via sf_update_campaign (automated -- verify landed)
+- [ ] Confirm future dinners updated to Not Approved via sf_update_campaign (automated -- verify landed)
 - [ ] Upload bulk ban CSV to build team if guest cases were created (Pammie handles)
 
 For Warning DNN and Nourishment Pause: only the DNN checkbox in backend applies. No ban, no device deactivation.
@@ -715,7 +715,7 @@ For Warning DNN and Nourishment Pause: only the DNN checkbox in backend applies.
 
 - Suspended accounts with Closed -- No Response: time window for conversion to Deactivation is TBD
 - Teshuva / formal acknowledgment step: pending confirmation
-- Past dinners to Not Nourishing at Suspension: decision pending
+- Past dinners to Not Approved at Suspension: decision pending
 
 ---
 
