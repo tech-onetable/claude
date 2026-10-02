@@ -524,15 +524,22 @@ function buildCaseBody(c, a, actioned, displayTier) {
     ${c.is_cluster&&c.cluster_hosts?.length?`
       <div class="section-label">Hosts</div>
       <table class="cluster-table">
-        <thead><tr><th>Host</th><th>Email</th><th>Score</th><th>Nourishment</th><th>Address</th><th>Linked via</th><th>Key signals</th></tr></thead>
-        <tbody>${c.cluster_hosts.map(h=>`<tr>
+        <thead><tr><th>Host</th><th>Email</th><th>Score</th><th>Nourishment</th><th>Dinner</th><th>Address</th><th>Linked via</th><th>Key signals</th></tr></thead>
+        <tbody>${c.cluster_hosts.map(h=>{
+          const addrLabel = h.address_type === 'full' ? h.address : h.address_type === 'city-only' ? `${h.address} <span style="color:#b45309;font-size:11px">(city only)</span>` : '<span style="color:#b45309;font-size:11px">no address</span>';
+          const dinnerLinks = [
+            h.campaign_url ? `<a class="purple-link" href="${h.campaign_url}" target="_blank">SF</a>` : '',
+            h.be_url ? `<a class="purple-link" href="${h.be_url}" target="_blank">BE</a>` : ''
+          ].filter(Boolean).join(' · ');
+          return `<tr>
           <td><a class="purple-link" href="${h.sf_url}" target="_blank">${h.name}</a></td>
           <td style="font-size:12px;color:var(--text-sec)">${h.email||'—'}</td>
           <td>${h.score}</td><td>${h.nourishment_received}</td>
-          <td style="font-size:12px;color:var(--text-sec)">${h.address||'—'}</td>
+          <td style="font-size:12px">${dinnerLinks||'—'}</td>
+          <td style="font-size:12px;color:var(--text-sec)">${addrLabel}</td>
           <td style="font-size:12px;color:var(--text-sec)">${h.device_action_str||h.cluster_reason||'—'}</td>
           <td style="font-size:12px;color:var(--text-sec)">${h.key_signals||''}</td>
-        </tr>`).join('')}</tbody>
+        </tr>`;}).join('')}</tbody>
       </table>`:''}
 
     ${c.is_cluster && c.narrative_summary ? `
