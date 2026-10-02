@@ -143,10 +143,14 @@ Run manually on Wednesdays before Dov processes Nourishment. Separate mode from 
 - **Thursday re-review:** Wednesday cases that were approved (moved back to Ready to Nourish) re-surface on Thursday flagged as "Reviewed Wed [date] · approved". Wednesday cases left at Not Approved appear in the Existing Cases banner on Thursday, not as new scored cases.
 
 Script command: `python3 ts_weekly_run.py <csv> --wednesday`
+**Case creation rule: one case per instance of misuse.**
+Every time a consequence is applied -- Warning, Warning DNN, Nourishment Pause, Suspension, Deactivation -- a new Salesforce case is created. Do not update or reuse a prior case. If a host was previously warned and is now being DNN'd, that is a new case. If a host is being escalated from DNN to Suspension, that is a new case. Each case is a standalone record of a specific action taken at a specific point in time.
+
 1. Brief progress updates as each pass completes
 2. The complete ts_ui_data JSON block (presented as a downloadable file via present_files)
-3. Cross-host flags sheet and Slack draft -- if `cross_host_flags` in the JSON is non-empty, automatically: (a) create a Google Sheet titled "T+S Cross-Host Flags · [date]" containing one row per host with columns: Dinner Address, Host Name, Email, Dinner Name, Date, Nourishment Eligible, SF Contact link, SF Dinner link, Contact Mailing Address, Dinner Description -- pull Contact mailing addresses from Salesforce for the flagged hosts; (b) create a Slack DM draft to Elliana (U09326MSYDN) with the message: "Hey Elliana! Here are this week's multi-host/single-address groups to investigate: [Google Sheet link]" followed by a brief bulleted list of the flag groups (address · host names). Do not send the Slack message -- create a draft only.
-4. Post-action verification -- see below.
+3. Ban and DNN CSVs -- present `ts_ban_YYYYMMDD.csv` and `ts_dnn_YYYYMMDD.csv` via present_files alongside the JSON. Ban CSV covers Suspension and above. DNN CSV covers Warning DNN and above. Both use Email + Platform_Profile_ID__c. DNN CSV is pending OT-5498 for upload tool but generate and present regardless.
+4. Cross-host flags sheet and Slack draft -- if `cross_host_flags` in the JSON is non-empty, automatically: (a) create a Google Sheet titled "T+S Cross-Host Flags · [date]" containing one row per host with columns: Dinner Address, Host Name, Email, Dinner Name, Date, Nourishment Eligible, SF Contact link, SF Dinner link, Contact Mailing Address, Dinner Description -- pull Contact mailing addresses from Salesforce for the flagged hosts; (b) create a Slack DM draft to Elliana (U09326MSYDN) with the message: "Hey Elliana! Here are this week's multi-host/single-address groups to investigate: [Google Sheet link]" followed by a brief bulleted list of the flag groups (address · host names). Do not send the Slack message -- create a draft only.
+5. Post-action verification -- see below.
 
 The Slack summary to #trustandsafety-agent-status is handled via the UI -- do not send it as part of the agent output. The cross-host sheet and Elliana draft (step 3) happen only when cross_host_flags is non-empty.
 
