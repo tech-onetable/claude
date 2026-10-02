@@ -104,7 +104,8 @@ def parse_csv(contact_path, lead_path=None):
         "Campaign Description","Total Nourishment Received","Requested Nourishment","Notes",
         "Email","Lead: Created Date","Mandrill Bounce Time + Date",
         # New device/IP fields (populated from 2026-08-21 onward; legacy RSVP fields empty from that date)
-        "Device ID","IP Address Reservation"
+        "Device ID","IP Address Reservation","Platform ID","Profile Created Device ID",
+        "Mailing Zip/Postal Code"
     }
     ONETABLE_DOMAIN = 'onetable.org'
 
