@@ -510,6 +510,7 @@ The JSON block powers the visual case review interface.
         "new_host": "[Yes | No]",
         "unique_guests_12mo": "[n or note]"
       },
+      "narrative_summary": "[For cluster cases only: plain-language narrative produced during Pass 2 investigation. Three sections: What we think is happening (1-2 sentences), Why we think that (specific evidence with named examples organized by type -- accounts made together, shared connections, guest lists passed around, hosts at each other's dinners, device pattern), What we don't know (explicit uncertainty). Written for staff, not data analysts. Null for individual cases or before Pass 2 runs.]",
       "cluster_note": "[Cluster banner text if is_cluster = true, else null]",
       "cluster_hosts": [
         { "name": "[Host name]", "sf_url": "[SF Contact URL]", "score": 0, "nourishment_received": "[amount or pending]", "future_dinners": "0", "address": "[dinner address from report]", "key_signals": "[brief signal summary]" }
