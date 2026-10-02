@@ -1537,9 +1537,9 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
         # Build device sharing detail bullets -- frame positively (what IS happening)
         host_on_device_names = [h['name'].split()[0] for h in cluster_hosts if h['host_on_device']]
         if host_on_device_names:
-            host_device_str = f"**Host accounts also on device:** {', '.join(host_on_device_names)}"
+            host_device_str = f"**Host accounts also used this device:** {', '.join(host_on_device_names)}"
         else:
-            host_device_str = "**Device appears in guest RSVPs only** -- hosts did not RSVP using this device"
+            host_device_str = f"**Guest RSVPs only** -- this device appears in guest RSVPs across {len(cluster_hosts)} dinners"
 
         # Guest breakdown -- only show hosts where device actually appears in guests
         guest_breakdown_parts = []
@@ -1569,6 +1569,7 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
             'suspended': False,
             'dnn': False,
             'collapsed_summary': f"{len(members)}-host cluster · top score {top_score} · {combined_n}",
+            'narrative_summary': None,  # Populated by agent during Pass 2 investigation
             'bullets': [
                 (f"**{len(members)}-host cluster.** Device fingerprint [{fp}]({fp_link}) detected across {len(members)} dinners. {host_device_str}." if fp else f"**{len(members)}-host cluster.** {ip_note}."),
                 f"**Guest device breakdown:** {guest_breakdown}.",
