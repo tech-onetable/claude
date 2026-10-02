@@ -1683,9 +1683,19 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
                 'unique_guests_12mo': 'see individual cases below',
             },
             'cluster_note': (
-                (f"Device [{fp}]({fp_link}) used across {len(members)} dinners. " if fp else f"{ip_note}. ") +
+                (lambda: (
+                    # Build a specific description of what the device did
+                    (lambda created, rsvpd: 
+                        f"Device [{fp}]({fp_link}) " +
+                        ("created all {n} dinners and appears in guest RSVPs. ".format(n=len(members)) if created and rsvpd else
+                         "created all {n} dinners. ".format(n=len(members)) if created else
+                         "appears in guest RSVPs across {n} dinners. ".format(n=len(members)))
+                    )(
+                        all(h.get('host_on_device') or 'dinner created on this device' in h.get('device_action_str','') for h in cluster_hosts),
+                        any(h.get('guests_on_device',0) > 0 for h in cluster_hosts)
+                    )
+                ) if fp else f"{ip_note}. ")() +
                 f"Guest overlap: {guest_breakdown}. " +
-                (f"{host_device_str} " if host_device_str else "") +
                 f"Combined Nourishment: {combined_n}."
             ),
             'cluster_hosts': cluster_hosts,
