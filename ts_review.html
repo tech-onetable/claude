@@ -524,7 +524,7 @@ function buildCaseBody(c, a, actioned, displayTier) {
           <td style="font-size:12px;color:var(--text-sec)">${h.email||'—'}</td>
           <td>${h.score}</td><td>${h.nourishment_received}</td>
           <td style="font-size:12px;color:var(--text-sec)">${h.address||'—'}</td>
-          <td style="font-size:12px;color:var(--text-sec)">${h.guest_device_pct>0 ? h.cluster_reason+' · '+h.guest_device_pct+'% of guests' : h.cluster_reason||'—'}</td>
+          <td style="font-size:12px;color:var(--text-sec)">${h.device_action_str||h.cluster_reason||'—'}</td>
           <td style="font-size:12px;color:var(--text-sec)">${h.key_signals||''}</td>
         </tr>`).join('')}</tbody>
       </table>`:''}
