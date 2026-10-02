@@ -274,12 +274,22 @@ def score_campaign(cid, camp, cross_dinner, high_volume):
                    if fp in cross_dinner and fp not in high_volume]:
         # Count how many guests in THIS dinner share this FP
         guests_with_fp = guest_fps.count(fp) if hasattr(guest_fps, 'count') else sum(1 for g in guest_fps if g == fp)
-        # Also count host if host has it
-        if host_fp == fp:
-            # host+guest case -- sig1 handles this; for sig2 count guests only
-            pass
         if guests_with_fp >= 3 or (guests_with_fp >= 2 and host_fp == fp):
-            cross_hits.append((fp, nd, guests_with_fp))
+            # Require at least one OTHER dinner to also have 50%+ concentration
+            # This filters holiday/venue coincidences where a device appears briefly across many dinners
+            other_cids = [c for c in cross_dinner[fp] if c != cid]
+            high_conc_other = False
+            for other_cid in other_cids:
+                other_camp = campaigns.get(other_cid, {})
+                other_guests = other_camp.get('guests', [])
+                if not other_guests:
+                    continue
+                other_fp_count = sum(1 for g in other_guests if g.get('RSVP Device Fingerprint ID','') == fp or g.get('Device ID','') == fp)
+                if len(other_guests) >= 3 and other_fp_count / len(other_guests) >= 0.50:
+                    high_conc_other = True
+                    break
+            if high_conc_other:
+                cross_hits.append((fp, nd, guests_with_fp))
     if cross_hits and n >= 3:  # min 3 guests required
         total_weight = SIGNAL_WEIGHTS['sig2'] * len(cross_hits)
         descs = []
