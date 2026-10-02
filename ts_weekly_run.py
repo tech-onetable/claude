@@ -32,7 +32,7 @@ SUSPICIOUS_DOMAINS = {
     # Added 2026-10-01 from Alfie Elliott case
     'hudzer.com','flakeian.com','cwsgear.com','mail2usa.com',
 }
-HIGH_VOLUME_THRESHOLD = 20   # FP on 20+ dinners = shared infrastructure, not scored
+HIGH_VOLUME_THRESHOLD = 10   # FP on 10+ dinners = shared infrastructure, not scored
 SIGNAL_WEIGHTS = {
     'sig1': 7,   # Shared device FP host+guest (standalone)
     'sig2': 7,   # Cross-dinner device FP match (needs pairing)
