@@ -49,6 +49,8 @@ SIGNAL_WEIGHTS = {
     'sig12': 8,  # Guest email bounces 75%+ (any type, high-confidence, Warning DNN eligible)
     'sig14_low': 3,  # Sequential guest PIDs 55-99% of profiled (corroborating, can score standalone)
     'sig14': 6,  # Sequential guest PIDs 100% of profiled (Warning-eligible standalone)
+    'sig14_watch': 0,  # Sequential PIDs below threshold -- surfaces observed % but does not score
+    'sig14_none': 0,  # No profiled guests -- PID check not possible
     'sig15': 3,  # Recycled bounced guest lists (needs pairing -- same exact email across 2+ dinners AND bounced)
     'sig16': 1,  # Privacy domain no bounce (needs pairing)
     'sig17': 3,  # AI not pass (needs guest integrity signal)
@@ -280,7 +282,12 @@ def score_campaign(cid, camp, cross_dinner, high_volume):
             cross_hits.append((fp, nd, guests_with_fp))
     if cross_hits and n >= 3:  # min 3 guests required
         total_weight = SIGNAL_WEIGHTS['sig2'] * len(cross_hits)
-        descs = [f"{fp} across {nd} dinners ({gc} guests share it here)" for fp, nd, gc in cross_hits]
+        descs = []
+        other_cids = []
+        for fp, nd, gc in cross_hits:
+            other_dinner_cids = [c for c in cross_dinner[fp] if c != cid]
+            other_cids.extend(other_dinner_cids)
+            descs.append(f"{fp} across {nd} dinners ({gc} guests share it here; other dinners: {', '.join(other_dinner_cids)})")
         add_sig('sig2',
                 "Cross-dinner device fingerprint match: " + "; ".join(descs),
                 f"{len(cross_hits)} FP(s) across multiple dinners",
@@ -1677,6 +1684,23 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
             camp['host']['_future_dinner_count'] = len(sf.get('_future_dinners', []))
         case = build_case_json(cid, camp, scored_signals, d['score'],
                                d['tier'] or 'watch', sf)
+        # Resolve cross-dinner FP host names in sig2 description
+        for sig in case.get('signals', []):
+            if sig.get('name','').startswith('Cross-dinner') and 'other dinners:' in sig.get('name',''):
+                desc = sig['name']
+                import re
+                cids_in_desc = re.findall(r'other dinners: ([^\)]+)\)', desc)
+                for cids_str in cids_in_desc:
+                    for other_cid in cids_str.split(', '):
+                        other_cid = other_cid.strip()
+                        other_camp = campaigns.get(other_cid, {})
+                        other_host = other_camp.get('host', {})
+                        if other_host:
+                            other_name = f"{other_host.get('First Name','')} {other_host.get('Last Name','')}".strip()
+                            other_dinner = other_camp.get('name', '')
+                            desc = desc.replace(other_cid, f"{other_name} ({other_dinner})")
+                sig['name'] = desc
+
         # Add ip_adjacent cluster connection note (soft link to a device FP cluster via shared IP)
         if cid in ip_adjacent_lookup and not case.get('is_cluster'):
             adj = ip_adjacent_lookup[cid]
