@@ -1454,6 +1454,7 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
                 'guests_on_device': guests_on_device,
                 'total_guests': n_guests,
                 'guest_device_pct': guest_pct,
+                'cluster_reason': 'device fingerprint' if fp else cluster.get('shared_ip_note', 'shared IP'),
                 # Combined context fields
                 'applied_date': str(app_date)[:10] if app_date else '—',
                 'tenure': tenure_str,
@@ -1499,16 +1500,27 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
         # Scores per host for display
         scores_str = ' · '.join(f"{h['name'].split()[-1]} {h['score']}" for h in cluster_hosts)
 
-        # Build device sharing detail bullets
+        # Build device sharing detail bullets -- frame positively (what IS happening)
         host_on_device_names = [h['name'].split()[0] for h in cluster_hosts if h['host_on_device']]
-        host_device_str = (
-            f"**Host accounts on device:** {', '.join(host_on_device_names)}" if host_on_device_names
-            else "**Host accounts:** none of the host accounts RSVPed from this device"
-        )
-        guest_breakdown = ' · '.join(
-            f"{h['name'].split()[0]}: {h['guests_on_device']}/{h['total_guests']} guests ({h['guest_device_pct']}%)"
-            for h in cluster_hosts
-        )
+        if host_on_device_names:
+            host_device_str = f"**Host accounts also on device:** {', '.join(host_on_device_names)}"
+        else:
+            host_device_str = "**Device appears in guest RSVPs only** -- hosts did not RSVP using this device"
+
+        # Guest breakdown -- only show hosts where device actually appears in guests
+        guest_breakdown_parts = []
+        for h in cluster_hosts:
+            pct = h['guest_device_pct']
+            reason = h.get('cluster_reason', 'device fingerprint')
+            if pct > 0:
+                guest_breakdown_parts.append(
+                    f"{h['name'].split()[0]}: {h['guests_on_device']}/{h['total_guests']} guests ({pct}%) via {reason}"
+                )
+            else:
+                guest_breakdown_parts.append(
+                    f"{h['name'].split()[0]}: linked via {reason}"
+                )
+        guest_breakdown = ' · '.join(guest_breakdown_parts)
 
         cases.append({
             'id': f"cluster-{cluster_key}",
