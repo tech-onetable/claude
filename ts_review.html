@@ -557,16 +557,47 @@ function buildCaseBody(c, a, actioned, displayTier) {
         </tr>`;}).join('')}</tbody>
       </table>`:''}
 
-    ${c.is_cluster && c.narrative_summary ? `
-      <div class="section-label">What we think is happening</div>
-      <div style="font-size:13px;color:var(--text-sec);line-height:1.6;padding:8px 10px;background:#FAFAF8;border-radius:6px;margin-bottom:8px;white-space:pre-line">${c.narrative_summary}</div>
-      <div class="collapsible">
+    ${c.is_cluster && c.narrative_summary ? (()=>{
+      // Parse narrative into sections by header keywords
+      const text = c.narrative_summary;
+      const sections = [];
+      const sectionDefs = [
+        {key:'what', labels:['What we think is happening','What we think is happening:']},
+        {key:'why',  labels:['Why we think that','Why we think that:']},
+        {key:'unknown', labels:["What we don't know","What we don't know:"]},
+      ];
+      // Split on section headers
+      let remaining = text;
+      const found = [];
+      for (const sd of sectionDefs) {
+        for (const label of sd.labels) {
+          const idx = remaining.indexOf(label);
+          if (idx !== -1) { found.push({idx, key:sd.key, label}); break; }
+        }
+      }
+      found.sort((a,b)=>a.idx-b.idx);
+      for (let i=0;i<found.length;i++) {
+        const start = found[i].idx + found[i].label.length;
+        const end = i+1 < found.length ? found[i+1].idx : remaining.length;
+        sections.push({key:found[i].key, label:found[i].label.replace(':',''), body:remaining.slice(start).slice(0,end-start-found[i].label.length).trim()});
+      }
+      // If no sections found, render as single block
+      if (!sections.length) return `
+        <div class="section-label">What we think is happening</div>
+        <div style="font-size:13px;color:var(--text-sec);line-height:1.6;padding:8px 10px;background:#FAFAF8;border-radius:6px;margin-bottom:8px">${md(text)}</div>`;
+      const sectionColors = {what:'#FAFAF8', why:'#FAFAF8', unknown:'#F5F5F3'};
+      const sectionLabels = {what:'What we think is happening', why:'Why we think that', unknown:"What we don't know"};
+      return sections.map(s=>`
+        <div class="section-label" style="margin-top:10px">${sectionLabels[s.key]||s.label}</div>
+        <div style="font-size:13px;color:var(--text-sec);line-height:1.6;padding:8px 10px;background:${sectionColors[s.key]||'#FAFAF8'};border-radius:6px;margin-bottom:4px">${md(s.body)}</div>
+      `).join('') + `
+      <div class="collapsible" style="margin-top:8px">
         <div class="collapsible-header" onclick="toggleCollapsible(this)" style="font-size:12px">Data details <span class="chevron">▾</span></div>
         <div class="collapsible-body">
           <ul class="bullets">${(c.bullets||[]).map(b=>`<li>${md(b)}</li>`).join('')}</ul>
         </div>
-      </div>
-    ` : `
+      </div>`;
+    })() : `
       <div class="section-label">Summary</div>
       <ul class="bullets">${(c.bullets||[]).map(b=>`<li>${md(b)}</li>`).join('')}</ul>
     `}
