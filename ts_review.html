@@ -709,7 +709,7 @@ function buildCaseBody(c, a, actioned, displayTier) {
         ` : `<button class="btn btn-primary" ${actioned?'disabled':''} onclick="approveCase('${c.id}','${c.tier}',false)">${actioned?'✓ Approved':'Approve recommendation'}</button>
         ${!actioned?`<button class="btn btn-secondary" onclick="toggleOverride('${c.id}')">${overrideOpen?'Cancel':'Override / dismiss'}</button>`:''}`}
       </div>
-      <button class="btn-discuss" onclick="openChat(${JSON.stringify(c).replace(/"/g,'&quot;')})">Discuss ↗</button>
+      <button class="btn-discuss" data-copy="Let's discuss ${c.name} (score ${c.score}, ${c.tier.replace(/_/g,' ')})" onclick="copyDiscuss(this)">Discuss</button>
     </div>
   </div>`;
 }
@@ -747,7 +747,7 @@ function buildHostContextPanels(c) {
         <tbody>${rows}</tbody>
       </table>
       <div style="margin-top:10px;text-align:right">
-        <button class="btn-discuss" onclick="requestDeepDive(${JSON.stringify(c).replace(/"/g,'&quot;')})">Request deep dive ↗</button>
+        <button class="btn-discuss" data-copy="Let's do a deep dive on ${c.name} (score ${c.score}, ${c.tier.replace(/_/g,' ')})" onclick="copyDiscuss(this)">Deep dive</button>
       </div>
     </div>
   </div>`;
@@ -849,7 +849,7 @@ function buildFlagCard(f) {
         <button class="btn ${isProgram?'btn-green':'btn-amber'}" ${actioned?'disabled':''} onclick="actionFlag('${f.id}','${f.type}')">
           ${actioned?'✓ Done':isProgram?'Route to program team':'Flag for review'}
         </button>
-        <button class="btn-discuss" onclick="openChat(${JSON.stringify(f).replace(/"/g,'&quot;')})">Discuss ↗</button>
+        <button class="btn-discuss" data-copy="Let's discuss ${f.title||f.id}" onclick="copyDiscuss(this)">Discuss</button>
       </div>
     </div>`:''}
   </div>`;
@@ -1111,6 +1111,15 @@ function confirmOverride(id) {
 }
 
 function actionFlag(id, type) { state.actionState[id]={tier:type}; render(); }
+
+function copyDiscuss(btn) {
+  const txt = btn.getAttribute('data-copy');
+  navigator.clipboard.writeText(txt).then(()=>{
+    const orig = btn.textContent;
+    btn.textContent = '✓ Copied';
+    setTimeout(()=>btn.textContent=orig, 1500);
+  });
+}
 
 function saveNote(id, val) {
   state.actionState[id] = {...state.actionState[id], note:val};
