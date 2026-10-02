@@ -482,12 +482,15 @@ The JSON block powers the visual case review interface.
       "sf_url": "[https://onetable.lightning.force.com/lightning/r/Contact/{id}/view]",
       "collapsed_summary": "[One line for collapsed card view -- key facts only]",
       "bullets": [
+        "🚨 [CRITICAL CONNECTION IF ANY -- connection to previously suspended hosts, prior fraud rings, or open cases. ALWAYS FIRST if present.]",
         "Confidence: [High/Medium/Low]. [One sentence rationale.]",
         "[Key signal or pattern noted.]",
         "[Financial or payment note if relevant.]",
         "[Evasion or intent note if present.]",
+        "[Soft cluster connection note if ip_adjacent.]",
         "[Recommended action or open item.]"
       ],
+      "bullets_ordering_rule": "Critical connections to prior suspended hosts or open cases MUST be the first bullet. Never bury cross-case connections below confidence or signal notes. The reviewer needs to know immediately if this case links to a known fraud ring.",
       "signals": [
         { "name": "[Full signal name]", "triggered": true, "weight": 0, "observed": "[e.g. 56% or 3/5 guests or 2 dinners]", "threshold": "[e.g. 50%+ or Any or pairing required]", "threshold_met": true, "score_contribution": 0 },
         { "name": "[Full signal name]", "triggered": false, "weight": 0, "observed": "[observed % if applicable, else null]", "threshold": "[threshold]", "threshold_met": false, "score_contribution": 0 }
@@ -812,6 +815,9 @@ Once a cluster is confirmed via shared device fingerprint in Pass 1, run this ch
 
 **Historical attendance check (Pass 2, confirmed clusters)**
 For each confirmed cluster member, query their full CampaignMember history as a guest (not as host): `SELECT CampaignId, Campaign.Name, Campaign.StartDate FROM CampaignMember WHERE ContactId = '[id]' AND Status IN ('Attended', 'Applied') ORDER BY Campaign.StartDate DESC LIMIT 20`. Cross-reference the Campaign IDs against: (a) other confirmed cluster members' dinner IDs, (b) any host flagged in the current week's run, (c) any Contact with open T&S cases. If a cluster member attended dinners hosted by other cluster members, or attended dinners hosted by separately flagged hosts, this is a strong social graph connection. Surface in the cluster note as "Cluster member A attended B's dinner on [date]" -- this is how real operator networks get mapped.
+
+**Critical finding ordering rule:**
+When Pass 2 device/IP expansion finds that a cluster's device or IP connects to previously suspended hosts or open T&S cases, this is the most important finding in the entire case assessment. It must appear as the FIRST bullet in the case summary, not buried in host context or expansion notes. Format: "🚨 **Critical connection:** Dinner creation device [fp] also created dinners for [N] previously suspended hosts: [names with SF links]. This directly links this week's cluster to [prior case name]." Never surface this finding below other bullets. If a device expansion finding connects to suspended hosts, it changes the consequence framing -- treat it as deliberate coordinated fraud (Sig22 consideration) and flag explicitly for staff.
 
 **IP and device expansion (Pass 2, confirmed clusters)**
 For each confirmed cluster member, collect all device fingerprints and IPs from: `Dinner_Created_Device_ID__c` and `Dinner_Created_IP__c` on their Campaign records, and `RSVP_Device_Fingerprint_ID__c`, `RSVP_IP__c`, `Device_ID__c`, `IP_Address_Reservation__c` on their CampaignMember guest records. Then query whether those same IPs or device IDs appear on any other Campaign or CampaignMember records in the current calendar year -- including hosts who did not score in Pass 1. Limit to current calendar year to keep the query manageable. Query: `SELECT DISTINCT CampaignId FROM CampaignMember WHERE (RSVP_Device_Fingerprint_ID__c IN ([fp_list]) OR Device_ID__c IN ([fp_list])) AND CampaignId NOT IN ([cluster_campaign_ids]) AND CreatedDate >= 2026-01-01T00:00:00Z`. Run a parallel query on Campaign for dinner creation device IDs: `SELECT Id FROM Campaign WHERE Dinner_Created_Device_ID__c IN ([device_list]) AND StartDate >= 2026-01-01 AND Id NOT IN ([cluster_campaign_ids])`. Flag any new campaigns found and pull their hosts for review. Query the host's CampaignMember history as a guest (Status = 'Attended' or 'Applied') and cross-reference against other flagged hosts' Campaign IDs. This surfaces real social connections between hosts that device/IP overlap alone would miss -- a host who was a genuine guest at another flagged host's dinner is a stronger cluster signal than shared infrastructure alone.
