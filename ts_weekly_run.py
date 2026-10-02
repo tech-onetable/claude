@@ -1040,7 +1040,6 @@ def run(csv_path, lead_path=None, wednesday_mode=False):
         CRITICAL_FIELDS = {
             'RSVP Device Fingerprint ID': 'Device fingerprint signals (Signals 1-3) will not score',
             'RSVP IP': 'IP-based signals (Signal 6) will not score',
-            'Mandrill Bounce Reason': 'Guest email bounce signal (Signal 12) will not score',
             'Platform Profile ID': 'Sequential PID signal (Signal 13-14) will not score',
         }
         alerts = []
@@ -1051,6 +1050,14 @@ def run(csv_path, lead_path=None, wednesday_mode=False):
                 alerts.append(f"⚠ CRITICAL: '{field}' is {pct:.0%} populated ({populated}/{total_guests} guests). {impact}.")
             elif pct < 0.20:  # Less than 20% = warning
                 alerts.append(f"⚠ WARNING: '{field}' is only {pct:.0%} populated ({populated}/{total_guests} guests). Signals may be underscoring.")
+
+        # Mandrill bounce pipeline check: bounce data is expected to be sparse (most guests have real emails)
+        # but a very low bounce rate may indicate the Mandrill sync isn't working.
+        # Flag if fewer than 2% of guests have any bounce data -- suggests a pipeline issue, not normal sparsity.
+        bounced_guests = [g for g in all_guest_rows if g.get('Mandrill Bounce Time/Date', '').strip() not in ('', 'nan', 'None')]
+        bounce_rate = len(bounced_guests) / total_guests if total_guests > 0 else 0
+        if bounce_rate < 0.02:
+            alerts.append(f"⚠ WARNING: Only {len(bounced_guests)}/{total_guests} guests ({bounce_rate:.1%}) have Mandrill bounce data. This may indicate a Mandrill sync issue -- bounce signals may be underscoring.")
 
         if alerts:
             print("[T&S] DATA PIPELINE ALERTS:", file=sys.stderr)
