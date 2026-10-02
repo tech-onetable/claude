@@ -347,6 +347,15 @@ def score_campaign(cid, camp, cross_dinner, high_volume):
             add_sig('sig14_low',
                     f"Sequential guest Profile IDs (55-99% of profiled): {round(100*seq_pct)}% of {profiled_n} profiled guests sequential (gap≤2). Plus-ones excluded from calculation.",
                     f"{round(100*seq_pct)}% ({profiled_n} profiled guests)", "55-99% of profiled guests", True)
+        else:
+            # Below threshold -- surface as unscored so reviewer sees it was checked
+            add_sig('sig14_watch',
+                    f"Sequential guest Profile IDs (below threshold): {round(100*seq_pct)}% of {profiled_n} profiled guests sequential (gap≤2). Threshold is 55%. Does not score.",
+                    f"{round(100*seq_pct)}% ({profiled_n} profiled guests)", "55%+ to score", False)
+    elif profiled_n == 0:
+        add_sig('sig14_none',
+                f"Sequential guest Profile IDs: no profiled guests found -- all guests may be leads/plus-ones or Profile IDs not populated.",
+                f"0 profiled guests", "requires 2+ profiled guests", False)
 
     # ── Signal 9: Suspicious email domains -- anomaly note only, does not score ──
     # Without a confirmed bounce, domain alone is not sufficient evidence.
