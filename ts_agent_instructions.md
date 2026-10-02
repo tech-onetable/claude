@@ -872,7 +872,20 @@ Format:
 - **Open items:** [anything unresolved -- pending SF actions, questions for Amalia, follow-up needed]
 - **Salesforce case:** [https://onetable.lightning.force.com/lightning/r/Case/{case_id}/view -- query the Case Id after creation]
 
-For cluster cases, include one summary block per host plus a cluster-level summary.
+For cluster cases, produce a narrative cluster summary BEFORE the per-host blocks. This summary is written for a staff member who needs to understand what is happening and why, not for a data analyst. It must be in plain language. Structure:
+
+**What we think is happening:** One or two sentences describing the most likely scenario in plain terms. Example: "Most likely a small group working together, creating host accounts and filling each dinner with guest accounts they also created, in order to collect Nourishment."
+
+**Why we think that:** Specific evidence organized by type, each with a concrete named example. Write in plain English, not signal names. Use the following categories where evidence exists:
+- **Accounts made together:** Were host and guest accounts created in batches on the same days with sequential IDs? Name the hosts and dates.
+- **Shared connections:** What specific IPs or devices link these hosts? How many dinners? Is it unique to this group or widespread?
+- **Guest lists passed around:** Did guests move from one host to another? Were the same guests recycled across multiple hosts' dinners?
+- **Hosts at each other's dinners:** Did any hosts RSVP as guests to other group members' dinners?
+- **Device pattern:** What does the dinner creation device tell us? If it created dinners for suspended hosts, name them.
+
+**What we don't know:** Be explicit about uncertainty. Did these dinners happen? Is this one person or several? Are any guests real?
+
+This narrative should be written so that a staff member reading it could explain the situation to Amalia or on a Zoom call without re-reading the raw data. Do not lead with scores, signal names, or technical identifiers -- those belong in the signals section. Lead with what is happening in human terms.
 
 ---
 
