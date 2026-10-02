@@ -1874,12 +1874,21 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
     if addr_flags:
         patterns.append(f"{len(addr_flags)} same-address group{'s' if len(addr_flags)>1 else ''} routed to program team.")
 
+    # Recompute summary from final cases list -- Pass 1 summary is stale after cluster merging
+    final_summary = {
+        'suspension': len([c for c in cases if c.get('tier') in ('suspension', 'deactivation')]),
+        'warning_dnn': len([c for c in cases if c.get('tier') == 'warning_dnn']),
+        'warning': len([c for c in cases if c.get('tier') == 'warning']),
+        'clusters': len([c for c in cases if c.get('is_cluster')]),
+        'cluster_hosts': sum(len(c.get('cluster_hosts', [])) for c in cases if c.get('is_cluster')),
+    }
+
     ts_ui_data = {
         'run': {
             'week_of': REVIEW_DATE.strftime('%Y-%m-%d'),
             'run_date': datetime.now().strftime('%Y-%m-%d'),
             'dinners_reviewed': pass1_output['total_dinners'],
-            'summary': pass1_output['summary'],
+            'summary': final_summary,
             'field_alerts': pass1_output.get('field_alerts', []),
             'wednesday_mode': wednesday_mode,
             'not_approved_pending': [c.get('campaign_id') for c in cases if wednesday_mode and c.get('campaign_id')],
@@ -1898,7 +1907,7 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
         },
         'slack_summary': {
             'week_of': REVIEW_DATE.strftime('%Y-%m-%d'),
-            'totals': pass1_output['summary'],
+            'totals': final_summary,
             'actioned': [],
             'trends': '',
             'urgent': None,
@@ -2035,10 +2044,10 @@ def run_pass2(pass1_output, sf):
             batch = ids_18[i:i+30]
             ids_str = "', '".join(batch)
             cases_soql = (
-                f"SELECT Id, CaseNumber, Subject, Status, ContactId "
+                f"SELECT Id, CaseNumber, Subject, Status, ContactId, T_S_Type__c "
                 f"FROM Case "
                 f"WHERE ContactId IN ('{ids_str}') "
-                f"AND T_S_Type__c = 'Misuse of Platform' "
+                f"AND (T_S_Type__c = 'Misuse of Platform' OR Subject LIKE '%Trust and Safety%' OR Subject LIKE '%T&S%') "
                 f"AND Status != 'Closed' "
                 f"LIMIT 100"
             )
