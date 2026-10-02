@@ -1542,16 +1542,36 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
                 device_actions.append(f'{guests_on_device}/{n_guests} guests RSVPd from this device ({guest_pct}%)')
             device_action_str = '; '.join(device_actions) if device_actions else 'linked via shared IP'
 
+            # Address type classification
+            addr = d.get('address', '') or ''
+            import re as _re
+            has_street = bool(_re.search(r'\d+\s+\w', addr))
+            if not addr.strip():
+                addr_type = 'none'
+            elif has_street:
+                addr_type = 'full'
+            else:
+                addr_type = 'city-only'
+
+            # Platform ID for BE link
+            camp_host = campaigns.get(cid, {}).get('host', {}) or {}
+            platform_id = str(camp_host.get('Platform ID', '') or '').split('.')[0]
+
             cluster_hosts.append({
                 'name': d['host_name'],
                 'email': sf.get('Email', ''),
                 'platform_profile_id': sf.get('Platform_Profile_ID__c', ''),
                 'contact_id': d['host_id_15'],
                 'sf_url': SF_BASE.format(host_id_18),
+                'campaign_id': cid,
+                'campaign_url': SF_CAMPAIGN_BASE.format(cid),
+                'platform_id': platform_id,
+                'be_url': f"https://api.onetable.org/cp/events/{platform_id}" if platform_id else '',
                 'score': d['score'],
                 'nourishment_received': n_str,
                 'future_dinners': str(len(sf.get('_future_dinners', []))),
-                'address': d['address'],
+                'address': addr,
+                'address_type': addr_type,
                 'key_signals': ', '.join(
                     v['name'] for v in sorted(d['signals'].values(),
                     key=lambda x: -x['score_contribution'])[:2] if v['triggered']
