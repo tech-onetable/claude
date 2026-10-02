@@ -650,7 +650,7 @@ When staff approves a recommendation via the case review UI, the following actio
 
 **Warning DNN (scores 9-17, first offense)**
 - All of the above
-- Set Do_Not_Nourish__c = true on Contact via sf_update_contact_flags
+- Check Do_Not_Nourish__c on Contact first -- set to true via sf_update_contact_flags only if not already true
 - Move all future dinners to Not Approved campaign status via sf_update_campaign (status = "Not Approved", further_review_reason = "Trust & Safety Issue") -- query future campaigns first: SELECT Id, Name, Status, StartDate FROM Campaign WHERE ContactId = '[id]' AND StartDate >= TODAY AND Status NOT IN ('Not Approved', 'Sent Nourishment, Confirmation Email Sent', 'Aborted')
 - Email from: community@onetable.org, reply-to: trustandsafety@onetable.org
 - Tone: friendly, adds note that Nourishment is paused until host connects
@@ -664,10 +664,11 @@ When staff approves a recommendation via the case review UI, the following actio
 
 **Suspension (scores 18-39)**
 - All of the above
-- Set Do_Not_Nourish__c = true on Contact via sf_update_contact_flags
-- Set Suspended_Flag__c = true on Contact via sf_update_contact_flags
+- Check Do_Not_Nourish__c on Contact first -- set to true via sf_update_contact_flags only if not already true
+- Check Suspended_Flag__c on Contact first -- set to true via sf_update_contact_flags only if not already true
 - Move all future dinners to Not Approved campaign status via sf_update_campaign (same query as DNN above)
-- Set Grant Application status = "Suspended" (requires Workbench -- flag as manual pending MCP access)
+- Check Grant Application Status first -- set to "Suspended" via sf_update_grant_application only if not already "Suspended" or "Deactivated"
+- Surface all associated Device IDs in the case output as a checklist for manual deactivation: query `SELECT DISTINCT Dinner_Created_Device_ID__c FROM Campaign WHERE ContactId = '[id]' AND Dinner_Created_Device_ID__c != null` and `SELECT DISTINCT Device_ID__c FROM CampaignMember WHERE ContactId = '[id]' AND Device_ID__c != null`. List each device ID with a note: "⚠ Manual: deactivate device session in backend." (Pending ImagineX bulk device deactivation endpoint.)
 
 **Deactivation (scores 40+, post-reinstatement or second formal consequence only)**
 - All of the above
@@ -683,8 +684,8 @@ When staff approves a recommendation via the case review UI, the following actio
 **Guest case protocol (Suspension level only -- triggered when staff approves a Suspension recommendation)**
 When staff approves a host case at Suspension tier via the review UI, guest accounts associated with the flagged dinner(s) also need to be actioned at the same time. Two categories:
 
-- **Clearly fake guests** (confirmed fabricated: hard bounce AND throwaway domain, or obviously fake identity confirmed): Create Salesforce Case linked to the guest Contact, set Coaching_Status__c = "Closed - Resolved" immediately. Add guest Contact ID to bulk ban CSV for upload to build team. Staff (Pammie) handles the CSV upload directly.
-- **Flagged but not confirmed fake** (shared device fingerprint, cross-host appearance, suspicious but unproven): Create Salesforce Case linked to the guest Contact, set Coaching_Status__c = "Closed - Resolved" immediately. Set Problem_Flag__c = true on Contact for monitoring.
+- **Clearly fake guests** (confirmed fabricated: hard bounce AND throwaway domain, or obviously fake identity confirmed): Create Salesforce Case linked to the guest Contact. Description must include: host name, host SF Contact link, dinner name, dinner Campaign link, and reason flagged (e.g. "Hard bounce + throwaway domain. Associated with [Host Name] dinner [Dinner Name] ([Campaign link])."). Set Coaching_Status__c = "Closed - Resolved" immediately. Add guest Contact ID to bulk ban CSV for upload to build team. Staff (Pammie) handles the CSV upload directly.
+- **Flagged but not confirmed fake** (shared device fingerprint, cross-host appearance, suspicious but unproven): Create Salesforce Case linked to the guest Contact. Description must include: host name, host SF Contact link, dinner name, dinner Campaign link, and reason flagged. Set Coaching_Status__c = "Closed - Resolved" immediately. Set Problem_Flag__c = true on Contact for monitoring.
 
 This protocol is triggered by staff approval of a Suspension -- not by the agent recommendation alone. Do not create guest cases at Warning or Nourishment Pause level, and do not create them until staff has explicitly approved the host case at Suspension tier.
 
