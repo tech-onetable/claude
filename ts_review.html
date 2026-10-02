@@ -573,24 +573,26 @@ function buildCaseBody(c, a, actioned, displayTier) {
       const text = c.narrative_summary;
       const sections = [];
       const sectionDefs = [
-        {key:'what', labels:['What we think is happening','What we think is happening:']},
-        {key:'why',  labels:['Why we think that','Why we think that:']},
-        {key:'unknown', labels:["What we don't know","What we don't know:"]},
+        {key:'what', labels:['What we think is happening','What we think is happening:','**What we think is happening:**','**What we think is happening**']},
+        {key:'why',  labels:['Why we think that','Why we think that:','**Why we think that:**','**Why we think that**']},
+        {key:'unknown', labels:["What we don't know","What we don't know:","**What we don't know:**","**What we don't know**"]},
       ];
-      // Split on section headers
+      // Split on section headers -- search case-insensitively and handle bold markers
       let remaining = text;
       const found = [];
       for (const sd of sectionDefs) {
         for (const label of sd.labels) {
           const idx = remaining.indexOf(label);
-          if (idx !== -1) { found.push({idx, key:sd.key, label}); break; }
+          if (idx !== -1) { found.push({idx, key:sd.key, label, len:label.length}); break; }
         }
       }
       found.sort((a,b)=>a.idx-b.idx);
       for (let i=0;i<found.length;i++) {
-        const start = found[i].idx + found[i].label.length;
+        const start = found[i].idx + found[i].len;
         const end = i+1 < found.length ? found[i+1].idx : remaining.length;
-        sections.push({key:found[i].key, label:found[i].label.replace(':',''), body:remaining.slice(start).slice(0,end-start-found[i].label.length).trim()});
+        // Strip leading colon, asterisks, whitespace from body
+        let body = remaining.slice(start, end).replace(/^[\s:*]+/, '').trim();
+        sections.push({key:found[i].key, body});
       }
       // If no sections found, render as single block
       if (!sections.length) return `
