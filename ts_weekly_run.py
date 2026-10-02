@@ -1699,38 +1699,9 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
             'similarity_pct': None,
         })
 
-    # Add cross-host IP flags to cross_host_flags
-    for ip, cids in pass1_output.get('cross_host_ips', {}).items():
-        flag_hosts = []
-        for cid in cids:
-            camp = campaigns.get(cid, {})
-            host = camp.get('host', {})
-            if not host:
-                continue
-            contact_id = host.get('Contact ID', '')
-            sf = sf_results.get(contact_id, {})
-            host_id_18 = sf.get('Id', sf_15_to_18(contact_id))
-            flag_hosts.append({
-                'name': (host.get('First Name','') + ' ' + host.get('Last Name','')).strip(),
-                'sf_url': SF_BASE.format(host_id_18),
-                'dinner': camp.get('name', ''),
-                'dinner_url': SF_CAMPAIGN_BASE.format(cid),
-                'description': (camp.get('description', '') or '')[:200],
-                'eligible': '—',
-            })
-        if len(flag_hosts) >= 2:
-            cross_host_flags.append({
-                'id': f"flag-ip-{ip.replace('.', '-')}",
-                'type': 'shared_ip',
-                'title': f"Shared IP · {ip}",
-                'hosts': flag_hosts,
-                'summary_bullets': [
-                    f"**{len(flag_hosts)} dinners share IP {ip} this week.** May indicate same person hosting under multiple accounts.",
-                    "**Review for coordinated fraud** -- check if hosts know each other or share device fingerprints.",
-                ],
-                'flags': [{'label': 'Shared IP', 'type': 'warning'}],
-                'similarity_pct': None,
-            })
+    # IP-only groups are NOT added to cross_host_flags.
+    # Shared IP without device corroboration is not actionable for the program team.
+    # IP-adjacent hosts with their own scored signals surface as individual cases with a soft connection note.
 
     # Note: cross-host PID batches are surfaced in insights, not cross_host_flags,
     # because single-week false positive rate is too high for program team action.
@@ -1767,8 +1738,7 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
     pid_batch_flags = [f for f in cross_host_flags if f.get('type') == 'pid_batch']
     ip_flags = [f for f in cross_host_flags if f.get('type') == 'shared_ip']
     addr_flags = [f for f in cross_host_flags if f.get('type') in ('confirm_rule', 'program_policy')]
-    if ip_flags:
-        patterns.append(f"{len(ip_flags)} cross-host shared IP group{'s' if len(ip_flags)>1 else ''} flagged for review.")
+
     if addr_flags:
         patterns.append(f"{len(addr_flags)} same-address group{'s' if len(addr_flags)>1 else ''} routed to program team.")
 
