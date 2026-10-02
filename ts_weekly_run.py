@@ -203,11 +203,15 @@ def build_fp_maps(campaigns):
     """
     all_fps = collections.defaultdict(set)
     for cid, camp in campaigns.items():
-        # Include dinner creation device ID -- this is the key cluster signal
+        # Include dinner creation device ID
         creation_device = camp.get('dinner_created_device_id', '') or (
             camp['host'].get('Dinner Created Device ID', '') if camp['host'] else '')
         if creation_device and creation_device not in ('nan', 'None', ''):
             all_fps[creation_device].add(cid)
+        # Include profile creation device ID -- strongest signal: same device created the host accounts
+        profile_device = camp['host'].get('Profile Created Device ID', '') if camp['host'] else ''
+        if profile_device and profile_device not in ('nan', 'None', ''):
+            all_fps[profile_device].add(cid)
         if camp['host']:
             fp = camp['host'].get('RSVP Device Fingerprint ID', '')
             if fp:
@@ -903,6 +907,10 @@ def detect_clusters(scored_cases, campaigns, cross_dinner_fps):
             host.get('Dinner Created Device ID', '') if host else '')
         if creation_device and creation_device not in ('nan', 'None', ''):
             fps.add(creation_device)
+        # Include profile creation device ID -- strongest signal
+        profile_device = host.get('Profile Created Device ID', '') if host else ''
+        if profile_device and profile_device not in ('nan', 'None', ''):
+            fps.add(profile_device)
         for g in camp['guests']:
             fp = g.get('RSVP Device Fingerprint ID', '')
             if fp: fps.add(fp)
@@ -1461,12 +1469,28 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
                 'times_attended_as_guest': str(int(sf['Times_Attended_as_Guest__c'])) if sf.get('Times_Attended_as_Guest__c') is not None else 'pending',
             }
 
-            # Device sharing detail for this host's dinner
+            # Device sharing detail -- track WHICH actions tie this host to the cluster device
             camp = campaigns[cid]
             n_guests = len(camp['guests'])
-            host_on_device = camp['host'] and camp['host'].get('RSVP Device Fingerprint ID','').strip() == fp
-            guests_on_device = sum(1 for g in camp['guests'] if g.get('RSVP Device Fingerprint ID','').strip() == fp)
+            host = camp['host'] or {}
+
+            profile_device_match = fp and host.get('Profile Created Device ID','').strip() == fp
+            dinner_device_match = fp and host.get('Dinner Created Device ID','').strip() == fp
+            host_rsvp_match = fp and host.get('RSVP Device Fingerprint ID','').strip() == fp
+            guests_on_device = sum(1 for g in camp['guests'] if g.get('RSVP Device Fingerprint ID','').strip() == fp) if fp else 0
             guest_pct = round(100 * guests_on_device / n_guests) if n_guests > 0 else 0
+
+            # Build explicit device action description
+            device_actions = []
+            if profile_device_match:
+                device_actions.append('account created on this device')
+            if dinner_device_match:
+                device_actions.append('dinner created on this device')
+            if host_rsvp_match:
+                device_actions.append('host RSVPd from this device')
+            if guests_on_device > 0:
+                device_actions.append(f'{guests_on_device}/{n_guests} guests RSVPd from this device ({guest_pct}%)')
+            device_action_str = '; '.join(device_actions) if device_actions else 'linked via shared IP'
 
             cluster_hosts.append({
                 'name': d['host_name'],
@@ -1484,10 +1508,11 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
                 ),
                 'host_context': host_context,
                 # Device sharing detail
-                'host_on_device': host_on_device,
+                'host_on_device': profile_device_match or dinner_device_match or host_rsvp_match,
                 'guests_on_device': guests_on_device,
                 'total_guests': n_guests,
                 'guest_device_pct': guest_pct,
+                'device_action_str': device_action_str,
                 'cluster_reason': 'device fingerprint' if fp else cluster.get('shared_ip_note', 'shared IP'),
                 # Combined context fields
                 'applied_date': str(app_date)[:10] if app_date else '—',
@@ -1536,27 +1561,13 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
 
         # Build device sharing detail bullets -- frame positively (what IS happening)
         host_on_device_names = [h['name'].split()[0] for h in cluster_hosts if h['host_on_device']]
-        # Build TL;DR cluster note -- what IS happening, concisely
-        # Guest device concentration per host
+        # Build TL;DR cluster note using explicit device actions per host
         guest_breakdown_parts = []
         for h in cluster_hosts:
-            pct = h['guest_device_pct']
-            reason = h.get('cluster_reason', 'device fingerprint')
-            if pct > 0:
-                guest_breakdown_parts.append(
-                    f"{h['name'].split()[0]}: {pct}% of guests ({h['guests_on_device']}/{h['total_guests']})"
-                )
-            else:
-                guest_breakdown_parts.append(
-                    f"{h['name'].split()[0]}: linked via {reason}"
-                )
+            action = h.get('device_action_str', 'linked via device fingerprint')
+            guest_breakdown_parts.append(f"{h['name'].split()[0]}: {action}")
         guest_breakdown = ' · '.join(guest_breakdown_parts)
-
-        # Host on device
-        if host_on_device_names:
-            host_device_str = f"Host accounts also on device: {', '.join(host_on_device_names)}."
-        else:
-            host_device_str = ""
+        host_device_str = ""  # now embedded in device_action_str per host
 
         cases.append({
             'id': f"cluster-{cluster_key}",
