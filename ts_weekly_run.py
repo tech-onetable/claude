@@ -194,9 +194,20 @@ def parse_csv(contact_path, lead_path=None):
 
 
 def build_fp_maps(campaigns):
-    """Build cross-dinner FP map using full IDs."""
+    """Build cross-dinner FP map using full IDs.
+    Includes dinner creation device IDs (Dinner_Created_Device_ID__c) so that
+    hosts who created dinners on the same device are clustered together, not just
+    hosts whose guests share a device. This is the stronger signal -- a host creating
+    dinners on a shared device is harder to explain innocently than guests RSVPing
+    from a shared device.
+    """
     all_fps = collections.defaultdict(set)
     for cid, camp in campaigns.items():
+        # Include dinner creation device ID -- this is the key cluster signal
+        creation_device = camp.get('dinner_created_device_id', '') or (
+            camp['host'].get('Dinner Created Device ID', '') if camp['host'] else '')
+        if creation_device and creation_device not in ('nan', 'None', ''):
+            all_fps[creation_device].add(cid)
         if camp['host']:
             fp = camp['host'].get('RSVP Device Fingerprint ID', '')
             if fp:
