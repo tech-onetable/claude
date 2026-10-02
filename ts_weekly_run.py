@@ -887,6 +887,9 @@ def detect_clusters(scored_cases, campaigns, cross_dinner_fps):
     Returns list of cluster groups (each group is a list of cids).
     """
     # Build FP -> [cid] map for scored cases only
+    # Includes dinner creation device IDs -- a host creating dinners on the same device
+    # as another host is a stronger cluster signal than guest RSVP overlap alone.
+    # Same high-volume and cross-dinner filters apply (via cross_dinner_fps).
     case_fps = {}
     for cid in scored_cases:
         camp = campaigns[cid]
@@ -895,6 +898,11 @@ def detect_clusters(scored_cases, campaigns, cross_dinner_fps):
         if host:
             fp = host.get('RSVP Device Fingerprint ID', '')
             if fp: fps.add(fp)
+        # Include dinner creation device ID
+        creation_device = camp.get('dinner_created_device_id', '') or (
+            host.get('Dinner Created Device ID', '') if host else '')
+        if creation_device and creation_device not in ('nan', 'None', ''):
+            fps.add(creation_device)
         for g in camp['guests']:
             fp = g.get('RSVP Device Fingerprint ID', '')
             if fp: fps.add(fp)
