@@ -257,10 +257,10 @@ def score_campaign(cid, camp, cross_dinner, high_volume):
     if host_fp and n >= 3:  # min 3 guests required for device FP signals
         shared = [fp for fp in guest_fps if fp == host_fp]
         pct = len(shared) / n
-        met = pct >= 0.25
+        met = pct >= 0.50
         add_sig('sig1',
                 f"Shared device fingerprint host and guest: {len(shared)}/{n} ({round(100*pct)}%) [{host_fp}]",
-                f"{round(100*pct)}% ({len(shared)}/{n} guests)", "25%+ (min 3 guests)", met)
+                f"{round(100*pct)}% ({len(shared)}/{n} guests)", "50%+ (min 3 guests)", met)
 
     # ── Signal 2: Cross-dinner FP match (needs pairing, any, skip high-volume) ──
     # Only score if 2+ guests in this dinner share the cross-dinner FP
@@ -294,10 +294,10 @@ def score_campaign(cid, camp, cross_dinner, high_volume):
         if top_fp not in high_volume:
             pct = top_count / n
             # Require at least 2 guests sharing the same FP -- 1 guest is not meaningful
-            met = pct >= 0.40 and top_count >= 3
+            met = pct >= 0.50 and top_count >= 3
             add_sig('sig3',
                     f"Same device fingerprint across guests: {top_count}/{n} ({round(100*pct)}%) [{top_fp}]",
-                    f"{round(100*pct)}% ({top_count}/{n} guests)", "40%+ and ≥3 guests sharing (min 3 guests total)", met)
+                    f"{round(100*pct)}% ({top_count}/{n} guests)", "50%+ and ≥3 guests sharing (min 3 guests total)", met)
 
     # ── Signal 12: Guest email bounces (any type -- hard or reject combined) ──
     # 50-74% = weight 4 corroborating; 75%+ = weight 8 high-confidence Warning DNN eligible
