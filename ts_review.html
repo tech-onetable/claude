@@ -558,7 +558,8 @@ function buildCaseBody(c, a, actioned, displayTier) {
             // Ensure sequential PID signals always appear even if not evaluated for this dinner
             const sigs = c.signals||[];
             const hasPID = sigs.some(s=>s.name&&s.name.toLowerCase().includes('profile id'));
-            const extras = hasPID ? [] : [{name:'Sequential guest Profile IDs',triggered:false,score_contribution:0,observed:'not evaluated for this dinner',threshold:'55-99% or 100% of profiled guests'}];
+            const pidSig = sigs.find(s=>s.name&&s.name.toLowerCase().includes('profile id'));
+            const extras = hasPID ? [] : [{name:'Sequential guest Profile IDs',triggered:false,score_contribution:0,observed: pidSig?.observed || 'below threshold or no profiled guests',threshold:'55%+ of profiled guests'}];
             return [...sigs.filter(s=>!s.triggered),...extras];
           })().map(s=>`
             <div class="breakdown-row dimmed"><span style="color:var(--text-ter)">${s.name} — ${s.observed||s.threshold||'not triggered'}</span><span style="color:var(--text-ter)">+0</span></div>`).join('')}
