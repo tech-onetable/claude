@@ -836,6 +836,7 @@ def build_case_json(cid, camp, scored_signals, score, tier, sf_data=None):
         'campaign_id': cid,
         'email': sf_data.get('Email', host.get('Campaign Member Email', '')) if sf_data else host.get('Campaign Member Email', ''),
         'contact_id': host.get('Contact ID', '') if host else '',
+        'platform_profile_id': sf_data.get('Platform_Profile_ID__c', '') if sf_data else '',
         'tier': tier,
         'is_cluster': False,
         'score': score,
@@ -1436,6 +1437,8 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
             cluster_hosts.append({
                 'name': d['host_name'],
                 'email': sf.get('Email', ''),
+                'platform_profile_id': sf.get('Platform_Profile_ID__c', ''),
+                'contact_id': d['host_id_15'],
                 'sf_url': SF_BASE.format(host_id_18),
                 'score': d['score'],
                 'nourishment_received': n_str,
@@ -2029,6 +2032,43 @@ if __name__ == '__main__':
     with open(fname, 'w') as f:
         json.dump(ts_ui_data, f, indent=2)
     print(f"[T&S] Final JSON saved to {fname}", file=sys.stderr)
+
+    # Generate ban CSV (Suspension and above -- hosts only)
+    # Format matches bulk_ban upload: Email, ID (Platform_Profile_ID__c)
+    import csv as csv_module
+    date_str = REVIEW_DATE.strftime('%Y%m%d')
+    ban_rows = []
+    dnn_rows = []
+    for case in ts_ui_data.get('cases', []):
+        tier = case.get('tier', '')
+        hosts = case.get('cluster_hosts', []) if case.get('is_cluster') else [case]
+        for h in hosts:
+            email = h.get('email', '')
+            platform_id = h.get('platform_profile_id', '') or sf_results.get(
+                h.get('contact_id', ''), {}).get('Platform_Profile_ID__c', '')
+            if not email or not platform_id:
+                continue
+            row = {'Email': email, 'ID': platform_id}
+            if tier in ('suspension', 'deactivation'):
+                ban_rows.append(row)
+            if tier in ('warning_dnn', 'suspension', 'deactivation'):
+                dnn_rows.append(row)
+
+    if ban_rows:
+        ban_fname = f'/home/claude/ts_ban_{date_str}.csv'
+        with open(ban_fname, 'w', newline='') as f:
+            w = csv_module.DictWriter(f, fieldnames=['Email', 'ID'])
+            w.writeheader()
+            w.writerows(ban_rows)
+        print(f"[T&S] Ban CSV ({len(ban_rows)} hosts): {ban_fname}", file=sys.stderr)
+
+    if dnn_rows:
+        dnn_fname = f'/home/claude/ts_dnn_{date_str}.csv'
+        with open(dnn_fname, 'w', newline='') as f:
+            w = csv_module.DictWriter(f, fieldnames=['Email', 'ID'])
+            w.writeheader()
+            w.writerows(dnn_rows)
+        print(f"[T&S] DNN CSV ({len(dnn_rows)} hosts): {dnn_fname} (pending OT-5498)", file=sys.stderr)
 
     # Print the ts_ui_data block for the agent to output
     print("\n```ts_ui_data")
