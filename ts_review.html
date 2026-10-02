@@ -513,7 +513,7 @@ function buildCaseBody(c, a, actioned, displayTier) {
   const clusterWarn = state.clusterWarning===c.id;
 
   return `<div class="case-body">
-    ${c.is_cluster&&c.cluster_note?`<div class="cluster-banner">🔗 ${md(c.cluster_note)}</div>`:''}
+    ${c.is_cluster&&c.cluster_note?`<div class="cluster-banner" style="font-size:13px;line-height:1.6">${md(c.cluster_note)}</div>`:''}
     ${c.is_cluster?`<div style="font-size:12px;color:var(--text-sec);margin:4px 0 8px;padding:0 2px">Score shown is the highest individual score — not a combined total.</div>`:''}
     ${c.is_cluster&&c.cluster_hosts?.length?`
       <div class="section-label">Hosts</div>
