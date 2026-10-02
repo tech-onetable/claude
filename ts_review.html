@@ -346,8 +346,13 @@ function buildReviewView() {
       ${[['all','All'],['cluster','⚠ Cluster'],['suspension','Suspension'],['warning_dnn','Warning DNN'],['warning_dnn','Warning (DNN)'],['warning','Warning']].map(([f,l])=>`<button class="filter-btn ${state.filter===f?'active':''}" onclick="setFilter('${f}')">${l}</button>`).join('')}
     </div>
     ${(state.current.field_alerts||[]).map(a=>{const crit=a.includes('CRITICAL');return `<div style="padding:10px 14px;border-radius:8px;margin-bottom:8px;font-size:13px;font-weight:500;background:${crit?'#FEF2F2':'#FFFBEB'};color:${crit?'#991B1B':'#633806'};border-left:3px solid ${crit?'#991B1B':'#F59E0B'}">${a.replace('⚠ CRITICAL: ','🚨 ').replace('⚠ WARNING: ','⚠️ ')}</div>`;}).join('')}
-    ${(state.current.existing_cases||[]).length>0?`<div style="background:#FFF7ED;border:0.5px solid #FED7AA;border-radius:8px;padding:14px 16px;margin-bottom:12px">
-      <div style="font-weight:600;color:#C2410C;margin-bottom:8px;font-size:13px">⚠ Hosts with active flags posting this week (${state.current.existing_cases.length})</div>
+    ${(state.current.existing_cases||[]).length>0?`<div style="background:#FFF7ED;border:0.5px solid #FED7AA;border-radius:8px;margin-bottom:12px;overflow:hidden">
+      <div onclick="state.existingCasesOpen=!state.existingCasesOpen;render()" style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;cursor:pointer">
+        <div style="font-weight:600;color:#C2410C;font-size:13px">⚠ Hosts with active flags posting this week (${state.current.existing_cases.length})</div>
+        <span style="color:#C2410C;font-size:12px">${state.existingCasesOpen!==false?'▲':'▼'}</span>
+      </div>
+      ${state.existingCasesOpen===false?'':
+      `<div style="padding:0 16px 12px">
       ${(state.current.existing_cases||[]).map(c=>`
         <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:8px 0;border-top:0.5px solid #FED7AA;font-size:13px">
           <div>
@@ -364,6 +369,7 @@ function buildReviewView() {
           </div>
           <span style="color:var(--text-sec);font-size:12px;white-space:nowrap;margin-left:12px">${c.nourishment_received} received</span>
         </div>`).join('')}
+      </div>`}
     </div>`:''}
     ${(()=>{
       const actionableCases = filtered.filter(c => c.tier !== 'warning');
