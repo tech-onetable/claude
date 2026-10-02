@@ -592,7 +592,7 @@ function buildCaseBody(c, a, actioned, displayTier) {
 
     <div style="margin-top:14px;">
       <div class="section-label">Internal notes</div>
-      <textarea class="notes-textarea" placeholder="Add notes -- context, agreements, decisions. Saved with this run and added to Salesforce case on approval." oninput="saveNote('${c.id}',this.value)">${a.note||''}</textarea>
+      <textarea class="notes-textarea" data-case-id="${c.id}" placeholder="Add notes -- context, agreements, decisions. Saved with this run and added to Salesforce case on approval." oninput="saveNote('${c.id}',this.value)">${a.note||''}</textarea>
     </div>
 
     ${overrideOpen?`<div class="override-panel">
@@ -1018,8 +1018,15 @@ function confirmHostOverride(clusterId, hostName) {
   render();
 }
 
+function captureNote(id) {
+  // Read note directly from textarea at action time to avoid oninput timing issues
+  const ta = document.querySelector(`textarea[data-case-id="${id}"]`);
+  if (ta && ta.value) state.actionState[id] = {...state.actionState[id], note: ta.value};
+}
+
 function approveCase(id, tier, isCluster) {
   if (isCluster && state.clusterWarning!==id) { state.clusterWarning=id; render(); return; }
+  captureNote(id);
   state.actionState[id] = {...state.actionState[id], tier};
   state.clusterWarning = null;
   state.overrideOpen = null;
@@ -1038,6 +1045,7 @@ function confirmOverride(id) {
   const t = document.getElementById(`override-tier-${id}`)?.value;
   const r = document.getElementById(`override-reason-${id}`)?.value;
   if (!t) return;
+  captureNote(id);
   state.actionState[id] = {...state.actionState[id], tier:t, reason:r};
   state.overrideOpen = null;
   render();
