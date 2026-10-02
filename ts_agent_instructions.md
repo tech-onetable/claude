@@ -457,7 +457,12 @@ If two or more flagged hosts share any of these, treat them as a potential clust
 
 Produce all output only after both passes are complete.
 
-**Output is JSON only.** Do not produce any text narrative, summary, headers, or case descriptions. Output a single fenced code block labeled `ts_ui_data` containing the complete JSON. No text before it, no text after it. Everything staff needs is rendered by the artifact.
+**Output format.** Do not produce any text narrative, summary, headers, or case descriptions in the chat. Everything staff needs is rendered by the UI. Required outputs, all presented via present_files:
+- `ts_ui_data_YYYYMMDD.json` -- the complete case review JSON
+- `ts_ban_YYYYMMDD.csv` -- Suspension and above hosts (Email + Platform_Profile_ID__c)
+- `ts_dnn_YYYYMMDD.csv` -- Warning DNN and above hosts (Email + Platform_Profile_ID__c)
+
+All three files must be presented regardless of how Pass 2 was run (script built-in SF connection or MCP). If the script's wrapper was used to feed in MCP results, the CSV generation step must still be run explicitly. Never treat "no narrative text" as a reason to suppress the CSV files -- they are required outputs on every run.
 
 The JSON block powers the visual case review interface.
 
