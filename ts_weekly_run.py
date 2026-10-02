@@ -1983,13 +1983,17 @@ def run_pass2(pass1_output, sf):
         for i in range(0, len(ids_18), 50):
             batch = ids_18[i:i+50]
             ids_str = "', '".join(batch)
+            # today_str is this week's review date -- use +1 day to exclude current dinner
+            from datetime import timedelta
+            future_start = (REVIEW_DATE + timedelta(days=1)).strftime('%Y-%m-%d')
             future_soql = (
                 f"SELECT CampaignId, Campaign.Name, Campaign.StartDate, Campaign.Status, "
                 f"Campaign.Do_Not_Nourish__c, ContactId "
                 f"FROM CampaignMember "
                 f"WHERE Status = 'Host' "
                 f"AND ContactId IN ('{ids_str}') "
-                f"AND Campaign.StartDate >= {today_str} "
+                f"AND Campaign.StartDate >= {future_start} "
+                f"AND Campaign.Status NOT IN ('Not Approved', 'Sent Nourishment, Confirmation Email Sent', 'Aborted', 'Not Nourishing') "
                 f"ORDER BY Campaign.StartDate ASC "
                 f"LIMIT 200"
             )
