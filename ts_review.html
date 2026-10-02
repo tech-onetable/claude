@@ -278,8 +278,14 @@ function buildLoadView() {
     <div class="load-sub">Auto-loads <code>ts_ui_data.json</code> from the same folder, or paste the JSON below.</div>
     <button class="btn btn-primary" onclick="autoLoad()" style="margin-bottom:16px;">↻ Refresh from file</button>
     <div id="load-status"></div>
-    <textarea id="paste-input" placeholder="Or paste ts_ui_data JSON here..." style="width:100%;min-height:120px;padding:10px;border-radius:8px;border:0.5px solid var(--border);font-size:13px;font-family:monospace;resize:vertical;margin-bottom:10px;"></textarea>
-    <button class="btn btn-primary" onclick="loadFromPaste()" style="width:100%;">Load from paste</button>
+    <textarea id="paste-input" placeholder="Paste ts_ui_data JSON here..." style="width:100%;min-height:120px;padding:10px;border-radius:8px;border:0.5px solid var(--border);font-size:13px;font-family:monospace;resize:vertical;margin-bottom:10px;"></textarea>
+    <div style="display:flex;gap:8px;margin-bottom:6px">
+      <button class="btn btn-primary" onclick="loadFromPaste()" style="flex:1">Load from paste</button>
+      <label class="btn btn-secondary" style="flex:1;text-align:center;cursor:pointer;margin:0">
+        Upload JSON file
+        <input type="file" accept=".json" onchange="handleFileUpload(event)" style="display:none">
+      </label>
+    </div>
     ${state.runs.length>0?`<div style="margin-top:16px;font-size:13px;color:var(--text-sec);">Or <a href="#" onclick="switchView('history');return false;" style="color:var(--wine);">view a previous run</a>.</div>`:''}
   </div>`;
 }
