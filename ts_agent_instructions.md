@@ -883,18 +883,27 @@ Format:
 
 For cluster cases, produce a narrative cluster summary BEFORE the per-host blocks. This summary is written for a staff member who needs to understand what is happening and why, not for a data analyst. It must be in plain language. Structure:
 
-**What we think is happening:** One or two sentences describing the most likely scenario in plain terms. CRITICAL RULE: if any cluster member was previously suspended, or if this device was previously banned or tied to a prior cluster action, lead with that fact in sentence one -- before anything else. Example lead when prior action exists: "This is a continuation of an active fraud operation we have already taken action on. The device behind this cluster is the same one we banned dinners from as part of the [prior cluster] suspension -- [Name] was already suspended from that action, and the remaining hosts created new accounts on the same banned device." Do not bury prior action history. Example when no prior action: "Most likely a small group working together, creating host accounts and filling each dinner with guest accounts they also created, in order to collect Nourishment."
+**What we think is happening:** One or two sentences describing the most likely scenario in plain terms.
 
-**Why we think that:** Specific evidence organized by type, each with a concrete named example. Write in plain English, not signal names. Use the following categories where evidence exists:
+CRITICAL RULE 1 -- prior action leads: if any cluster member was previously suspended, or if this device was previously banned or tied to a prior cluster action, lead with that fact in sentence one -- before anything else. Example: "This is a continuation of an active fraud operation we have already taken action on. The device behind this cluster is the same one we banned dinners from as part of the [prior cluster] suspension -- [Name] was already suspended from that action, and the remaining hosts created new accounts on the same banned device."
+
+CRITICAL RULE 2 -- only describe hosts as coordinated if their guests are linked too: do not use "ring," "operation," or "group" for hosts unless each has guest-side evidence -- shared guest devices, recycled guest accounts, batch-created guest Profile IDs, or bounced guest emails. Hosts linked only by a shared host device or IP are "connected for awareness," not group members. The correct default framing when evidence is uneven: "[Host names]' dinners appear to be filled with guest accounts created on one device. [N] other hosts were also found on that device; their guest activity [does / does not] appear suspicious." Do not use the example framing "a small group working together" unless the guest-side evidence actually supports it.
+
+CRITICAL RULE 3 -- introduce connected hosts before drawing conclusions about them: if Pass 2 or a device file surfaces additional hosts beyond the scored cluster members, introduce each one by name first -- how they were found, whether they hosted this week, and whether their guest activity looks suspicious. State plainly when it does not. Keep them in a separate "Also on this device" section rather than folding them into "What we think is happening."
+
+**Why we think that:** Specific evidence organized by type, each with a concrete named example. Write in plain English, not signal names. Where evidence is strong for some hosts but not others, say so explicitly -- name which hosts the finding applies to. Use the following categories where evidence exists:
 - **Accounts made together:** Were host and guest accounts created in batches on the same days with sequential IDs? Name the hosts and dates.
 - **Shared connections:** What specific IPs or devices link these hosts? How many dinners? Is it unique to this group or widespread?
 - **Guest lists passed around:** Did guests move from one host to another? Were the same guests recycled across multiple hosts' dinners?
 - **Hosts at each other's dinners:** Did any hosts RSVP as guests to other group members' dinners?
 - **Device pattern:** What does the dinner creation device tell us? If it created dinners for suspended hosts, name them.
+- **Also on this device (if applicable):** Name any additional hosts found on the device who did not score. State whether their guest activity appears suspicious. Do not fold them into the main finding.
 
-**What we don't know:** Be explicit about uncertainty. Did these dinners happen? Is this one person or several? Are any guests real?
+**What we don't know:** Be explicit about uncertainty. Did these dinners happen? Is this one person or several? Are any guests real? If there are connected hosts whose status is unclear, name them and say what you don't know.
 
-This narrative should be written so that a staff member reading it could explain the situation to Amalia or on a Zoom call without re-reading the raw data. Do not lead with scores, signal names, or technical identifiers -- those belong in the signals section. Lead with what is happening in human terms.
+**Next steps (if applicable):** Flag any recommended actions beyond the standard consequence -- e.g. check-in with connected hosts, Data Team validation before action, Amalia review for edge cases.
+
+This narrative should be written so that a staff member reading it could explain the situation to Amalia or on a Zoom call without re-reading the raw data. Do not lead with scores, signal names, or technical identifiers -- those belong in the signals section. Lead with what is happening in human terms. Never introduce host names in the "What we think is happening" section without having first established who they are.
 
 ---
 
