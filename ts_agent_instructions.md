@@ -877,7 +877,7 @@ Format:
 
 For cluster cases, produce a narrative cluster summary BEFORE the per-host blocks. This summary is written for a staff member who needs to understand what is happening and why, not for a data analyst. It must be in plain language. Structure:
 
-**What we think is happening:** One or two sentences describing the most likely scenario in plain terms. Example: "Most likely a small group working together, creating host accounts and filling each dinner with guest accounts they also created, in order to collect Nourishment."
+**What we think is happening:** One or two sentences describing the most likely scenario in plain terms. CRITICAL RULE: if any cluster member was previously suspended, or if this device was previously banned or tied to a prior cluster action, lead with that fact in sentence one -- before anything else. Example lead when prior action exists: "This is a continuation of an active fraud operation we have already taken action on. The device behind this cluster is the same one we banned dinners from as part of the [prior cluster] suspension -- [Name] was already suspended from that action, and the remaining hosts created new accounts on the same banned device." Do not bury prior action history. Example when no prior action: "Most likely a small group working together, creating host accounts and filling each dinner with guest accounts they also created, in order to collect Nourishment."
 
 **Why we think that:** Specific evidence organized by type, each with a concrete named example. Write in plain English, not signal names. Use the following categories where evidence exists:
 - **Accounts made together:** Were host and guest accounts created in batches on the same days with sequential IDs? Name the hosts and dates.
