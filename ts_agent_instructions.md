@@ -160,7 +160,7 @@ Before closing out, query Salesforce directly to verify every action requested o
 - **Cases created:** `SELECT Id, CaseNumber, Subject, Status FROM Case WHERE ContactId = '[id]' ORDER BY CreatedDate DESC LIMIT 1` -- confirm case exists with correct subject
 - **DNN set:** `SELECT Id, Do_Not_Nourish__c FROM Contact WHERE Id = '[id]'` -- confirm true
 - **Suspended_Flag__c set:** `SELECT Id, Suspended_Flag__c FROM Contact WHERE Id = '[id]'` -- confirm true
-- **Future dinners moved to Not Approved:** query `SELECT Id, Name, Status FROM Campaign WHERE ContactId = '[id]' AND StartDate >= TODAY` and confirm all show Status = 'Not Approved' and Further_Review_Reason__c = 'Trust & Safety Issue'. This is now automated via sf_update_campaign but verify it landed.
+- **Future dinners moved to Not Approved:** query `SELECT Id, Name, Status FROM Campaign WHERE ContactId = '[id]' AND StartDate >= TODAY AND Status NOT IN ('Not Approved', 'Sent Nourishment, Confirmation Email Sent', 'Aborted')` -- this should return zero rows if all eligible dinners were moved. Confirm Status = 'Not Approved' and Further_Review_Reason__c = 'Trust & Safety Issue'. This is now automated via sf_update_campaign but verify it landed.
 
 Present as a brief checklist:
 - ✅ Case created: [Host name] — Case [number]
@@ -651,7 +651,7 @@ When staff approves a recommendation via the case review UI, the following actio
 **Warning DNN (scores 9-17, first offense)**
 - All of the above
 - Set Do_Not_Nourish__c = true on Contact via sf_update_contact_flags
-- Move all future dinners to Not Approved campaign status via sf_update_campaign (status = "Not Approved", further_review_reason = "Trust & Safety Issue") -- query future campaigns first: SELECT Id, Name, Status, StartDate FROM Campaign WHERE ContactId = '[id]' AND StartDate >= TODAY AND Status NOT IN ('Not Approved', 'Aborted')
+- Move all future dinners to Not Approved campaign status via sf_update_campaign (status = "Not Approved", further_review_reason = "Trust & Safety Issue") -- query future campaigns first: SELECT Id, Name, Status, StartDate FROM Campaign WHERE ContactId = '[id]' AND StartDate >= TODAY AND Status NOT IN ('Not Approved', 'Sent Nourishment, Confirmation Email Sent', 'Aborted')
 - Email from: community@onetable.org, reply-to: trustandsafety@onetable.org
 - Tone: friendly, adds note that Nourishment is paused until host connects
 - Zoom required (camera on)
