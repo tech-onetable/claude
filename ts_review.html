@@ -509,7 +509,7 @@ function buildCaseCard(c) {
             // Try bullets first, then narrative summary
             const cb = (c.bullets||[]).find(b=>b.startsWith('**Confidence:'));
             const src = cb || c.narrative_summary || '';
-            const m = src.match(/\*\*Confidence:\s*([\w]+)[\.\*]/);
+            const m = src.match(/\*\*Confidence:\s*(High|Medium|Low)/i);
             if(!m) return '';
             const lvl=m[1];
             const col=lvl==='High'?'var(--wine)':lvl==='Medium'?'var(--amber-dark)':'var(--text-sec)';
