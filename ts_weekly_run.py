@@ -1710,12 +1710,21 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
 
         if crossover_parts:
             guest_breakdown = 'Same device ' + '; '.join(crossover_parts)
+        elif hosts_with_guest_rsvps:
+            # Device only appears in guest RSVPs -- summarize concentration per host
+            conc_parts = []
+            for h in hosts_with_guest_rsvps:
+                import re as _re2
+                m = _re2.search(r'(\d+/\d+)\s+guests', h.get('device_action_str',''))
+                if m:
+                    conc_parts.append(f"{h['name'].split()[0]} ({m.group(1)})")
+            names_str = ', '.join(h['name'].split()[0] for h in hosts_with_guest_rsvps)
+            conc_str = ', '.join(conc_parts) if conc_parts else names_str
+            guest_breakdown = f"Same device RSVPd guests at all {len(members)} dinners: {conc_str}"
         else:
-            # Fallback to old format
             guest_breakdown_parts = []
             for h in cluster_hosts:
-                action = h.get('device_action_str', 'linked via device fingerprint')
-                guest_breakdown_parts.append(f"{h['name'].split()[0]}: {action}")
+                guest_breakdown_parts.append(f"{h['name'].split()[0]}: {h.get('device_action_str','linked via device fingerprint')}")
             guest_breakdown = ' · '.join(guest_breakdown_parts)
         host_device_str = ""  # now embedded in device_action_str per host
 
