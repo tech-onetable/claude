@@ -544,6 +544,32 @@ function buildCaseBody(c, a, actioned, displayTier) {
   return `<div class="case-body">
     ${c.is_cluster&&c.cluster_note?`<div class="cluster-banner" style="font-size:13px;line-height:1.6">${md(c.cluster_note)}</div>`:''}
     ${c.is_cluster&&c.connected_unscored?`<div style="background:#FEF3C7;border-left:3px solid #D97706;border-radius:0 6px 6px 0;padding:10px 14px;margin:8px 0;font-size:13px;line-height:1.6;color:#92400E"><strong>🔍 Unscored hosts tied to this network:</strong> ${md(c.connected_unscored)}</div>`:''}
+    ${c.is_cluster&&c.device_table&&c.device_table.length>0?`
+      <div class="section-label" style="margin-top:12px">Device breakdown</div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:8px">
+        <thead><tr style="text-align:left;border-bottom:1px solid var(--border);color:var(--text-sec)">
+          <th style="padding:5px 8px;font-weight:600">Device</th>
+          <th style="padding:5px 8px;font-weight:600">Accounts on it</th>
+          <th style="padding:5px 8px;font-weight:600">Role this week</th>
+          <th style="padding:5px 8px;font-weight:600">Assessment</th>
+        </tr></thead>
+        <tbody>${c.device_table.map(d=>{
+          const isPrimary = d.assessment&&d.assessment.toLowerCase().includes('primary');
+          const isCross = d.assessment&&d.assessment.toLowerCase().includes('cross-host');
+          const isSupport = d.assessment&&d.assessment.toLowerCase().includes('supporting');
+          const isClean = d.assessment&&d.assessment.toLowerCase().includes('clean');
+          const assessColor = isPrimary?'var(--wine)':isCross?'#b45309':isSupport?'var(--text-sec)':'#166534';
+          const fp = d.fingerprint||'';
+          const shortFp = fp.length>16?fp.slice(0,16)+'...':fp;
+          return `<tr style="border-bottom:0.5px solid var(--border)">
+            <td style="padding:6px 8px"><a class="purple-link" href="${d.url||'#'}" target="_blank" style="font-family:monospace;font-size:11px">${shortFp}</a></td>
+            <td style="padding:6px 8px;color:var(--text-sec)">${d.accounts||'—'}</td>
+            <td style="padding:6px 8px;color:var(--text-sec)">${d.role||'—'}</td>
+            <td style="padding:6px 8px;font-weight:600;color:${assessColor}">${d.assessment||'—'}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>
+    `:''}
     ${c.is_cluster?`<div style="font-size:12px;color:var(--text-sec);margin:4px 0 8px;padding:0 2px">Score shown is the highest individual score — not a combined total.</div>`:''}
     ${c.is_cluster&&c.cluster_hosts?.length?`
       <div class="section-label">Hosts</div>
