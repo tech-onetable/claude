@@ -1624,10 +1624,8 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
         # Determine who is sharing the device (hosts, guests, or both)
         fp_link = FP_BASE.format(fp) if fp else ''
         # Collect dinner creation FPs and guest RSVP FPs separately
-        creation_fps = set()
-        rsvp_fps = set()
-        if fp:
-            creation_fps.add(fp)  # primary cluster FP defaults to creation
+        # Track which FPs appear on which hosts -- only show FPs shared across 2+ hosts
+        fp_to_hosts = {}  # fp -> set of cids that use it
         host_fps_in_cluster = []
         guest_fps_in_cluster = []
         for cid in members:
@@ -1637,37 +1635,52 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
             for fp_field in ('Dinner Created Device ID', 'Profile Created Device ID'):
                 val = str(host_row.get(fp_field, '') or '').strip()
                 if val and val not in ('nan', 'None') and len(val) > 8:
-                    creation_fps.add(val)
-            # Guest RSVP devices -- find the dominant FP across guests
+                    fp_to_hosts.setdefault(val, set()).add(cid)
+            # Guest RSVP devices -- only if meaningfully concentrated (25%+ of guests)
             guest_fp_counts = {}
             for g in camp.get('guests', []):
                 for fp_field in ('RSVP Device Fingerprint ID', 'Device ID'):
                     val = str(g.get(fp_field, '') or '').strip()
                     if val and val not in ('nan', 'None') and len(val) > 8:
                         guest_fp_counts[val] = guest_fp_counts.get(val, 0) + 1
-            # Only add guest FPs that are meaningfully concentrated (25%+ of guests)
             n_guests = len([g for g in camp.get('guests', []) if g.get('Member Status','') != 'Host'])
             for gfp, count in guest_fp_counts.items():
                 if n_guests > 0 and count / n_guests >= 0.25:
-                    rsvp_fps.add(gfp)
+                    fp_to_hosts.setdefault(gfp, set()).add(cid)
             if host_row.get('RSVP Device Fingerprint ID','').strip() == fp:
                 host_fps_in_cluster.append(pass1_output['campaigns'][cid]['host_name'])
             for g in camp.get('guests', []):
                 if g.get('RSVP Device Fingerprint ID','').strip() == fp:
                     guest_fps_in_cluster.append(pass1_output['campaigns'][cid]['host_name'])
                     break
-        # Build linked device strings -- creation and RSVP separately
-        creation_fps.discard('')
-        rsvp_fps.discard('')
-        rsvp_only_fps = rsvp_fps - creation_fps  # FPs used for RSVPs but not dinner creation
-        all_cluster_fps = creation_fps | rsvp_fps
+
+        # Only include FPs seen on 2+ hosts -- single-host FPs are not cluster evidence
+        shared_fps = {f for f, hosts in fp_to_hosts.items() if len(hosts) >= 2}
+        if fp:
+            shared_fps.add(fp)  # always include primary cluster FP
+
+        # Split into creation vs RSVP-only
+        all_creation_fps = set()
+        for cid in members:
+            host_row = (campaigns[cid].get('host') or {})
+            for fp_field in ('Dinner Created Device ID', 'Profile Created Device ID'):
+                val = str(host_row.get(fp_field, '') or '').strip()
+                if val in shared_fps:
+                    all_creation_fps.add(val)
+
+        creation_fps = all_creation_fps & shared_fps
+        rsvp_only_fps = shared_fps - creation_fps
+        all_cluster_fps = shared_fps
+
         def fp_link_str(fps): return ' · '.join(f"[{f[:16]}...]({FP_BASE.format(f)})" for f in sorted(fps))
         if creation_fps and rsvp_only_fps:
             fp_links_str = f"Creation: {fp_link_str(creation_fps)} · RSVPs: {fp_link_str(rsvp_only_fps)}"
         elif creation_fps:
             fp_links_str = fp_link_str(creation_fps)
+        elif rsvp_only_fps:
+            fp_links_str = fp_link_str(rsvp_only_fps)
         else:
-            fp_links_str = fp_link_str(all_cluster_fps)
+            fp_links_str = f"[{fp[:16]}...]({FP_BASE.format(fp)})" if fp else ''
         has_host_fp = len(host_fps_in_cluster) > 0
         has_guest_fp = len(guest_fps_in_cluster) > 0
         if has_host_fp and has_guest_fp:
