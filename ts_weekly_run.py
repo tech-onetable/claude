@@ -1683,11 +1683,40 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
         # Build device sharing detail bullets -- frame positively (what IS happening)
         host_on_device_names = [h['name'].split()[0] for h in cluster_hosts if h['host_on_device']]
         # Build TL;DR cluster note using explicit device actions per host
-        guest_breakdown_parts = []
-        for h in cluster_hosts:
-            action = h.get('device_action_str', 'linked via device fingerprint')
-            guest_breakdown_parts.append(f"{h['name'].split()[0]}: {action}")
-        guest_breakdown = ' · '.join(guest_breakdown_parts)
+        # Summarise what the shared device actually did across hosts
+        # Lead with the crossover (why this is a cluster), then per-host concentrations
+        hosts_with_dinner_creation = [h for h in cluster_hosts if 'dinner created on this device' in h.get('device_action_str','')]
+        hosts_with_guest_rsvps = [h for h in cluster_hosts if 'guests RSVPd from this device' in h.get('device_action_str','') or 'host RSVPd from this device' in h.get('device_action_str','')]
+        hosts_with_account_creation = [h for h in cluster_hosts if 'account created on this device' in h.get('device_action_str','')]
+
+        crossover_parts = []
+        if len(hosts_with_dinner_creation) > 1:
+            names = ', '.join(h['name'].split()[0] for h in hosts_with_dinner_creation)
+            crossover_parts.append(f"created dinners for {names}")
+        if len(hosts_with_guest_rsvps) > 1:
+            # Build concentration summary
+            conc_parts = []
+            for h in hosts_with_guest_rsvps:
+                # Extract "X/Y guests" from device_action_str
+                import re as _re2
+                m = _re2.search(r'(\d+/\d+)\s+guests', h.get('device_action_str',''))
+                if m:
+                    conc_parts.append(f"{h['name'].split()[0]} ({m.group(1)})")
+            if conc_parts:
+                crossover_parts.append(f"RSVPd guests across multiple dinners: {', '.join(conc_parts)}")
+        if len(hosts_with_account_creation) > 1:
+            names = ', '.join(h['name'].split()[0] for h in hosts_with_account_creation)
+            crossover_parts.append(f"created accounts for {names}")
+
+        if crossover_parts:
+            guest_breakdown = 'Same device ' + '; '.join(crossover_parts)
+        else:
+            # Fallback to old format
+            guest_breakdown_parts = []
+            for h in cluster_hosts:
+                action = h.get('device_action_str', 'linked via device fingerprint')
+                guest_breakdown_parts.append(f"{h['name'].split()[0]}: {action}")
+            guest_breakdown = ' · '.join(guest_breakdown_parts)
         host_device_str = ""  # now embedded in device_action_str per host
 
         cases.append({
