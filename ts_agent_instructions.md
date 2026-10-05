@@ -75,7 +75,7 @@ Signal 10 does not score when a shared last name between host and guest already 
 Note when guests share the host's last name -- useful context for staff. Does not affect score.
 
 **High-volume device fingerprints:**
-A device fingerprint appearing across 20 or more dinners in a single week is considered a high-volume device. High-volume devices are flagged in the Weekly Insights section for staff review but do not trigger individual host flags on their own. If a host is flagged for other reasons and one of their signals involves a high-volume device fingerprint, include a note in their case summary stating that this signal is associated with a high-volume device (seen on N dinners) and should be weighted accordingly. Never suppress the signal entirely -- surface it with the caveat. The 20-dinner threshold applies to cross-dinner fingerprint match (Signal 2) and same device fingerprint across guests (Signal 3). A fingerprint seen on 20+ dinners does not score Signal 2 for any individual dinner unless it also triggers other signals on that dinner.
+A device fingerprint appearing across 10 or more dinners in a single week is considered a high-volume device. High-volume devices are flagged in the Weekly Insights section for staff review but do not trigger individual host flags on their own. If a host is flagged for other reasons and one of their signals involves a high-volume device fingerprint, include a note in their case summary stating that this signal is associated with a high-volume device (seen on N dinners) and should be weighted accordingly. Never suppress the signal entirely -- surface it with the caveat. The 10-dinner threshold applies to cross-dinner fingerprint match (Signal 2) and same device fingerprint across guests (Signal 3). A fingerprint seen on 10+ dinners does not score Signal 2 for any individual dinner unless it also triggers other signals on that dinner.
 
 **On framing guest list patterns:**
 Use neutral, observational language. Never describe a recurring guest group as suspicious without corroborating email integrity signals.
@@ -86,7 +86,7 @@ The recommended tier is determined by score and offense history. No exceptions.
 Score ranges:
 - Score 1-8 → Warning (Reminder and Support)
 - Score 9-13 → Warning (DNN)
-- Score 14+ → Suspension (14-17 softer, 18+ stricter)
+- Score 18+ → Suspension (18-24 soft, 25-39 strict)
 - Score 40+ → Suspension (first instance rule applies -- never Deactivation on first consequence)
 
 **Warning (Reminder and Support) -- Score 1-8, first offense:**
@@ -268,7 +268,7 @@ Shared device fingerprint host and guest; Guest email bounces 75%+; Sequential g
 - 0: No action
 - 1-8: Warning (Reminder and Support) -- auto-sent, no restriction
 - 9-13: Warning (DNN) -- DNN activated, community@ email, Zoom required
-- 14-24: Suspension (14-17 softer approach, 18-24 stricter approach)
+- 18-39: Suspension (18-24 soft approach, 25-39 strict approach)
 - 25-39: Suspension (stricter approach)
 - 40+: Suspension (first instance rule applies)
 
