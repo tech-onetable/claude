@@ -105,7 +105,7 @@ def parse_csv(contact_path, lead_path=None):
         "Email","Lead: Created Date","Mandrill Bounce Time + Date",
         # New device/IP fields (populated from 2026-08-21 onward; legacy RSVP fields empty from that date)
         "Device ID","IP Address Reservation","Platform ID","Profile Created Device ID",
-        "Mailing Zip/Postal Code"
+        "Mailing Zip/Postal Code","Area"
     }
     ONETABLE_DOMAIN = 'onetable.org'
 
@@ -1580,6 +1580,7 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
                 'future_dinners': str(len(sf.get('_future_dinners', []))),
                 'address': addr,
                 'address_type': addr_type,
+                'area': camp_host.get('Area', '') or '',
                 'key_signals': ', '.join(
                     v['name'] for v in sorted(d['signals'].values(),
                     key=lambda x: -x['score_contribution'])[:2] if v['triggered']
