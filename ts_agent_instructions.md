@@ -436,6 +436,8 @@ ContactId, Contact.FirstName, Contact.LastName, Campaign_Member_Email__c, Platfo
 
 **Guest pool reappearance check:** If new host (within 90 days), check whether any guest Profile IDs appeared on a recently deactivated host's dinners in the prior 90 days.
 
+**Device table:** For confirmed clusters where you have pulled backend device user lists, populate `device_table` with one row per device. Assess each device's role: what accounts are on it (from the device file), what it did in the CSV this week (created dinners, RSVPd guests, or both), and an assessment (Primary problem / Problem: cross-host link / Supporting link / Clean on its own). Only include devices meaningfully linked to the cluster -- omit devices unique to a single host with no cross-host role. A device is "Primary problem" if it RSVPd guests across multiple hosts. It is "Problem: cross-host link" if it holds accounts for or created dinners across multiple hosts. It is "Supporting link" if it ties two hosts together but is not the main guest-RSVP device. It is "Clean on its own" if it appears in the data but has no cross-host connection. If you have not pulled device files, leave `device_table` as an empty array.
+
 **Cluster address type review:** For confirmed clusters, review the dinner address for each member and populate `address_assessment` on each cluster host entry. Use your judgment: "Residential" if the address looks like a home (apartment, house number, residential street), "Commercial" if it clearly suggests a non-home venue (retail center, office suite, coworking space, gym, synagogue), "Unknown" if city-only or insufficient to judge. Flag in the cluster narrative if any member's address appears commercial -- this can indicate the host is not operating a real home Shabbat dinner.
 
 **Cross-dinner sequential Profile ID check (cluster signal):**
@@ -519,6 +521,15 @@ The JSON block powers the visual case review interface.
       },
       "narrative_summary": "[For cluster cases only: plain-language narrative produced during Pass 2 investigation. Three sections: What we think is happening (1-2 sentences), Why we think that (specific evidence with named examples organized by type -- accounts made together, shared connections, guest lists passed around, hosts at each other's dinners, device pattern), What we don't know (explicit uncertainty). Written for staff, not data analysts. Null for individual cases or before Pass 2 runs.]",
       "cluster_note": "[Cluster banner text if is_cluster = true, else null]",
+      "device_table": [
+        {
+          "fingerprint": "[full 32-char fingerprint]",
+          "url": "[https://api.onetable.org/cp/device_activity/details?fingerprint=...]",
+          "accounts": "[plain-language summary of what accounts are on this device from the backend user list -- e.g. '26 guest accounts, 1 banned, none of the 5 hosts']",
+          "role": "[what this device did in the CSV this week -- e.g. 'RSVP device for all 49 guests at all 5 dinners' or 'Created Fournier and Morel dinners']",
+          "assessment": "[Primary problem / Problem: cross-host link / Supporting link / Clean on its own]"
+        }
+      ],
       "connected_unscored": "[Required for cluster cases where Pass 2 identifies hosts connected to the cluster who scored 0 and are not in the cases list. Plain text, staff-readable. Include: host name with SF Contact link, application date, why they appear connected (shared device/IP/domain/guest pool), what action is recommended and by when. Example: 'Shad Emmerich (applied 2026-09-11) and Glen Nolan (applied 2026-09-21) use astermail.org host emails, have 10/10 and 9/9 guests on suspicious domains, and share guest IP 23.234.80.19 with guests at Hadas Moran and Cory Heiden dinners. Both scored 0 and are not in the cases list; each has a 10/09 dinner Pending. Recommend review before Wednesday Nourishment run.' Null if no connected unscored hosts found.]",
       "cluster_hosts": [
         { "name": "[Host name]", "sf_url": "[SF Contact URL]", "score": 0, "nourishment_received": "[amount or pending]", "future_dinners": "0", "address": "[dinner address from report]", "address_assessment": "[Residential / Commercial / Unknown -- agent judgment during Pass 2]", "key_signals": "[brief signal summary]" }
