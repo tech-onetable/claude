@@ -883,6 +883,8 @@ Format:
 
 For cluster cases, produce a narrative cluster summary BEFORE the per-host blocks. This summary is written for a staff member who needs to understand what is happening and why, not for a data analyst. It must be in plain language. Structure:
 
+**Confidence: [High/Medium/Low].** [One sentence explaining the confidence level -- e.g. "Hard bounces confirm guest emails are non-existent." or "Device link is strong but no bounce data to confirm fake guests."] This must be the first line of the narrative_summary, in exactly this format, so the review UI can display it in the case header.
+
 **What we think is happening:** One or two sentences describing the most likely scenario in plain terms.
 
 CRITICAL RULE 1 -- prior action leads: if any cluster member was previously suspended, or if this device was previously banned or tied to a prior cluster action, lead with that fact in sentence one -- before anything else. Example: "This is a continuation of an active fraud operation we have already taken action on. The device behind this cluster is the same one we banned dinners from as part of the [prior cluster] suspension -- [Name] was already suspended from that action, and the remaining hosts created new accounts on the same banned device."
