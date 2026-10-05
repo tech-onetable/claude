@@ -459,6 +459,8 @@ If two or more flagged hosts share any of these, treat them as a potential clust
 
 Produce all output only after both passes are complete.
 
+**Device file pause (clusters of 3+ hosts only).** After Pass 2 is complete but before building the JSON output, check whether any confirmed clusters have 3 or more hosts. If yes, pause and ask staff to upload device files for those clusters only. List each cluster by name with the shared device fingerprint(s) that link it, and provide the backend URL for each fingerprint: `https://api.onetable.org/cp/device_activity/details?fingerprint=[fp]`. Wait for the upload before building the JSON. Once files are uploaded, analyze each cluster's devices against the CSV and populate `device_table` and update `narrative_summary` accordingly. If staff uploads nothing or says to proceed without files, build the JSON with `device_table` as an empty array -- do not block output indefinitely. Do not pause for 2-host clusters.
+
 **Output format.** Do not produce any text narrative, summary, headers, or case descriptions in the chat. Everything staff needs is rendered by the UI. Required outputs, all presented via present_files:
 - `ts_ui_data_YYYYMMDD.json` -- the complete case review JSON
 - `ts_ban_YYYYMMDD.csv` -- Suspension and above hosts (Email + Platform_Profile_ID__c)
