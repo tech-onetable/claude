@@ -42,7 +42,7 @@ All emails are created as drafts first. Staff reviews and sends. The agent never
 ## CRITICAL DATA RULES
 
 1. Always query Salesforce directly for current data on flagged hosts. Never assume report data is complete -- it is a first-pass triage tool only.
-2. Always state data provenance -- distinguish "from report" from "just queried from Salesforce."
+2. Always state data provenance -- distinguish "from report" from "just queried from Salesforce." Every factual claim in a Pass 2 analysis or investigation must name its source inline: "per device file," "per SF query," "per CSV," "per ban log." Never state a fact as confirmed if it came from only one source without cross-referencing -- especially for ban status, RSVP status, or identity. Example of what went wrong: stating David Weill "RSVPd to Daham's dinner" (true, per CSV) and "is Banned" (per device file only, not confirmed in SF) as if both were equally verified facts led to a misdiagnosis. The RSVP was a plus-one Lead, not a confirmed RSVP, and the ban turned out to be a wrong-ID error. State the source and the confidence separately: "David Weill appears as a plus-one Lead at Daham's dinner (per CSV) and shows Banned status on device export (per device file, not confirmed in SF)."
 3. Never attribute guests to a host without an explicit ContactId → CampaignId match from the query.
 4. If the MCP is unavailable or a query returns empty, say so explicitly. Never fill in from context.
 5. Re-query before producing any score or recommendation on flagged hosts.
@@ -161,6 +161,8 @@ Before closing out, query Salesforce directly to verify every action requested o
 - **DNN set:** `SELECT Id, Do_Not_Nourish__c FROM Contact WHERE Id = '[id]'` -- confirm true
 - **Suspended_Flag__c set:** `SELECT Id, Suspended_Flag__c FROM Contact WHERE Id = '[id]'` -- confirm true
 - **Future dinners moved to Not Approved:** query `SELECT Id, Name, Status FROM Campaign WHERE ContactId = '[id]' AND StartDate >= TODAY AND Status NOT IN ('Not Approved', 'Sent Nourishment, Confirmation Email Sent', 'Aborted')` -- this should return zero rows if all eligible dinners were moved. Confirm Status = 'Not Approved' and Further_Review_Reason__c = 'Trust & Safety Issue'. This is now automated via sf_update_campaign but verify it landed.
+- **Suspended/DNN consistency:** for any host set to Suspended this session, confirm DNN is also set. A host that is Suspended but not DNN is an incomplete action. Query `SELECT Id, Name, Do_Not_Nourish__c, Suspended_Flag__c FROM Contact WHERE Id IN ('[ids]')` and flag any row where Suspended_Flag__c = true AND Do_Not_Nourish__c = false.
+- **Case status:** for any case created this session, confirm Coaching_Status__c is not stuck at New when it should have progressed. Flag cases still at New after a bulk action for manual follow-up.
 
 Present as a brief checklist:
 - ✅ Case created: [Host name] — Case [number]
@@ -467,6 +469,8 @@ Produce all output only after both passes are complete.
 - `ts_dnn_YYYYMMDD.csv` -- Warning DNN and above hosts (Email + Platform_Profile_ID__c)
 
 All three files must be presented regardless of how Pass 2 was run (script built-in SF connection or MCP). If the script's wrapper was used to feed in MCP results, the CSV generation step must still be run explicitly. Never treat "no narrative text" as a reason to suppress the CSV files -- they are required outputs on every run.
+
+**Ban CSV spot-check (required before presenting ban CSV):** Before presenting `ts_ban_YYYYMMDD.csv`, pick 2-3 rows at random and verify each one via Salesforce MCP: query the Contact by email and confirm the Platform_Profile_ID__c in the CSV matches what Salesforce returns for that email. If email and ID belong to different people, or if a Contact cannot be found for the email, stop and flag the mismatch before presenting the file. Never present the ban CSV without completing this check -- the 163 wrong bans on 2026-10-05 were caused by an undetected ID type mismatch that a row-one check would have caught.
 
 The JSON block powers the visual case review interface.
 
