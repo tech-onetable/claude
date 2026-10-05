@@ -548,7 +548,7 @@ function buildCaseBody(c, a, actioned, displayTier) {
     ${c.is_cluster&&c.cluster_hosts?.length?`
       <div class="section-label">Hosts</div>
       <table class="cluster-table">
-        <thead><tr><th>Host</th><th>Email</th><th>Score</th><th>Nourishment</th><th>Dinner</th><th>Address</th><th>Location type</th><th>Linked via</th><th>Key signals</th></tr></thead>
+        <thead><tr><th>Host</th><th>Email</th><th>Score</th><th>Nourishment</th><th>Dinner</th><th>Address</th><th>Area</th><th>Location type</th><th>Linked via</th><th>Key signals</th></tr></thead>
         <tbody>${c.cluster_hosts.map(h=>{
           const dinnerLinks = [
             h.campaign_url ? `<a class="purple-link" href="${h.campaign_url}" target="_blank">SF</a>` : '',
@@ -563,6 +563,7 @@ function buildCaseBody(c, a, actioned, displayTier) {
           <td>${h.score}</td><td>${h.nourishment_received}</td>
           <td style="font-size:12px">${dinnerLinks||'—'}</td>
           <td style="font-size:12px;color:var(--text-sec)">${h.address||'—'}</td>
+          <td style="font-size:12px;color:var(--text-sec)">${h.area||'—'}</td>
           <td style="font-size:11px">
             <select onchange="state.actionState['${addrKey}']=this.value;saveRuns(state.runs);this.style.color=this.value.includes('not real')?'#b91c1c':this.value.includes('real')?'#166534':'var(--text-sec)'" style="font-size:11px;border:0.5px solid var(--border);border-radius:4px;padding:2px 4px;background:var(--card);color:${addrColor};max-width:140px">
               <option value="">— select —</option>
