@@ -8,9 +8,9 @@ Usage:
   python3 ts_weekly_run.py <combined_csv_path> [--no-sf]
   
   Combined CSV contains both Contact and Lead guest rows in one file.
-  Contact rows are identified by populated Contact ID field.
-  Lead rows (plus-ones) are identified by populated Lead ID field and no Contact ID.
-  Lead rows never have Platform Profile IDs and are excluded from sequential PID calculations.
+  Contact rows have Contact IDs starting with 003.
+  Lead rows (plus-ones) have Contact IDs starting with 00Q -- they are never profiled and excluded from PID calculations.
+  Platform Profile ID of 0 or blank = no profile (plus-one or unprofiled guest).
   
   Legacy two-file mode still supported:
   python3 ts_weekly_run.py <contact_csv_path> <lead_csv_path> [--no-sf]
@@ -96,7 +96,7 @@ def parse_csv(contact_path, lead_path=None):
         "Campaign ID","Start Date","Campaign Status","Address","Member Status",
         "Platform Profile ID","First Name","Last Name","Host?","Campaign Member Email",
         "Mandrill Bounce Reason","Mandrill Bounce Time/Date","RSVP Device Fingerprint ID",
-        "RSVP IP","Contact ID","Lead ID","Do Not Nourish","Suspended Flag","Problem Flag",
+        "RSVP IP","Contact ID","Do Not Nourish","Suspended Flag","Problem Flag",
         "Problem Flag Reason","AI Not Pass Summary","Further Review Reason",
         "Unresolved Further Review Reason","Dinner Privacy","Host Application Date OLD",
         "Host Application Date","Campaign Name","FYI Flag Reason",
@@ -128,8 +128,9 @@ def parse_csv(contact_path, lead_path=None):
                     r['RSVP IP'] = r['IP Address Reservation']
                 # Classify as Lead if Lead ID present and no Contact ID
                 contact_id = r.get('Contact ID', '').strip()
-                lead_id = r.get('Lead ID', '').strip()
-                r['is_lead'] = bool(lead_id and not contact_id)
+                # With single-column format, Lead IDs start with 00Q, Contact IDs with 003
+                r['is_lead'] = contact_id.startswith('00Q') if contact_id else False
+                # Normalize: leads store ID in contact_id field, blank Lead ID column no longer needed
                 # Lead guests never have Profile IDs
                 if r['is_lead']:
                     r['Platform Profile ID'] = ''
@@ -349,7 +350,9 @@ def score_campaign(cid, camp, cross_dinner, high_volume, campaigns=None):
     pids = []
     for g in guests:
         try:
-            pids.append((int(float(g.get('Platform Profile ID', ''))), g))
+            pid = int(float(g.get('Platform Profile ID', '') or ''))
+            if pid > 0:  # 0 = no profile (older Leads report format), blank = plus-one
+                pids.append((pid, g))
         except (ValueError, TypeError):
             pass
     profiled_n = len(pids)  # denominator = profiled guests ONLY (plus-ones excluded)
