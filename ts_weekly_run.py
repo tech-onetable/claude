@@ -332,17 +332,21 @@ def score_campaign(cid, camp, cross_dinner, high_volume, campaigns=None):
         if domain in SUSPICIOUS_DOMAINS and reason.strip(): return True
         return False
 
-    bounced = [g for g in guests if is_bounce(g)]
-    if n > 0:
-        pct = len(bounced) / n
+    # Leads (plus-ones) have no bounce field -- exclude from denominator, same logic as PID.
+    # An absent signal on a lead is unconfirmed, not negative.
+    contact_guests = [g for g in guests if not g.get('is_lead')]
+    n_contacts = len(contact_guests)
+    bounced = [g for g in contact_guests if is_bounce(g)]
+    if n_contacts > 0:
+        pct = len(bounced) / n_contacts
         if pct >= 0.75:
             add_sig('sig12',
-                    f"Guest email bounces (75%+): {len(bounced)}/{n} ({round(100*pct)}%) -- any bounce type",
-                    f"{round(100*pct)}% ({len(bounced)}/{n} guests)", "75%+", True)
+                    f"Guest email bounces (75%+): {len(bounced)}/{n_contacts} ({round(100*pct)}%) -- plus-ones excluded from denominator",
+                    f"{round(100*pct)}% ({len(bounced)}/{n_contacts} contacts)", "75%+", True)
         elif pct >= 0.50:
             add_sig('sig12_low',
-                    f"Guest email bounces (50-74%): {len(bounced)}/{n} ({round(100*pct)}%) -- any bounce type",
-                    f"{round(100*pct)}% ({len(bounced)}/{n} guests)", "50-74% (needs pairing)", True)
+                    f"Guest email bounces (50-74%): {len(bounced)}/{n_contacts} ({round(100*pct)}%) -- plus-ones excluded from denominator",
+                    f"{round(100*pct)}% ({len(bounced)}/{n_contacts} contacts)", "50-74% (needs pairing)", True)
 
     # ── Signal 14: Sequential PIDs (profiled guests only as denominator) ────────
     # 55-99% of profiled = weight 3 corroborating (sig14_low, can score standalone)
