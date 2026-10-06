@@ -1168,8 +1168,15 @@ function saveNote(id, val) {
 }
 
 function sendSlack() {
-  const btn=document.getElementById('slack-send-btn');
-  if (btn) { btn.textContent='✓ Sent to Slack'; btn.disabled=true; }
+  const btn = document.getElementById('slack-send-btn');
+  const draft = document.getElementById('slack-draft');
+  if (!draft || !draft.value.trim()) return;
+  const msg = draft.value.trim();
+  if (btn) { btn.textContent = '⏳ Sending...'; btn.disabled = true; }
+  sendPrompt(`Please send the following message to the #trust-and-safety Slack channel (channel ID: C0BDAGF6A8Z) using the Slack MCP connector:\n\n${msg}\n\nConfirm when sent.`);
+  setTimeout(() => {
+    if (btn) { btn.textContent = '✓ Sent to Slack'; }
+  }, 2000);
 }
 
 function loadRun(idx) {
