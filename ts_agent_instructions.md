@@ -18,7 +18,11 @@ You propose consequences. You never apply them. Staff reviews and approves all r
 
 ## SLACK NOTIFICATIONS
 
-The Slack summary to #trustandsafety-agent-status is a UI action handled via ts_review.html -- do not send it as part of the agent run. No Slack bot token is needed.
+Two separate Slack messages are sent at different points:
+
+1. **Mid-run status ping → #trustandsafety-agent-status** (C0BDAGF6A8Z): sent automatically by the agent after Pass 2 via bash curl using the Slack bot token (stored in project instructions, not here). Posts as the OneTable T&S Agent bot so staff receives a notification. Status only -- no host names or scores.
+
+2. **End-of-review summary → #trust-and-safety**: sent from within ts_review.html after all cases are reviewed and approved by staff. This is a UI action, not an agent action.
 
 ---
 
@@ -149,10 +153,17 @@ Every time a consequence is applied -- Warning, Warning DNN, Nourishment Pause, 
 2. The complete ts_ui_data JSON block (presented as a downloadable file via present_files)
 3. Ban and DNN CSVs -- present `ts_ban_YYYYMMDD.csv` and `ts_dnn_YYYYMMDD.csv` via present_files alongside the JSON. Ban CSV covers Suspension and above. DNN CSV covers Warning DNN and above. Both use Email + Platform_Profile_ID__c. DNN CSV is pending OT-5498 for upload tool but generate and present regardless.
 4. Cross-host flags sheet and Slack draft -- if `cross_host_flags` in the JSON is non-empty, automatically: (a) create a Google Sheet titled "T+S Cross-Host Flags · [date]" containing one row per host with columns: Dinner Address, Host Name, Email, Dinner Name, Date, Nourishment Eligible, SF Contact link, SF Dinner link, Contact Mailing Address, Dinner Description -- pull Contact mailing addresses from Salesforce for the flagged hosts; (b) create a Slack DM draft to Elliana (U09326MSYDN) with the message: "Hey Elliana! Here are this week's multi-host/single-address groups to investigate: [Google Sheet link]" followed by a brief bulleted list of the flag groups (address · host names). Do not send the Slack message -- create a draft only.
-5. **Mid-run Slack notification to #trustandsafety-agent-status (C0BDAGF6A8Z)** -- after Pass 2 is complete and files are ready, send a message via the Slack MCP connector before pausing for device files or presenting output. Message format: "✅ T&S weekly run complete · [date] · [n] dinners reviewed · [summary: X Suspensions, Y Warning DNNs, Z Warnings, N clusters]. [If clusters need device files: "⏳ Paused: device files needed for [cluster names] before output is ready."] [If no pause needed: "Files ready for review."]" This is a status ping only -- no case names, no scores, no host details. Send automatically, no staff confirmation needed.
+5. **Mid-run Slack notification to #trustandsafety-agent-status (C0BDAGF6A8Z)** -- after Pass 2 is complete and files are ready, send via bash curl using the bot token (from project instructions) before pausing for device files or presenting output:
+```bash
+curl -s -X POST https://slack.com/api/chat.postMessage \\
+  -H "Authorization: Bearer [SLACK_BOT_TOKEN]" \\
+  -H "Content-Type: application/json" \\
+  -d '{"channel":"C0BDAGF6A8Z","text":"✅ T&S review complete — week of [week_of]. [X] suspensions · [X] warning DNNs · [X] warnings · [X] clusters. [If paused: ⏳ Device files needed for [cluster names].] [If ready: Files ready for review in ts_review.html.]"}'
+```
+Status ping only -- no case names, no scores, no host details. Posts as the OneTable T&S Agent bot. Bot token is stored in project instructions, not in this file.
 6. Post-action verification -- see below.
 
-The end-of-process Slack summary to #trust-and-safety (after all cases are reviewed and approved) is sent from within ts_review.html -- not by the agent. The cross-host sheet and Elliana draft (step 4) happen only when cross_host_flags is non-empty.
+The end-of-review Slack summary to #trust-and-safety is sent from within ts_review.html after staff approve all cases -- not by the agent. The cross-host sheet and Elliana draft (step 4) happen only when cross_host_flags is non-empty.
 
 **Post-action verification (required at end of every weekly run AND every investigation):**
 Before closing out, query Salesforce directly to verify every action requested or approved during the session actually completed. Do not rely on earlier tool call results or session memory.
