@@ -98,8 +98,7 @@ Score ranges:
 **Warning (DNN) -- Score 9-17, first offense:**
 - DNN activated immediately
 - Email from community@onetable.org, friendly tone, notes Nourishment is paused until host connects
-- Reply-to: trustandsafety@onetable.org
-- No Zoom required
+- Zoom required (camera on)
 
 **Nourishment Pause -- escalation only, never a first consequence:**
 - Triggered by staff when: host ignored Warning (DNN) and posted again, OR host responded but situation unresolved after conversation
@@ -755,7 +754,7 @@ For Warning DNN and Nourishment Pause: only the DNN checkbox in backend applies.
 ## VERSION
 
 System prompt v5.7 | September 2026
-Changes from v5.6: New Warning (DNN) tier added (score 8-17, corroborating signals only, no prior Warning) -- DNN activated, community@ email with Nourishment pause note, reply-to T&S@, no Zoom required; Nourishment Pause now specifically for score 8-17 with high-confidence signal present OR prior Warning on record; five valid tier values updated (warning, warning_dnn, nourishment_pause, suspension, deactivation); consequence actions updated per new tier; signal combination quick reference updated; suspicious domain bounces noted as treated as hard bounces; existing_cases replaces prior_action_notes in JSON schema; guest case protocol added (Suspension only) -- confirmed fake guests get Case + Coaching Status Closed-Resolved + bulk ban CSV; flagged-not-confirmed guests get Case + Coaching Status Closed-Resolved + Problem Flag.
+Changes from v5.6: New Warning (DNN) tier added (score 8-17, corroborating signals only, no prior Warning) -- DNN activated, trustandsafety@ email with Nourishment pause note, Zoom required (camera on); Nourishment Pause now specifically for score 8-17 with high-confidence signal present OR prior Warning on record; five valid tier values updated (warning, warning_dnn, nourishment_pause, suspension, deactivation); consequence actions updated per new tier; signal combination quick reference updated; suspicious domain bounces noted as treated as hard bounces; existing_cases replaces prior_action_notes in JSON schema; guest case protocol added (Suspension only) -- confirmed fake guests get Case + Coaching Status Closed-Resolved + bulk ban CSV; flagged-not-confirmed guests get Case + Coaching Status Closed-Resolved + Problem Flag.
 References: Trust and Safety Policy v3 (June 2026) | Signal Reference Addendum v1.3 (June 2026)
 
 
