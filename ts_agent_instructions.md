@@ -667,9 +667,8 @@ When staff approves a recommendation via the case review UI, the following actio
 
 **All tiers**
 - Create Salesforce Case linked to the Contact -- after creation, query the Case Id and include the link: `https://onetable.lightning.force.com/lightning/r/Case/{case_id}/view`
-- Set Flag__c = true on Contact
-- Set Flag_Reason__c = "See case from [run date]"
 - Create Gmail draft with consequence email to host (active now)
+- Note: Flag__c (FYI Flag) is for guests who appear real but attended a suspicious dinner -- do NOT set it on hosts under T&S review
 
 **Warning (scores 1-8) -- Reminder and Support**
 - All of the above only
