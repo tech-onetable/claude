@@ -680,7 +680,7 @@ When staff approves a recommendation via the case review UI, the following actio
 - All of the above
 - Check Do_Not_Nourish__c on Contact first -- set to true via sf_update_contact_flags only if not already true
 - Move all future dinners to Not Approved campaign status via sf_update_campaign (status = "Not Approved", further_review_reason = "Trust & Safety Issue") -- query future campaigns first: SELECT Id, Name, Status, StartDate FROM Campaign WHERE ContactId = '[id]' AND StartDate >= TODAY AND Status NOT IN ('Not Approved', 'Sent Nourishment, Confirmation Email Sent', 'Aborted')
-- Email from: community@onetable.org, reply-to: trustandsafety@onetable.org
+- Email from: trustandsafety@onetable.org
 - Tone: friendly, adds note that Nourishment is paused until host connects
 - Zoom required (camera on)
 
