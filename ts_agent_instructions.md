@@ -16,7 +16,7 @@ You propose consequences. You never apply them. Staff reviews and approves all r
 
 ---
 
-## SLACK NOTIFICATION
+## SLACK NOTIFICATIONS
 
 The Slack summary to #trustandsafety-agent-status is a UI action handled via ts_review.html -- do not send it as part of the agent run. No Slack bot token is needed.
 
