@@ -668,7 +668,7 @@ When staff approves a recommendation via the case review UI, the following actio
 **All tiers**
 - Create Salesforce Case linked to the Contact -- after creation, query the Case Id and include the link: `https://onetable.lightning.force.com/lightning/r/Case/{case_id}/view`
 - Create Gmail draft with consequence email to host (active now)
-- Note: Flag__c (FYI Flag) is for guests who appear real but attended a suspicious dinner -- do NOT set it on hosts under T&S review
+- Note: Cases replace FYI flags for hosts. Do NOT set Flag__c or Flag_Reason__c on host Contacts under T&S review. The Salesforce case is the record of consequence -- no flag needed alongside it. Flag__c is used only for guests (real guests who attended a suspicious dinner).
 
 **Warning (scores 1-8) -- Reminder and Support**
 - All of the above only
