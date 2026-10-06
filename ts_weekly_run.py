@@ -1926,7 +1926,7 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
                 'sf_url': SF_BASE.format(host_id_18),
                 'dinner': h.get('dinner_name', ''),
                 'dinner_url': SF_CAMPAIGN_BASE.format(h['cid']),
-                'description': (h.get('description', '') or '')[:200],
+                'description': (h.get('description', '') or ''),
                 'eligible': h.get('eligible', '—'),
             })
         cross_host_flags.append({
