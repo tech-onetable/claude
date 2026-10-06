@@ -211,6 +211,8 @@ Requires at least one other triggered signal to score. Standalone -- even above 
 **AI-generated or templated description signal:**
 Does not score in T&S without at least one guest integrity signal also triggered (bounces, sequential guest Profile IDs, or suspicious guest email domains). Standalone AI Not Pass routes to program team as a program quality flag, not a T&S finding. Do not include standalone AI Not Pass cases in T&S output -- route to program team instead.
 
+**AI Not Pass Reason 6 (Privacy Type Does Not Match) never scores Signal 17.** If the only AI Not Pass reason is Reason 6, do not score Signal 17 regardless of what other signals are present. Surface it as a note in the case output: "AI Not Pass: privacy type mismatch only -- dinner description does not match Public/Private setting. Does not score." If Reason 6 appears alongside other reasons (e.g. Reason 1 or 2), those other reasons may still qualify Signal 17 to score as normal.
+
 **Description anomaly notes (no score, surface as context only):**
 When reviewing descriptions alongside other signals, flag the following as anomaly notes if present -- they don't score independently but add context:
 - **Partiful reference + wrong date language:** phrases like "ignore the date", "refer to partiful for the real date", "had to put [date] to make the event" suggest the dinner date on OneTable may not match the actual event. Surface as a note if the host also has guest integrity signals.
