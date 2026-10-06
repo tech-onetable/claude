@@ -910,7 +910,7 @@ def build_case_json(cid, camp, scored_signals, score, tier, sf_data=None):
         'id': f"case-{cid}",
         'name': host_name,
         'dinner_name': camp.get('name', ''),
-        'dinner_description': (camp.get('description', '') or '')[:400],
+        'dinner_description': (camp.get('description', '') or ''),
         'guest_count': len([g for g in camp.get('guests', []) if g.get('Member Status','').lower() != 'host']),
         'campaign_id': cid,
         'email': sf_data.get('Email', host.get('Campaign Member Email', '')) if sf_data else host.get('Campaign Member Email', ''),
