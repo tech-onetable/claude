@@ -97,7 +97,7 @@ Score ranges:
 
 **Warning (DNN) -- Score 9-17, first offense:**
 - DNN activated immediately
-- Email from community@onetable.org, friendly tone, notes Nourishment is paused until host connects
+- Email from trustandsafety@onetable.org, friendly tone, notes Nourishment is paused until host connects
 - Zoom required (camera on)
 
 **Nourishment Pause -- escalation only, never a first consequence:**
@@ -268,9 +268,8 @@ Shared device fingerprint host and guest; Guest email bounces 75%+; Sequential g
 **Score ranges:**
 - 0: No action
 - 1-8: Warning (Reminder and Support) -- auto-sent, no restriction
-- 9-13: Warning (DNN) -- DNN activated, community@ email, Zoom required
+- 9-17: Warning (DNN) -- DNN activated, trustandsafety@ email, Zoom required (camera on)
 - 18-39: Suspension (18-24 soft approach, 25-39 strict approach)
-- 25-39: Suspension (stricter approach)
 - 40+: Suspension (first instance rule applies)
 
 **First instance rule:** Even at 40+, first formal consequence is Suspension not Deactivation.
@@ -446,6 +445,8 @@ When a confirmed cluster is identified via shared device fingerprint, check whet
 
 Clusters surface at the top of the weekly output before all other cases. All cluster members receive the same consequence unless staff overrides per member.
 
+**Cluster headline -- future dinners:** For each cluster host, query and surface the count of upcoming dinners (StartDate >= TODAY, Status not in Not Approved / Aborted / Not Nourishing) in the cluster host table. This appears in the UI alongside the host's score and Nourishment total so staff can see immediately who has upcoming dinners that need to be moved.
+
 ### Cluster Detection
 
 Before producing individual case output, check whether any flagged hosts share:
@@ -537,7 +538,7 @@ The JSON block powers the visual case review interface.
       ],
       "connected_unscored": "[Required for cluster cases where Pass 2 identifies hosts connected to the cluster who scored 0 and are not in the cases list. Plain text, staff-readable. Include: host name with SF Contact link, application date, why they appear connected (shared device/IP/domain/guest pool), what action is recommended and by when. Example: 'Shad Emmerich (applied 2026-09-11) and Glen Nolan (applied 2026-09-21) use astermail.org host emails, have 10/10 and 9/9 guests on suspicious domains, and share guest IP 23.234.80.19 with guests at Hadas Moran and Cory Heiden dinners. Both scored 0 and are not in the cases list; each has a 10/09 dinner Pending. Recommend review before Wednesday Nourishment run.' Null if no connected unscored hosts found.]",
       "cluster_hosts": [
-        { "name": "[Host name]", "sf_url": "[SF Contact URL]", "score": 0, "nourishment_received": "[amount or pending]", "future_dinners": "0", "address": "[dinner address from report]", "address_assessment": "[Residential / Commercial / Unknown -- agent judgment during Pass 2]", "key_signals": "[brief signal summary]" }
+        { "name": "[Host name]", "sf_url": "[SF Contact URL]", "score": 0, "nourishment_received": "[amount or pending]", "future_dinners": "[n -- count of upcoming dinners not yet Not Approved/Aborted; query in Pass 2: SELECT COUNT(Id) cnt FROM Campaign WHERE ContactId = '[id]' AND StartDate >= TODAY AND Status NOT IN ('Not Approved','Aborted','Not Nourishing')]", "address": "[dinner address from report]", "address_assessment": "[Residential / Commercial / Unknown -- agent judgment during Pass 2]", "key_signals": "[brief signal summary]" }
       ]
     }
   ],
@@ -603,7 +604,7 @@ Triggered when given an email address, Contact ID, or Campaign ID. Run Pass 2 di
 | Single geographic mismatch only | Watch flag | Internal monitoring note only |
 | Single low-confidence signal, innocent explanation plausible | Program Team Referral | Journey check-in by program team |
 | Single low-confidence signal, no innocent explanation | Warning | community@ email, auto-sent |
-| 2+ corroborating signals, no high-confidence, score 9-17, no prior Warning | Warning (DNN) | community@ email, DNN activated, reply-to T&S@ |
+| 2+ corroborating signals, no high-confidence, score 9-17, no prior Warning | Warning (DNN) | trustandsafety@ email, DNN activated, Zoom required (camera on) |
 | 2+ corroborating signals, score 9-17, prior Warning on record | Nourishment Pause | trustandsafety@ email, Zoom required |
 | Any high-confidence signal, score 9-17 | Nourishment Pause | trustandsafety@ email, Zoom required |
 | 1+ high-confidence signals, score 9-17 | Nourishment Pause | Written check-in if ambiguous; Zoom if stronger |
