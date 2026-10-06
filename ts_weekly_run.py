@@ -583,10 +583,19 @@ def score_campaign(cid, camp, cross_dinner, high_volume, campaigns=None):
     # ── Signal 17: AI Not Pass (needs any guest integrity signal) ───────────
     ai_flag = host.get('AI Not Pass Summary', '') if host else ''
     if ai_flag:
-        has_gi = any(raw.get(k, {}).get('threshold_met') for k in GUEST_INTEGRITY_SIGNALS)
-        add_sig('sig17',
-                f"AI-generated or templated description: {ai_flag[:80]}",
-                "AI Not Pass flag present", "Needs guest integrity signal", has_gi)
+        # Reason 6 (Privacy Type Does Not Match) never scores Signal 17.
+        # If the only reason is Reason 6, surface as a note only -- do not score.
+        import re
+        reasons = re.findall(r'\b(\d+):', ai_flag)
+        reason6_only = reasons == ['6'] or (ai_flag.strip().startswith('6:') and '1:' not in ai_flag and '2:' not in ai_flag and '3:' not in ai_flag and 'Not Nourishing' not in ai_flag)
+        if reason6_only:
+            # Surface as note only -- do not add to raw signals
+            pass  # will be noted in output via ai_flag field on campaign
+        else:
+            has_gi = any(raw.get(k, {}).get('threshold_met') for k in GUEST_INTEGRITY_SIGNALS)
+            add_sig('sig17',
+                    f"AI-generated or templated description: {ai_flag[:80]}",
+                    "AI Not Pass flag present", "Needs guest integrity signal", has_gi)
 
     # ── Apply pairing rules ──────────────────────────────────────────────────
     # Step 1: which signals met their threshold?
