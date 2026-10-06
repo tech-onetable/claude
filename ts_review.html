@@ -501,9 +501,11 @@ function buildCaseCard(c) {
       <div class="score-circle" style="background:${scoreBg(c.tier)};color:${scoreColor(c.tier)}">${c.score}</div>
       <div class="case-meta">
         <div class="case-name-row">
-          <a class="case-name" href="${c.sf_url}" target="_blank" onclick="event.stopPropagation()">${c.name} ↗</a>
-          ${c.sf_url?`<button onclick="copyLink('${c.sf_url}')" style="font-size:11px;padding:2px 6px;border:0.5px solid var(--border);border-radius:4px;background:transparent;color:var(--text-sec);cursor:pointer" title="Copy Contact link">Contact</button>`:''}
-          ${sfCampaignUrl(c)?`<button onclick="copyLink('${sfCampaignUrl(c)}')" style="font-size:11px;padding:2px 6px;border:0.5px solid var(--border);border-radius:4px;background:transparent;color:var(--text-sec);cursor:pointer" title="Copy Campaign link">Dinner</button>`:''}
+          ${c.is_cluster ? `<span class="case-name">${c.name}</span>
+          <button onclick="event.stopPropagation();navigator.clipboard.writeText('${(c.cluster_hosts||[]).map(h=>h.name).join(', ')}').then(()=>{this.textContent='✓';setTimeout(()=>this.textContent='Copy names',1200)})" style="font-size:11px;padding:2px 6px;border:0.5px solid var(--border);border-radius:4px;background:transparent;color:var(--text-sec);cursor:pointer" title="Copy host names">Copy names</button>` :
+          `<a class="case-name" href="${c.sf_url}" target="_blank" onclick="event.stopPropagation()">${c.name} ↗</a>
+          ${c.sf_url?`<button onclick="event.stopPropagation();copyLink('${c.sf_url}')" style="font-size:11px;padding:2px 6px;border:0.5px solid var(--border);border-radius:4px;background:transparent;color:var(--text-sec);cursor:pointer" title="Copy Contact link">Contact</button>`:''}
+          ${sfCampaignUrl(c)?`<button onclick="event.stopPropagation();copyLink('${sfCampaignUrl(c)}')" style="font-size:11px;padding:2px 6px;border:0.5px solid var(--border);border-radius:4px;background:transparent;color:var(--text-sec);cursor:pointer" title="Copy Campaign link">Dinner</button>`:''}`}
           <span class="badge ${tierClass(displayTier)}">${c.is_cluster?'⚠ Cluster · ':''}${tierLabel(displayTier, c.score)}</span>
           ${(()=>{
             // Try bullets first, then narrative summary
