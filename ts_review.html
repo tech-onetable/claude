@@ -222,15 +222,6 @@ function md(s) {
     .replace(/\[([^\]]+)\]\((https?:\/\/[^\s\)]+)\)/g,'<a href="$2" target="_blank" style="color:var(--purple);text-decoration:underline">$1 ↗</a>')
     .replace(/\n/g,'<br>');
 }
-function copyLink(url, label) {
-  navigator.clipboard.writeText(url).then(() => {
-    const btn = event.target;
-    const orig = btn.textContent;
-    btn.textContent = '✓';
-    setTimeout(() => btn.textContent = orig, 1500);
-  });
-  event.stopPropagation();
-}
 function sfCampaignUrl(c) {
   if (c.campaign_id) return `https://onetable.lightning.force.com/lightning/r/Campaign/${c.campaign_id}/view`;
   return '';
@@ -512,8 +503,9 @@ function buildCaseCard(c) {
         <div class="score-circle" style="background:${scoreBg(c.tier)};color:${scoreColor(c.tier)};width:32px;height:32px;font-size:13px">${c.score}</div>
         <div class="case-meta" style="display:flex;align-items:center;gap:10px;flex:1;min-width:0">
           <a class="case-name" href="${c.sf_url}" target="_blank" onclick="event.stopPropagation()" style="font-size:14px;white-space:nowrap">${c.name} ↗</a>
-          ${c.sf_url?`<button onclick="copyLink('${c.sf_url}')" style="font-size:11px;padding:2px 6px;border:0.5px solid var(--border);border-radius:4px;background:transparent;color:var(--text-sec);cursor:pointer">Contact</button>`:''}
-          ${sfCampaignUrl(c)?`<button onclick="copyLink('${sfCampaignUrl(c)}')" style="font-size:11px;padding:2px 6px;border:0.5px solid var(--border);border-radius:4px;background:transparent;color:var(--text-sec);cursor:pointer">Dinner</button>`:''}
+          ${c.be_url?`<button onclick="event.stopPropagation();window.open('${c.be_url}','_blank')" style="font-size:11px;padding:2px 6px;border:0.5px solid var(--border);border-radius:4px;background:transparent;color:var(--text-sec);cursor:pointer">Profile</button>`:''}
+          ${sfCampaignUrl(c)?`<button onclick="event.stopPropagation();window.open('${sfCampaignUrl(c)}','_blank')" style="font-size:11px;padding:2px 6px;border:0.5px solid var(--border);border-radius:4px;background:transparent;color:var(--text-sec);cursor:pointer">Dinner</button>`:''}
+          ${c.email?`<button onclick="event.stopPropagation();navigator.clipboard.writeText('${c.email}').then(()=>{this.textContent='✓';setTimeout(()=>this.textContent='Copy email',1200)})" style="font-size:11px;padding:2px 6px;border:0.5px solid var(--border);border-radius:4px;background:transparent;color:var(--text-sec);cursor:pointer">Copy email</button>`:''}
           <span class="badge ${tierClass(displayTier)}" style="font-size:11px">${tierLabel(displayTier, c.score)}</span>
           <span style="font-size:12px;color:var(--text-sec);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${signalSummary}</span>
           ${actioned?'<span class="badge actioned" style="font-size:11px">✓ Reviewed</span>':''}
@@ -824,7 +816,7 @@ function buildHostContextPanels(c) {
 
 function buildContextGrid(ctx) {
   const left = [['Tenure',ctx.tenure],['Dinners hosted',ctx.dinners_hosted],['Times attended as guest',ctx.times_attended_as_guest],['Nourishment received',ctx.nourishment_received],['Future dinners',ctx.future_dinners],['DNN',ctx.dnn]];
-  const right = [['Guest to host',ctx.guest_to_host],['Benchmark call',ctx.benchmark_call],['Prior T&S cases',ctx.prior_ts_cases],['Suspended',ctx.suspended],['Graduated host',ctx.graduated_host],['New host',ctx.new_host]];
+  const right = [['Guest to host',ctx.guest_to_host],['Benchmark call',ctx.benchmark_call],['Prior T&S cases',ctx.prior_ts_cases],['Suspended',ctx.suspended],['New host',ctx.new_host]];
   return `<div class="context-grid">
     <div>${left.map(([l,v])=>`<div class="profile-row"><span class="profile-label">${l}</span><span class="profile-val">${v||'—'}</span></div>`).join('')}</div>
     <div>${right.map(([l,v])=>`<div class="profile-row"><span class="profile-label">${l}</span><span class="profile-val">${v||'—'}</span></div>`).join('')}</div>
