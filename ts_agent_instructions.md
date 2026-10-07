@@ -166,7 +166,7 @@ Before closing out, query Salesforce directly to verify every action requested o
 - **Suspended_Flag__c set:** `SELECT Id, Suspended_Flag__c FROM Contact WHERE Id = '[id]'` -- confirm true
 - **Future dinners moved to Not Approved:** query `SELECT Id, Name, Status FROM Campaign WHERE ContactId = '[id]' AND StartDate >= TODAY AND Status NOT IN ('Not Approved', 'Sent Nourishment, Confirmation Email Sent', 'Aborted')` -- this should return zero rows if all eligible dinners were moved. Confirm Status = 'Not Approved' and Further_Review_Reason__c = 'Trust & Safety Issue'. This is now automated via sf_update_campaign but verify it landed.
 - **Suspended/DNN consistency:** for any host set to Suspended this session, confirm DNN is also set. A host that is Suspended but not DNN is an incomplete action. Query `SELECT Id, Name, Do_Not_Nourish__c, Suspended_Flag__c FROM Contact WHERE Id IN ('[ids]')` and flag any row where Suspended_Flag__c = true AND Do_Not_Nourish__c = false.
-- **Case status:** for any case created this session, confirm Coaching_Status__c is not stuck at New when it should have progressed. Flag cases still at New after a bulk action for manual follow-up.
+- **Case status:** for any case created this session, confirm Trust_and_Safety_Status__c is not stuck at New when it should have progressed. Flag cases still at New after a bulk action for manual follow-up.
 
 Present as a brief checklist:
 - ✅ Case created: [Host name] — Case [number]
@@ -722,16 +722,16 @@ Prior status of each dinner is stored in `future_dinners_list[].prior_status` so
 - Platform deactivation is handled via ban CSV upload by Pammie or Gabrielle -- not ImagineX
 
 **Coaching status logic**
-- **Warning:** Case auto-opens. Coaching_Status__c should auto-set to "Closed - Resolved" after warning email sends -- no response expected, case is informational only. ⚠ Requires Salesforce Flow from Amalia: trigger on consequence_recommended = "Warning" + send_warning_email = true → set Coaching_Status__c = "Closed - Resolved".
+- **Warning:** Case auto-opens. Trust_and_Safety_Status__c should auto-set to "Closed - Resolved" after warning email sends -- no response expected, case is informational only. ⚠ Requires Salesforce Flow from Amalia: trigger on consequence_recommended = "Warning" + send_warning_email = true → set Trust_and_Safety_Status__c = "Closed - Resolved".
 - **Warning DNN / Suspension / Nourishment Pause:** Case auto-opens (Dov's flow sets to Open). Stays open until Zoom call happens. Zoom calls are scheduled and conducted by Hannah or Abbie -- Dov is not involved. Staff closes manually after conversation -- "Closed - Resolved" if resolved, "Closed - Unresolved" if host never responded (after 2 weeks).
-- **No response after 2 weeks:** Staff sets Coaching_Status__c = "Closed - Unresolved". Restrictions remain in place.
-- **Guest cases:** Set Coaching_Status__c = "Closed - Resolved" immediately on case creation -- no follow-up needed.
+- **No response after 2 weeks:** Staff sets Trust_and_Safety_Status__c = "Closed - Unresolved". Restrictions remain in place.
+- **Guest cases:** Set Trust_and_Safety_Status__c = "Closed - Resolved" immediately on case creation -- no follow-up needed.
 
 **Guest case protocol (Suspension level only -- triggered when staff approves a Suspension recommendation)**
 When staff approves a host case at Suspension tier via the review UI, guest accounts associated with the flagged dinner(s) also need to be actioned at the same time. Two categories:
 
-- **Clearly fake guests** (confirmed fabricated: hard bounce AND throwaway domain, or obviously fake identity confirmed): Create Salesforce Case linked to the guest Contact. Description must include: host name, host SF Contact link, dinner name, dinner Campaign link, and reason flagged (e.g. "Hard bounce + throwaway domain. Associated with [Host Name] dinner [Dinner Name] ([Campaign link])."). Set Coaching_Status__c = "Closed - Resolved" immediately. Add guest Contact ID to bulk ban CSV for upload to build team. Staff (Pammie) handles the CSV upload directly.
-- **Flagged but not confirmed fake** (shared device fingerprint, cross-host appearance, suspicious but unproven): Create Salesforce Case linked to the guest Contact. Description must include: host name, host SF Contact link, dinner name, dinner Campaign link, and reason flagged. Set Coaching_Status__c = "Closed - Resolved" immediately. Set Problem_Flag__c = true on Contact for monitoring.
+- **Clearly fake guests** (confirmed fabricated: hard bounce AND throwaway domain, or obviously fake identity confirmed): Create Salesforce Case linked to the guest Contact. Description must include: host name, host SF Contact link, dinner name, dinner Campaign link, and reason flagged (e.g. "Hard bounce + throwaway domain. Associated with [Host Name] dinner [Dinner Name] ([Campaign link])."). Set Trust_and_Safety_Status__c = "Closed - Resolved" immediately. Add guest Contact ID to bulk ban CSV for upload to build team. Staff (Pammie) handles the CSV upload directly.
+- **Flagged but not confirmed fake** (shared device fingerprint, cross-host appearance, suspicious but unproven): Create Salesforce Case linked to the guest Contact. Description must include: host name, host SF Contact link, dinner name, dinner Campaign link, and reason flagged. Set Trust_and_Safety_Status__c = "Closed - Resolved" immediately. Set Problem_Flag__c = true on Contact for monitoring.
 
 This protocol is triggered by staff approval of a Suspension -- not by the agent recommendation alone. Do not create guest cases at Warning or Nourishment Pause level, and do not create them until staff has explicitly approved the host case at Suspension tier.
 
