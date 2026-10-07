@@ -346,31 +346,53 @@ function buildReviewView() {
       ${[['all','All'],['cluster','⚠ Cluster'],['suspension','Suspension'],['warning_dnn','Warning DNN'],['warning_dnn','Warning (DNN)'],['warning','Warning']].map(([f,l])=>`<button class="filter-btn ${state.filter===f?'active':''}" onclick="setFilter('${f}')">${l}</button>`).join('')}
     </div>
     ${(state.current.field_alerts||[]).map(a=>{const crit=a.includes('CRITICAL');return `<div style="padding:10px 14px;border-radius:8px;margin-bottom:8px;font-size:13px;font-weight:500;background:${crit?'#FEF2F2':'#FFFBEB'};color:${crit?'#991B1B':'#633806'};border-left:3px solid ${crit?'#991B1B':'#F59E0B'}">${a.replace('⚠ CRITICAL: ','🚨 ').replace('⚠ WARNING: ','⚠️ ')}</div>`;}).join('')}
-    ${(state.current.existing_cases||[]).length>0?`<div style="background:#FFF7ED;border:0.5px solid #FED7AA;border-radius:8px;margin-bottom:12px;overflow:hidden">
-      <div onclick="state.existingCasesOpen=!state.existingCasesOpen;render()" style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;cursor:pointer">
-        <div style="font-weight:600;color:#C2410C;font-size:13px">⚠ Hosts with active flags posting this week (${state.current.existing_cases.length})</div>
-        <span style="color:#C2410C;font-size:12px">${state.existingCasesOpen!==false?'▲':'▼'}</span>
-      </div>
-      ${state.existingCasesOpen===false?'':
-      `<div style="padding:0 16px 12px">
-      ${(state.current.existing_cases||[]).map(c=>`
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:8px 0;border-top:0.5px solid #FED7AA;font-size:13px">
+    ${(()=>{
+      const existingCases = state.current.existing_cases||[];
+      const actionNeeded = existingCases.filter(c=>c.existing_case_type==='suspension'||c.existing_case_type==='open_case');
+      const noActionNeeded = existingCases.filter(c=>c.existing_case_type==='dnn'||c.existing_case_type==='warning_dnn');
+      let ecHtml = '';
+
+      const renderRow = (c, borderColor) => `
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:8px 0;border-top:0.5px solid ${borderColor};font-size:13px">
           <div>
             <a href="${c.sf_url}" target="_blank" style="font-weight:500;color:#C2410C;text-decoration:underline">${c.host_name}</a>
             <span style="margin-left:8px;font-size:11px;padding:2px 6px;border-radius:4px;font-weight:600;${
-            c.existing_case_type==='suspension'?'background:#FECACA;color:#991B1B':
-            c.existing_case_type==='open_case'?'background:#EDE9FE;color:#5B21B6':
-            'background:#FAEEDA;color:#633806'}">${
-            c.existing_case_type==='suspension'?'SUSPENDED':
-            c.existing_case_type==='open_case'?'OPEN CASE':
-            'DNN'}</span>
+              c.existing_case_type==='suspension'?'background:#FECACA;color:#991B1B':
+              c.existing_case_type==='open_case'?'background:#EDE9FE;color:#5B21B6':
+              'background:#FAEEDA;color:#633806'}">${
+              c.existing_case_type==='suspension'?'SUSPENDED':
+              c.existing_case_type==='open_case'?'OPEN CASE':
+              'DNN'}</span>
             · ${c.dinner_name} · <strong>${c.campaign_status}</strong>
             <div style="font-size:12px;color:#92400E;margin-top:3px">${c.note}</div>
           </div>
           <span style="color:var(--text-sec);font-size:12px;white-space:nowrap;margin-left:12px">${c.nourishment_received} received</span>
-        </div>`).join('')}
-      </div>`}
-    </div>`:''}
+        </div>`;
+
+      if (actionNeeded.length > 0) {
+        const open = state.existingCasesActionOpen !== false;
+        ecHtml += `<div style="background:#FFF7ED;border:0.5px solid #FED7AA;border-radius:8px;margin-bottom:8px;overflow:hidden">
+          <div onclick="state.existingCasesActionOpen=!state.existingCasesActionOpen;render()" style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;cursor:pointer">
+            <div style="font-weight:600;color:#C2410C;font-size:13px">⚠ Action needed · ${actionNeeded.length} suspended host${actionNeeded.length>1?'s':''} posting this week</div>
+            <span style="color:#C2410C;font-size:12px">${open?'▲':'▼'}</span>
+          </div>
+          ${open?`<div style="padding:0 16px 12px">${actionNeeded.map(c=>renderRow(c,'#FED7AA')).join('')}</div>`:''}
+        </div>`;
+      }
+
+      if (noActionNeeded.length > 0) {
+        const open = state.existingCasesDNNOpen === true;
+        ecHtml += `<div style="background:var(--surface);border:0.5px solid var(--border);border-radius:8px;margin-bottom:8px;overflow:hidden">
+          <div onclick="state.existingCasesDNNOpen=!state.existingCasesDNNOpen;render()" style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;cursor:pointer">
+            <div style="font-weight:500;color:var(--text-sec);font-size:13px">DNN hosts posting this week · ${noActionNeeded.length} (dinner already blocked · no action needed)</div>
+            <span style="color:var(--text-sec);font-size:12px">${open?'▲':'▼'}</span>
+          </div>
+          ${open?`<div style="padding:0 16px 12px">${noActionNeeded.map(c=>renderRow(c,'var(--border)')).join('')}</div>`:''}
+        </div>`;
+      }
+
+      return ecHtml;
+    })()}
     ${(()=>{
       const actionableCases = filtered.filter(c => c.tier !== 'warning');
       const allWarnings = (state.current.cases||[]).filter(c => c.tier === 'warning');
