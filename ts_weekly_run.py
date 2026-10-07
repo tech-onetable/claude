@@ -1037,14 +1037,22 @@ def run(csv_path, lead_path=None, wednesday_mode=False):
     print(f"[T&S] {total_rows} rows, {len(campaigns)} campaigns", file=sys.stderr)
 
     if wednesday_mode:
-        # Wednesday mode: only score campaigns that are Ready to Nourish
-        READY_STATUSES = {'ready to nourish', 'ready to nourish - pending review'}
+        # Wednesday mode: score campaigns that are Ready to Nourish OR already sent
+        # (Dov may have started processing -- sent dinners are included so they surface
+        # as flagged but are excluded from the preemptive Not Approved move)
+        READY_STATUSES = {
+            'ready to nourish',
+            'ready to nourish - pending review',
+            'sent nourishment',
+            'sent nourishment, confirmation email sent',
+            'partial nourishment sent',
+        }
         before = len(campaigns)
         campaigns = {
             cid: camp for cid, camp in campaigns.items()
             if str(camp.get('host', {}).get('Campaign Status', '') or '').strip().lower() in READY_STATUSES
         }
-        print(f"[T&S] Wednesday filter: {len(campaigns)} Ready to Nourish campaigns (of {before} total)", file=sys.stderr)
+        print(f"[T&S] Wednesday filter: {len(campaigns)} Ready/Sent Nourishment campaigns (of {before} total)", file=sys.stderr)
 
     # ── FIELD POPULATION HEALTH CHECK ────────────────────────────────────────
     # Alert immediately if key scoring fields are unexpectedly empty
@@ -2125,7 +2133,7 @@ def run_pass2(pass1_output, sf):
                 f"WHERE Status = 'Host' "
                 f"AND ContactId IN ('{ids_str}') "
                 f"AND Campaign.StartDate >= {future_start} "
-                f"AND Campaign.Status NOT IN ('Not Approved', 'Sent Nourishment, Confirmation Email Sent', 'Aborted', 'Not Nourishing') "
+                f"AND Campaign.Status NOT IN ('Not Approved', 'Aborted', 'Not Nourishing') "
                 f"ORDER BY Campaign.StartDate ASC "
                 f"LIMIT 200"
             )
@@ -2134,11 +2142,18 @@ def run_pass2(pass1_output, sf):
                 cid = rec.get('ContactId', '')
                 if cid not in future_dinners_by_contact:
                     future_dinners_by_contact[cid] = []
+                status = rec.get('Campaign', {}).get('Status', '')
+                SENT_STATUSES = {
+                    'sent nourishment',
+                    'sent nourishment, confirmation email sent',
+                    'partial nourishment sent',
+                }
                 future_dinners_by_contact[cid].append({
                     'id': rec.get('CampaignId', ''),
                     'name': rec.get('Campaign', {}).get('Name', ''),
                     'date': rec.get('Campaign', {}).get('StartDate', ''),
-                    'status': rec.get('Campaign', {}).get('Status', ''),
+                    'status': status,
+                    'nourishment_sent': status.lower() in SENT_STATUSES,
                     'dnn': rec.get('Campaign', {}).get('Do_Not_Nourish__c', False),
                 })
         print(f"[T&S] Future dinners: {len(future_dinners_by_contact)} hosts with upcoming dinners", file=sys.stderr)
