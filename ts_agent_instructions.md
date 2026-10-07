@@ -676,6 +676,7 @@ When staff approves a recommendation via the case review UI, the following actio
 
 **All tiers**
 - Create Salesforce Case linked to the Contact -- after creation, query the Case Id and include the link: `https://onetable.lightning.force.com/lightning/r/Case/{case_id}/view`
+- Set `Trust_and_Safety_Status__c` on the case via `sf_update_case_ts` (trust_and_safety_status parameter): use "Open" for Warning DNN, Suspension, and Deactivation; use "Closed - Resolved" for Warning (no follow-up needed) and all guest cases
 - Create Gmail draft with consequence email to host (active now)
 - Note: Cases replace FYI flags for hosts. Do NOT set Flag__c or Flag_Reason__c on host Contacts under T&S review. The Salesforce case is the record of consequence -- no flag needed alongside it. Flag__c is used only for guests (real guests who attended a suspicious dinner).
 
@@ -725,7 +726,7 @@ Prior status of each dinner is stored in `future_dinners_list[].prior_status` so
 
 **Coaching status logic**
 - **Warning:** Case auto-opens. Trust_and_Safety_Status__c should auto-set to "Closed - Resolved" after warning email sends -- no response expected, case is informational only. ⚠ Requires Salesforce Flow from Amalia: trigger on consequence_recommended = "Warning" + send_warning_email = true → set Trust_and_Safety_Status__c = "Closed - Resolved".
-- **Warning DNN / Suspension / Nourishment Pause:** Case auto-opens (Dov's flow sets to Open). Stays open until Zoom call happens. Zoom calls are scheduled and conducted by Hannah or Abbie -- Dov is not involved. Staff closes manually after conversation -- "Closed - Resolved" if resolved, "Closed - Unresolved" if host never responded (after 2 weeks).
+- **Warning DNN / Suspension / Nourishment Pause:** Case opens with Trust_and_Safety_Status__c = "Open" (set by agent at case creation). Stays open until Zoom call happens. Zoom calls are scheduled and conducted by Hannah or Abbie -- Dov is not involved. Staff closes manually after conversation -- "Closed - Resolved" if resolved, "Closed - Unresolved" if host never responded (after 2 weeks).
 - **No response after 2 weeks:** Staff sets Trust_and_Safety_Status__c = "Closed - Unresolved". Restrictions remain in place.
 - **Guest cases:** Set Trust_and_Safety_Status__c = "Closed - Resolved" immediately on case creation -- no follow-up needed.
 
