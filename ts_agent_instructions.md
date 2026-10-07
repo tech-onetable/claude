@@ -685,11 +685,15 @@ When staff approves a recommendation via the case review UI, the following actio
 - Note: Cases replace FYI flags for hosts. Do NOT set Flag__c or Flag_Reason__c on host Contacts under T&S review. The Salesforce case is the record of consequence -- no flag needed alongside it. Flag__c is used only for guests (real guests who attended a suspicious dinner).
 
 **Preemptive Not Approved (DNN and above only)**
-For all Warning DNN, Suspension, and Deactivation cases: at run time, all future dinners in `future_dinners_list` must be moved to Not Approved in Salesforce immediately -- before staff review, before consequence emails. This gives staff time to review while Dov processes Nourishment for unaffected hosts on schedule. The prior status of each dinner is stored in `future_dinners_list[].prior_status` so it can be restored if staff rejects or downgrades the consequence.
+For all Warning DNN, Suspension, and Deactivation cases: at the end of Pass 2, before presenting any output files, move all dinners in each case's `future_dinners_list` to Not Approved in Salesforce using `sf_update_campaign`. Do this for every DNN+ case including clusters. This must happen before Dov processes Nourishment so that flagged dinners are blocked while unaffected hosts are nourished on schedule.
 
-**Do not double-action:** Because future dinners are already moved to Not Approved at run time, the consequence action steps for DNN+ tiers should NOT move them again. Only set DNN flag, create the case, and send the email.
+The `future_dinners_list` includes the current week's dinner (StartDate >= review date + 1 day) as well as all future dinners. Move all of them.
 
-**Restore on downgrade:** If staff downgrades a case to Warning (no dinner restriction) or rejects the consequence entirely, the UI will prompt a restore of each dinner to its prior status. This is handled via the UI -- the agent does not need to action it.
+Prior status of each dinner is stored in `future_dinners_list[].prior_status` so it can be restored if staff rejects or downgrades the consequence.
+
+**Do not double-action:** Because future dinners are already moved to Not Approved during Pass 2, the consequence action steps for DNN+ tiers should NOT move them again. Only set DNN flag, create the case, and send the email.
+
+**Restore on downgrade:** If staff downgrades a case to Warning or dismisses it, the UI automatically prompts a restore of each dinner to its prior status. The agent does not need to action this proactively -- the UI handles it.
 
 **Warning (scores 1-8) -- Reminder and Support**
 - All of the above only
