@@ -406,7 +406,8 @@ The script produces a complete, verified JSON. The agent's only job after runnin
 - `insights.patterns` -- cross-case patterns observed this week (e.g. "cluster uses same two FPs as prior run")
 - `insights.emerging_trends` -- new tactics identified
 - `insights.proposed_signal_updates` -- only with 3+ supporting cases
-- `insights.open_questions` -- judgment calls for staff
+- `insights.open_questions_urgent` -- items needing action before next run or before Nourishment
+- `insights.open_questions_fyi` -- longer-term questions, policy items, script gaps
 - `cases[*].bullets` -- up to 2 additional context-specific bullets per case, added after the script-generated ones. Examples: device log context, prior run matches, tenure anomalies. Must reference verifiable data -- never invent.
 - `slack_summary.trends` -- 2-3 sentence plain language summary
 - `slack_summary.urgent` -- time-sensitive items requiring immediate action
@@ -557,8 +558,11 @@ The JSON block powers the visual case review interface.
     "proposed_signal_updates": [
       "[Signal | Proposed change | Supporting cases -- only include if 3+ cases support]"
     ],
-    "open_questions": [
-      "[Judgment calls or policy questions for staff]"
+    "open_questions_urgent": [
+      "[Questions requiring action before next run or before Nourishment processes -- e.g. confirm DNN is set, hold a dinner, review a specific host]"
+    ],
+    "open_questions_fyi": [
+      "[Longer-term questions, policy decisions, or FYI items that don't require immediate action -- e.g. script gaps to fix, Data Team items, policy clarifications]"
     ],
     "known_bad_devices": [
       { "fingerprint": "[full device fingerprint ID -- never truncate, use exact value from report]", "url": "[https://api.onetable.org/cp/device_activity/details?fingerprint={full_id}]", "seen_on": "[n cases: host names]" }
