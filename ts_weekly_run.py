@@ -37,8 +37,8 @@ SIGNAL_WEIGHTS = {
     'sig1': 7,   # Shared device FP host+guest (standalone)
     'sig2': 7,   # Cross-dinner device FP match (needs pairing)
     'sig3': 5,   # Same device FP across guests (needs pairing)
-    'sig4': 5,   # Sequential RSVP timing (needs pairing) -- not in CSV, skip
-    'sig5': 3,   # VPN use (needs pairing) -- not reliably in CSV, skip
+    'sig4': 5,   # Sequential RSVP timing -- not implemented (data not in CSV)
+    'sig5': 3,   # VPN use (needs pairing, 30%+ of guests from known VPN ranges)
     'sig6': 0,   # Geographic mismatch (watch flag only)
     'sig7': 2,   # Same IP across guests (needs pairing, 80%+)
     'sig8': 0,   # Clearly fake guest identities -- anomaly note only, does not score
@@ -939,7 +939,6 @@ def build_case_json(cid, camp, scored_signals, score, tier, sf_data=None):
             'benchmark_call': ('Yes' if benchmark else 'No') if benchmark is not None else 'pending',
             'prior_ts_cases': str(int(prior_cases)) if prior_cases is not None else 'pending',
             'suspended': 'Yes · active' if suspended else 'No',
-            'graduated_host': 'pending',
             'new_host': f"Yes · approved {app_date}" if new_host and app_date else ('No' if not new_host else 'pending'),
             'unique_guests_12mo': str(int(sf_data['Unique_Guests_Last_12_Months__c'])) if sf_data and sf_data.get('Unique_Guests_Last_12_Months__c') is not None else (host.get('Unique guests', '').strip() or 'pending'),
         },
@@ -1548,7 +1547,6 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
                 'benchmark_call': ('Yes' if benchmark else 'No') if benchmark is not None else 'pending',
                 'prior_ts_cases': str(int(prior_cases)) if prior_cases is not None else 'pending',
                 'suspended': 'Yes · active' if suspended_sf else 'No',
-                'graduated_host': 'pending',
                 'new_host': f"Yes · approved {app_date}" if new_host_flag and app_date else ('No' if not new_host_flag else 'pending'),
                 'unique_guests_12mo': str(int(sf['Unique_Guests_Last_12_Months__c'])) if sf.get('Unique_Guests_Last_12_Months__c') is not None else (campaigns.get(cid, {}).get('host', {}).get('Unique guests', '').strip() or 'pending'),
                 'guest_to_host': 'Yes' if sf.get('Guest_to_Host_formula__c') else ('No' if sf.get('Guest_to_Host_formula__c') is not None else 'pending'),
@@ -1794,7 +1792,6 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
                 'benchmark_call': 'see individual cases below',
                 'prior_ts_cases': 'see individual cases below',
                 'suspended': 'see individual cases below',
-                'graduated_host': 'see individual cases below',
                 'new_host': 'see individual cases below',
                 'unique_guests_12mo': 'see individual cases below',
             },
@@ -1917,15 +1914,6 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
         cases = [c for c in cases if c.get('tier') in ('warning_dnn', 'suspension', 'deactivation')]
         print(f"[T&S] Wednesday mode: {len(cases)} cases at Warning DNN or above", file=sys.stderr)
 
-        # Build list of campaign IDs to move to Not Approved
-        not_approved_ids = [c.get('campaign_id', '') for c in cases if c.get('campaign_id')]
-        if not_approved_ids:
-            print(f"[T&S] Campaigns to move to Not Approved:", file=sys.stderr)
-            for cid in not_approved_ids:
-                camp = campaigns.get(cid, {})
-                name = camp.get('name', cid)
-                print(f"[T&S]   {cid} -- {name}", file=sys.stderr)
-
     # Cross-host flags
     cross_host_flags = []
     for addr, hosts in pass1_output['same_address'].items():
@@ -2018,7 +2006,7 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
             'summary': final_summary,
             'field_alerts': pass1_output.get('field_alerts', []),
             'wednesday_mode': wednesday_mode,
-            'not_approved_pending': [c.get('campaign_id') for c in cases if wednesday_mode and c.get('campaign_id')],
+
         },
         'existing_cases': existing_cases,
         'cases': cases,
