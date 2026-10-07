@@ -1480,6 +1480,7 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
                     else f"DNN host posted a new dinner (status: {camp.get('_suspended_status','')}). Check in before approving Nourishment -- may be returning after a gap."
                 ),
                 'existing_case_type': camp.get('_existing_case_type', 'suspension'),
+                'most_recent_case_date': max((c.get('created_date','') for c in sf_results.get(contact_id,{}).get('_open_ts_cases',[])), default=''),
             })
     existing_case_cids = {c['campaign_id'] for c in existing_cases}
 
@@ -1864,6 +1865,7 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
                 'nourishment_eligible': f"${float(host.get('Total Eligible Nourishment', 0) or 0):,.0f}" if host else '—',
                 'note': f"Open T&S case(s): {case_refs}. Score this week: {d['score']} ({d['tier']}). Review before taking new action.",
                 'existing_case_type': 'open_case',
+                'most_recent_case_date': max((c.get('created_date','') for c in open_cases), default=''),
             })
             existing_case_cids.add(cid)
             continue
@@ -2184,7 +2186,7 @@ def run_pass2(pass1_output, sf):
             batch = ids_18[i:i+30]
             ids_str = "', '".join(batch)
             cases_soql = (
-                f"SELECT Id, CaseNumber, Subject, Status, ContactId, T_S_Type__c "
+                f"SELECT Id, CaseNumber, Subject, Status, ContactId, T_S_Type__c, CreatedDate "
                 f"FROM Case "
                 f"WHERE ContactId IN ('{ids_str}') "
                 f"AND (T_S_Type__c = 'Misuse of Platform' OR Subject LIKE '%Trust and Safety%' OR Subject LIKE '%T&S%') "
@@ -2201,6 +2203,7 @@ def run_pass2(pass1_output, sf):
                     'case_number': rec.get('CaseNumber', ''),
                     'subject': rec.get('Subject', ''),
                     'status': rec.get('Status', ''),
+                    'created_date': rec.get('CreatedDate', '')[:10] if rec.get('CreatedDate') else '',
                 })
         print(f"[T&S] Open T&S cases: found for {len(open_cases_by_contact)} contacts", file=sys.stderr)
     except Exception as e:
