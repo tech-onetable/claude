@@ -20,7 +20,7 @@ You propose consequences. You never apply them. Staff reviews and approves all r
 
 Two separate Slack messages are sent at different points:
 
-1. **Mid-run status ping → #trustandsafety-agent-status** (C0BDAGF6A8Z): sent automatically by the agent after Pass 2 via bash curl using the bot token (see step 5 in the weekly run output section). Posts as the OneTable T&S Agent bot. Status only -- no host names or scores.
+1. **Mid-run status ping → #trustandsafety-agent-status** (C0BDAGF6A8Z): sent automatically by the agent after Pass 2 via the Slack MCP connector (slack_send_message). See step 5 in the weekly run output section. Status only -- no host names or scores.
 
 2. **End-of-review summary → #trust-and-safety**: sent from within ts_review.html after all cases are reviewed and approved by staff. This is a UI action, not an agent action.
 
@@ -139,10 +139,10 @@ Produce one unified assessment per case incorporating all data from all passes. 
 **Wednesday pre-Nourishment run (separate from Thursday weekly run):**
 Run manually on Wednesdays before Dov processes Nourishment. Separate mode from the Thursday run.
 
-- **Filter:** only campaigns with status "Ready to Nourish" (pass `--wednesday` flag to script)
+- **Filter:** only campaigns with Status = "Planned" AND Guest Count Met? = true, plus any already-sent dinners (pass `--wednesday` flag to script)
 - **Scoring:** full signal scoring as normal
 - **Surface:** Warning DNN and above only -- Warning cases are not shown at all
-- **Action:** auto-move Warning DNN+ campaigns to Not Approved status (requires Campaign status write via MCP -- pending Amalia build). Until available, output a list of campaign IDs to move manually.
+- **Action:** preemptive Not Approved move for all DNN+ cases (see Preemptive Not Approved section). Cluster host dinners are included -- do not skip cluster members.
 - **Thursday re-review:** Wednesday cases that were approved (moved back to Ready to Nourish) re-surface on Thursday flagged as "Reviewed Wed [date] · approved". Wednesday cases left at Not Approved appear in the Existing Cases banner on Thursday, not as new scored cases.
 
 Script command: `python3 ts_weekly_run.py <csv> --wednesday`
@@ -153,14 +153,7 @@ Every time a consequence is applied -- Warning, Warning DNN, Nourishment Pause, 
 2. The complete ts_ui_data JSON block (presented as a downloadable file via present_files)
 3. Ban and DNN CSVs -- present `ts_ban_YYYYMMDD.csv` and `ts_dnn_YYYYMMDD.csv` via present_files alongside the JSON. Ban CSV covers Suspension and above. DNN CSV covers Warning DNN and above. Both use columns: Email, Profile ID (Platform_Profile_ID__c). Column must be named "Profile ID" exactly -- "ID" alone is rejected by the upload tool.
 4. Cross-host flags sheet and Slack draft -- if `cross_host_flags` in the JSON is non-empty, automatically: (a) create a Google Sheet titled "T+S Cross-Host Flags · [date]" containing one row per host with columns: Dinner Address, Host Name, Email, Dinner Name, Date, Nourishment Eligible, SF Contact link, SF Dinner link, Contact Mailing Address, Dinner Description -- pull Contact mailing addresses from Salesforce for the flagged hosts; (b) create a Slack DM draft to Elliana (U09326MSYDN) with the message: "Hey Elliana! Here are this week's multi-host/single-address groups to investigate: [Google Sheet link]" followed by a brief bulleted list of the flag groups (address · host names). Do not send the Slack message -- create a draft only.
-5. **Mid-run Slack notification to #trustandsafety-agent-status (C0BDAGF6A8Z)** -- after Pass 2 is complete and files are ready, send a message via bash curl using the bot token before pausing for device files or presenting output:
-```bash
-curl -s -X POST https://slack.com/api/chat.postMessage \
-  -H "Authorization: Bearer [SLACK_BOT_TOKEN from project instructions]" \
-  -H "Content-Type: application/json" \
-  -d '{"channel":"C0BDAGF6A8Z","text":"✅ T&S review complete — week of [week_of]. [X] suspensions · [X] warning DNNs · [X] warnings · [X] clusters. [If paused for device files: ⏳ Paused: device files needed for [cluster names].] [If ready: Files ready for review in ts_review.html.]"}'
-```
-This is a status ping only -- no case names, no scores, no host details. Send automatically, no staff confirmation needed. Posts as the OneTable T&S Agent bot so staff receives a notification.
+5. **Mid-run Slack notification to #trustandsafety-agent-status (C0BDAGF6A8Z)** -- after Pass 2 is complete and before pausing for device files or presenting output, send a status ping using the Slack MCP connector (slack_send_message). Format: "@pammie ✅ T&S review complete · week of [week_of] · [X] suspensions · [X] warning DNNs · [X] warnings · [X] clusters." Then add either "⏳ Paused: device files needed for [N] cluster(s)." or "Files ready for review in ts_review.html." Status ping only -- no host names, scores, or case details. Do not use curl or a bot token.
 6. Post-action verification -- see below.
 
 The end-of-process Slack summary to #trust-and-safety (after all cases are reviewed and approved) is sent from within ts_review.html -- not by the agent. The cross-host sheet and Elliana draft (step 4) happen only when cross_host_flags is non-empty.
