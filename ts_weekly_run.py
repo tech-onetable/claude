@@ -105,7 +105,7 @@ def parse_csv(contact_path, lead_path=None):
         "Email","Lead: Created Date","Mandrill Bounce Time + Date",
         # New device/IP fields (populated from 2026-08-21 onward; legacy RSVP fields empty from that date)
         "Device ID","IP Address Reservation","Platform ID","Profile Created Device ID",
-        "Mailing Zip/Postal Code","Area"
+        "Mailing Zip/Postal Code","Area","Guest_Count_Met_NEW__c"
     }
     ONETABLE_DOMAIN = 'onetable.org'
 
@@ -1037,12 +1037,11 @@ def run(csv_path, lead_path=None, wednesday_mode=False):
     print(f"[T&S] {total_rows} rows, {len(campaigns)} campaigns", file=sys.stderr)
 
     if wednesday_mode:
-        # Wednesday mode: score campaigns that are Ready to Nourish OR already sent
-        # (Dov may have started processing -- sent dinners are included so they surface
-        # as flagged but are excluded from the preemptive Not Approved move)
-        READY_STATUSES = {
-            'ready to nourish',
-            'ready to nourish - pending review',
+        # Wednesday mode: score campaigns that are Planned with Guest Count Met? = true,
+        # OR already sent (Dov may have started processing).
+        # Sent dinners are included so they surface as flagged but are excluded from
+        # the preemptive Not Approved move (nourishment_sent flag handles this).
+        SENT_STATUSES = {
             'sent nourishment',
             'sent nourishment, confirmation email sent',
             'partial nourishment sent',
@@ -1050,9 +1049,14 @@ def run(csv_path, lead_path=None, wednesday_mode=False):
         before = len(campaigns)
         campaigns = {
             cid: camp for cid, camp in campaigns.items()
-            if str(camp.get('host', {}).get('Campaign Status', '') or '').strip().lower() in READY_STATUSES
+            if (
+                str(camp.get('host', {}).get('Campaign Status', '') or '').strip().lower() == 'planned'
+                and camp.get('host', {}).get('Guest_Count_Met_NEW__c') is True
+            ) or (
+                str(camp.get('host', {}).get('Campaign Status', '') or '').strip().lower() in SENT_STATUSES
+            )
         }
-        print(f"[T&S] Wednesday filter: {len(campaigns)} Ready/Sent Nourishment campaigns (of {before} total)", file=sys.stderr)
+        print(f"[T&S] Wednesday filter: {len(campaigns)} eligible campaigns (Planned+GuestCountMet or already Sent) of {before} total", file=sys.stderr)
 
     # ── FIELD POPULATION HEALTH CHECK ────────────────────────────────────────
     # Alert immediately if key scoring fields are unexpectedly empty
