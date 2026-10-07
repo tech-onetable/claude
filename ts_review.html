@@ -319,7 +319,15 @@ function buildReviewView() {
     const tA = tierOrder[a.tier]??3;
     const tB = tierOrder[b.tier]??3;
     if (tA!==tB) return tA-tB;
-    // Within tier, by score descending
+    // Within tier, High confidence before Medium before Low
+    const confLevel = c => {
+      const src = (c.bullets||[]).find(b=>b.startsWith('**Confidence:')) || c.narrative_summary || '';
+      const m = src.match(/\*\*Confidence:\s*(High|Medium|Low)/i);
+      return m ? {High:0,Medium:1,Low:2}[m[1]]??3 : 3;
+    };
+    const cA = confLevel(a), cB = confLevel(b);
+    if (cA!==cB) return cA-cB;
+    // Within tier+confidence, by score descending
     return b.score-a.score;
   });
 
@@ -526,8 +534,9 @@ function buildCaseCard(c) {
           ${c.is_cluster ? `<span class="case-name">${c.name}</span>
           <button onclick="event.stopPropagation();navigator.clipboard.writeText('${(c.cluster_hosts||[]).map(h=>h.name).join(', ')}').then(()=>{this.textContent='✓';setTimeout(()=>this.textContent='Copy names',1200)})" style="font-size:11px;padding:2px 6px;border:0.5px solid var(--border);border-radius:4px;background:transparent;color:var(--text-sec);cursor:pointer" title="Copy host names">Copy names</button>` :
           `<a class="case-name" href="${c.sf_url}" target="_blank" onclick="event.stopPropagation()">${c.name} ↗</a>
-          ${c.sf_url?`<button onclick="event.stopPropagation();copyLink('${c.sf_url}')" style="font-size:11px;padding:2px 6px;border:0.5px solid var(--border);border-radius:4px;background:transparent;color:var(--text-sec);cursor:pointer" title="Copy Contact link">Contact</button>`:''}
-          ${sfCampaignUrl(c)?`<button onclick="event.stopPropagation();copyLink('${sfCampaignUrl(c)}')" style="font-size:11px;padding:2px 6px;border:0.5px solid var(--border);border-radius:4px;background:transparent;color:var(--text-sec);cursor:pointer" title="Copy Campaign link">Dinner</button>`:''}`}
+          ${c.be_url?`<button onclick="event.stopPropagation();window.open('${c.be_url}','_blank')" style="font-size:11px;padding:2px 6px;border:0.5px solid var(--border);border-radius:4px;background:transparent;color:var(--text-sec);cursor:pointer" title="Open backend profile">Profile</button>`:''}
+          ${sfCampaignUrl(c)?`<button onclick="event.stopPropagation();window.open('${sfCampaignUrl(c)}','_blank')" style="font-size:11px;padding:2px 6px;border:0.5px solid var(--border);border-radius:4px;background:transparent;color:var(--text-sec);cursor:pointer" title="Open dinner in Salesforce">Dinner</button>`:''}
+          ${c.email?`<button onclick="event.stopPropagation();navigator.clipboard.writeText('${c.email}').then(()=>{this.textContent='✓';setTimeout(()=>this.textContent='Copy email',1200)})" style="font-size:11px;padding:2px 6px;border:0.5px solid var(--border);border-radius:4px;background:transparent;color:var(--text-sec);cursor:pointer" title="Copy host email">Copy email</button>`:''}`}
           <span class="badge ${tierClass(displayTier)}">${c.is_cluster?'⚠ Cluster · ':''}${tierLabel(displayTier, c.score)}</span>
           ${(()=>{
             // Try bullets first, then narrative summary
