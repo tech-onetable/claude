@@ -210,12 +210,6 @@ function tierLabel(t, score) {
 function tierClass(t) { return t || 'warning'; }
 function scoreColor(t) { return TIER_COLORS[t] || 'var(--text-sec)'; }
 function scoreBg(t) { return TIER_BGS[t] || '#F0F0EE'; }
-function caseEmail(c) {
-  if (c.email) return c.email;
-  if (c.is_cluster && c.cluster_hosts?.length)
-    return c.cluster_hosts.map(h => h.email).filter(e => e && e.trim()).join(', ');
-  return '';
-}
 function md(s) {
   return (s||'')
     .replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')
@@ -227,7 +221,6 @@ function sfCampaignUrl(c) {
   return '';
 }
 function runDate() { return state.current?.run?.run_date || state.current?.run?.week_of || ''; }
-function esc(s) { return (s||'').replace(/'/g,"&#39;").replace(/"/g,'&quot;'); }
 
 // ── file load ──────────────────────────────────────────────────────────────
 // Auto-load from same folder disabled -- paste JSON into the load screen instead
@@ -1052,12 +1045,6 @@ Please run ALL of the following:
   });
 }
 
-function openChat(c) {
-  state.activeChat = c;
-  state.chatMessages = [{role:'assistant', content:`I'm looking at the **${c.name||c.title}** case${c.score?' (score '+c.score+' → '+tierLabel(c.tier, c.score)+')':''}. What would you like to know?`}];
-  state.chatInput = '';
-  render();
-}
 
 function closeChat() { state.activeChat=null; state.chatMessages=[]; render(); }
 function setChat(q) { const el=document.getElementById('chat-input'); if(el){el.value=q; state.chatInput=q;} }
