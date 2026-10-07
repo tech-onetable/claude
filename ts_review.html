@@ -538,7 +538,9 @@ function buildCaseCard(c) {
             if(!m) return '';
             const lvl=m[1];
             const col=lvl==='High'?'var(--wine)':lvl==='Medium'?'var(--amber-dark)':'var(--text-sec)';
-            return `<span style="font-size:11px;font-weight:600;color:${col}">● ${lvl} confidence</span>`;
+            const wt=lvl==='Low'?'400':'600';
+            const style=lvl==='Low'?'font-style:italic;':'';
+            return `<span style="font-size:11px;font-weight:${wt};color:${col};${style}">● ${lvl} confidence</span>`;
           })()}
           ${actioned?'<span class="badge actioned">✓ Actioned</span>':''}
         </div>
