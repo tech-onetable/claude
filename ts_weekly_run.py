@@ -942,7 +942,7 @@ def build_case_json(cid, camp, scored_signals, score, tier, sf_data=None):
             'suspended': 'Yes · active' if suspended else 'No',
             'graduated_host': 'pending',
             'new_host': f"Yes · approved {app_date}" if new_host and app_date else ('No' if not new_host else 'pending'),
-            'unique_guests_12mo': 'pending',
+            'unique_guests_12mo': str(int(sf_data['Unique_Guests_Last_12_Months__c'])) if sf_data and sf_data.get('Unique_Guests_Last_12_Months__c') is not None else (host.get('Unique guests', '').strip() or 'pending'),
         },
         'cluster_note': None,
         'cluster_hosts': [],
@@ -1551,7 +1551,7 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
                 'suspended': 'Yes · active' if suspended_sf else 'No',
                 'graduated_host': 'pending',
                 'new_host': f"Yes · approved {app_date}" if new_host_flag and app_date else ('No' if not new_host_flag else 'pending'),
-                'unique_guests_12mo': str(int(sf['Unique_Guests_Last_12_Months__c'])) if sf.get('Unique_Guests_Last_12_Months__c') is not None else 'pending',
+                'unique_guests_12mo': str(int(sf['Unique_Guests_Last_12_Months__c'])) if sf.get('Unique_Guests_Last_12_Months__c') is not None else (campaigns.get(cid, {}).get('host', {}).get('Unique guests', '').strip() or 'pending'),
                 'guest_to_host': 'Yes' if sf.get('Guest_to_Host_formula__c') else ('No' if sf.get('Guest_to_Host_formula__c') is not None else 'pending'),
                 'times_attended_as_guest': str(int(sf['Times_Attended_as_Guest__c'])) if sf.get('Times_Attended_as_Guest__c') is not None else 'pending',
             }
