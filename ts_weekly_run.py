@@ -105,7 +105,7 @@ def parse_csv(contact_path, lead_path=None):
         "Email","Lead: Created Date","Mandrill Bounce Time + Date",
         # New device/IP fields (populated from 2026-08-21 onward; legacy RSVP fields empty from that date)
         "Device ID","IP Address Reservation","Platform ID","Profile Created Device ID",
-        "Mailing Zip/Postal Code","Area","Guest_Count_Met_NEW__c"
+        "Mailing Zip/Postal Code","Area","Guest Count Met?"
     }
     ONETABLE_DOMAIN = 'onetable.org'
 
@@ -1051,7 +1051,7 @@ def run(csv_path, lead_path=None, wednesday_mode=False):
             cid: camp for cid, camp in campaigns.items()
             if (
                 str(camp.get('host', {}).get('Campaign Status', '') or '').strip().lower() == 'planned'
-                and camp.get('host', {}).get('Guest_Count_Met_NEW__c') is True
+                and str(camp.get('host', {}).get('Guest Count Met?', '') or '').strip().lower() == 'true'
             ) or (
                 str(camp.get('host', {}).get('Campaign Status', '') or '').strip().lower() in SENT_STATUSES
             )
