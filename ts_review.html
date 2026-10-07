@@ -1113,6 +1113,13 @@ function confirmHostOverride(clusterId, hostName) {
   state.actionState[hid] = { tier: t, reason: r };
   state.hostOverrideOpen = null;
   render();
+  // If downgrading a cluster host to Warning or dismissing, restore their dinners
+  const clusterCase = (state.current?.cases||[]).find(x=>x.id===clusterId);
+  const hostData = clusterCase?.cluster_hosts?.find(h=>h.name===hostName);
+  const nowWarningOrDismiss = ['warning','dismiss','program_team'].includes(t);
+  if (hostData && nowWarningOrDismiss && hostData.future_dinners_list?.length) {
+    restoreDinners(hid, hostName, hostData.future_dinners_list);
+  }
 }
 
 function captureNote(id) {
@@ -1138,6 +1145,14 @@ function confirmCluster(id) {
 }
 function cancelCluster() { state.clusterWarning=null; render(); }
 
+function restoreDinners(caseId, hostName, dinnersList) {
+  // Called when a DNN+ case is downgraded to Warning or dismissed --
+  // prompts the agent to restore each dinner to its prior Salesforce status.
+  if (!dinnersList || !dinnersList.length) return;
+  const lines = dinnersList.map(d => `- ${d.name} (${d.date}): restore to "${d.prior_status}" [Campaign ID: ${d.id}]`).join('\n');
+  sendPrompt(`Staff has downgraded or dismissed the consequence for ${hostName}. Please restore the following dinners to their prior Salesforce Campaign Status using sf_update_campaign:\n\n${lines}\n\nConfirm when done.`);
+}
+
 function confirmOverride(id) {
   const t = document.getElementById(`override-tier-${id}`)?.value;
   const r = document.getElementById(`override-reason-${id}`)?.value;
@@ -1146,6 +1161,13 @@ function confirmOverride(id) {
   state.actionState[id] = {...state.actionState[id], tier:t, reason:r};
   state.overrideOpen = null;
   render();
+  // If downgrading a DNN+ case to Warning or dismissing, restore dinners
+  const c = (state.current?.cases||[]).find(x=>x.id===id);
+  const wasDnnPlus = ['warning_dnn','suspension','deactivation'].includes(c?.tier);
+  const nowWarningOrDismiss = ['warning','dismiss','program_team'].includes(t);
+  if (c && wasDnnPlus && nowWarningOrDismiss && c.future_dinners_list?.length) {
+    restoreDinners(id, c.name, c.future_dinners_list);
+  }
 }
 
 function actionFlag(id, type) { state.actionState[id]={tier:type}; render(); }
