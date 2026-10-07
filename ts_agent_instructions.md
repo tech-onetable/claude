@@ -203,7 +203,7 @@ Does not score when a shared last name between host and guest already explains t
 Requires at least one other triggered signal to score. Standalone cross-dinner FP match is a watch flag only -- noted in Weekly Insights, does not flag individual hosts. When paired with other signals (bounces, sequential PIDs, shared host/guest device), scores at weight 7 and is high confidence. A fingerprint appearing on many dinners does not reduce its weight when paired. When this signal fires on multiple dinners sharing other signals, treat as a cluster.
 
 **Guest email bounces signal:**
-Hard and reject bounces are combined into a single signal. Any delivery failure counts regardless of Mandrill's classification (hard_bounce, reject, invalid). Bounces on known throwaway domains always count. The hard/reject distinction is not meaningful for consequence decisions.
+Hard and reject bounces are combined into a single signal. Any delivery failure counts regardless of Mandrill's classification (hard_bounce, reject, invalid). Bounces on known throwaway domains always count. The hard/reject distinction is not meaningful for consequence decisions. **Lead guests (plus-ones) are included in the bounce denominator** -- they have real email addresses and a bounce is meaningful. Leads are excluded only from PID and device signal calculations where plus-ones don't register independently.
 - 50-74% of guests bounced: weight 4, corroborating, needs pairing
 - 75%+ of guests bounced: weight 8, high-confidence, Warning (DNN) eligible standalone
 
