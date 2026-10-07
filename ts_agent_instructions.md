@@ -677,6 +677,7 @@ When staff approves a recommendation via the case review UI, the following actio
 **All tiers**
 - Create Salesforce Case linked to the Contact -- after creation, query the Case Id and include the link: `https://onetable.lightning.force.com/lightning/r/Case/{case_id}/view`
 - Set `Trust_and_Safety_Status__c` on the case via `sf_update_case_ts` (trust_and_safety_status parameter): use "Open" for Warning DNN, Suspension, and Deactivation; use "Closed - Resolved" for Warning (no follow-up needed) and all guest cases
+- Note: `sf_update_case_ts` also has `send_warning_email`, `send_do_not_nourish_email`, `send_suspension_email` parameters that trigger emails via the Salesforce T&S flow -- but this flow is currently **inactive as of 2026-09**. Do not use these fields until Amalia confirms the flow is active. Email sending is handled via Gmail draft for now.
 - Create Gmail draft with consequence email to host (active now)
 - Note: Cases replace FYI flags for hosts. Do NOT set Flag__c or Flag_Reason__c on host Contacts under T&S review. The Salesforce case is the record of consequence -- no flag needed alongside it. Flag__c is used only for guests (real guests who attended a suspicious dinner).
 
@@ -684,6 +685,8 @@ When staff approves a recommendation via the case review UI, the following actio
 For all Warning DNN, Suspension, and Deactivation cases: at the end of Pass 2, before presenting any output files, move all dinners in each case's `future_dinners_list` to Not Approved in Salesforce using `sf_update_campaign`. Do this for every DNN+ case including clusters. This must happen before Dov processes Nourishment so that flagged dinners are blocked while unaffected hosts are nourished on schedule.
 
 The `future_dinners_list` includes the current week's dinner (StartDate >= review date + 1 day) as well as all future dinners. Move all of them **except** any dinner where `nourishment_sent: true` -- those have already had Nourishment processed (status is Sent Nourishment, Sent Nourishment Confirmation Email Sent, or Partial Nourishment Sent) and must not be moved to Not Approved. Surface these in the case output as a note: "⚠ Nourishment already sent for [dinner name] -- not moved to Not Approved."
+
+**Critical:** When moving a dinner to Not Approved, also set Dinner Sub Status to "Trust and Safety Platform Misuse" in the same `sf_update_campaign` call using the `further_review_reason` parameter (this maps to `Further_Review_Reason__c`, which is labeled "Dinner Sub Status" in Salesforce). Example: `sf_update_campaign(campaign_id='...', status='Not Approved', further_review_reason='Trust and Safety Platform Misuse')`. This applies to every dinner moved to Not Approved for DNN+ consequences. Never move a dinner to Not Approved for T&S reasons without also setting this sub status.
 
 Prior status of each dinner is stored in `future_dinners_list[].prior_status` so it can be restored if staff rejects or downgrades the consequence.
 
