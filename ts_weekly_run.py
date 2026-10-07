@@ -2313,7 +2313,7 @@ if __name__ == '__main__':
                 h.get('contact_id', ''), {}).get('Platform_Profile_ID__c', '')
             if not email or not platform_id:
                 continue
-            row = {'Email': email, 'ID': platform_id}
+            row = {'Email': email, 'Profile ID': platform_id}
             if tier in ('suspension', 'deactivation'):
                 ban_rows.append(row)
             if tier in ('warning_dnn', 'suspension', 'deactivation'):
@@ -2322,7 +2322,7 @@ if __name__ == '__main__':
     if ban_rows:
         ban_fname = f'/home/claude/ts_ban_{date_str}.csv'
         with open(ban_fname, 'w', newline='') as f:
-            w = csv_module.DictWriter(f, fieldnames=['Email', 'ID'])
+            w = csv_module.DictWriter(f, fieldnames=['Email', 'Profile ID'])
             w.writeheader()
             w.writerows(ban_rows)
         print(f"[T&S] Ban CSV ({len(ban_rows)} hosts): {ban_fname}", file=sys.stderr)
@@ -2330,10 +2330,10 @@ if __name__ == '__main__':
     if dnn_rows:
         dnn_fname = f'/home/claude/ts_dnn_{date_str}.csv'
         with open(dnn_fname, 'w', newline='') as f:
-            w = csv_module.DictWriter(f, fieldnames=['Email', 'ID'])
+            w = csv_module.DictWriter(f, fieldnames=['Email', 'Profile ID'])
             w.writeheader()
             w.writerows(dnn_rows)
-        print(f"[T&S] DNN CSV ({len(dnn_rows)} hosts): {dnn_fname} (pending OT-5498)", file=sys.stderr)
+        print(f"[T&S] DNN CSV ({len(dnn_rows)} hosts): {dnn_fname}", file=sys.stderr)
 
     # Print the ts_ui_data block for the agent to output
     print("\n```ts_ui_data")
