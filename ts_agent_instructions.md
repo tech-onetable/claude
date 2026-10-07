@@ -151,7 +151,7 @@ Every time a consequence is applied -- Warning, Warning DNN, Nourishment Pause, 
 
 1. Brief progress updates as each pass completes
 2. The complete ts_ui_data JSON block (presented as a downloadable file via present_files)
-3. Ban and DNN CSVs -- present `ts_ban_YYYYMMDD.csv` and `ts_dnn_YYYYMMDD.csv` via present_files alongside the JSON. Ban CSV covers Suspension and above. DNN CSV covers Warning DNN and above. Both use Email + Platform_Profile_ID__c. DNN CSV is pending OT-5498 for upload tool but generate and present regardless.
+3. Ban and DNN CSVs -- present `ts_ban_YYYYMMDD.csv` and `ts_dnn_YYYYMMDD.csv` via present_files alongside the JSON. Ban CSV covers Suspension and above. DNN CSV covers Warning DNN and above. Both use columns: Email, Profile ID (Platform_Profile_ID__c). Column must be named "Profile ID" exactly -- "ID" alone is rejected by the upload tool.
 4. Cross-host flags sheet and Slack draft -- if `cross_host_flags` in the JSON is non-empty, automatically: (a) create a Google Sheet titled "T+S Cross-Host Flags · [date]" containing one row per host with columns: Dinner Address, Host Name, Email, Dinner Name, Date, Nourishment Eligible, SF Contact link, SF Dinner link, Contact Mailing Address, Dinner Description -- pull Contact mailing addresses from Salesforce for the flagged hosts; (b) create a Slack DM draft to Elliana (U09326MSYDN) with the message: "Hey Elliana! Here are this week's multi-host/single-address groups to investigate: [Google Sheet link]" followed by a brief bulleted list of the flag groups (address · host names). Do not send the Slack message -- create a draft only.
 5. **Mid-run Slack notification to #trustandsafety-agent-status (C0BDAGF6A8Z)** -- after Pass 2 is complete and before pausing for device files or presenting output, send a status ping using the Slack MCP connector (slack_send_message). Format: "@pammie ✅ T&S review complete · week of [week_of] · [X] suspensions · [X] warning DNNs · [X] warnings · [X] clusters." Then add either "⏳ Paused: device files needed for [N] cluster(s)." or "Files ready for review in ts_review.html." Status ping only -- no host names, scores, or case details. The @pammie mention ensures a notification is received.
 6. Post-action verification -- see below.
@@ -472,8 +472,8 @@ Produce all output only after both passes are complete.
 
 **Output format.** Do not produce any text narrative, summary, headers, or case descriptions in the chat. Everything staff needs is rendered by the UI. Required outputs, all presented via present_files:
 - `ts_ui_data_YYYYMMDD.json` -- the complete case review JSON
-- `ts_ban_YYYYMMDD.csv` -- Suspension and above hosts (Email + Platform_Profile_ID__c)
-- `ts_dnn_YYYYMMDD.csv` -- Warning DNN and above hosts (Email + Platform_Profile_ID__c)
+- `ts_ban_YYYYMMDD.csv` -- Suspension and above hosts (columns: Email, Profile ID)
+- `ts_dnn_YYYYMMDD.csv` -- Warning DNN and above hosts (columns: Email, Profile ID)
 
 All three files must be presented regardless of how Pass 2 was run (script built-in SF connection or MCP). If the script's wrapper was used to feed in MCP results, the CSV generation step must still be run explicitly. Never treat "no narrative text" as a reason to suppress the CSV files -- they are required outputs on every run.
 
