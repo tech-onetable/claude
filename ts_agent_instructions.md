@@ -806,7 +806,7 @@ Finding: Flag / No flag / Inconclusive. Does not score -- informational only.
 
 ---
 
-**2. Description similarity (sig18) -- weight 3**
+**2. Description quality degradation (sig18) -- weight 3, longitudinal report required**
 Query last 5 dinner descriptions per host:
 `SELECT Campaign.Name, Campaign.StartDate, Campaign.Description FROM CampaignMember WHERE Status = 'Host' AND ContactId = '[id]' ORDER BY Campaign.StartDate DESC LIMIT 5`
 Check for:
@@ -817,7 +817,7 @@ Finding: Triggered (+3) / Not triggered / Inconclusive
 
 ---
 
-**3. Guest list recycling (sig15) -- weight 5**
+**3. Guest list recycling / recycled bounced guests (sig15) -- weight 3, longitudinal report required**
 Query last 5 dinners per host, then their guest Contact IDs:
 `SELECT CampaignId FROM CampaignMember WHERE Status = 'Host' AND ContactId = '[id]' ORDER BY Campaign.StartDate DESC LIMIT 5`
 Then for each campaign: `SELECT ContactId FROM CampaignMember WHERE CampaignId = '[id]' AND Status IN ('Attended','Applied')`
@@ -852,6 +852,40 @@ This signal is not scored -- it requires staff judgment. However, during the dee
 - Template-matched descriptions across unrelated hosts
 - Any pattern that demonstrates awareness of and active circumvention of detection systems
 Output: "Sig22 consideration: [description of pattern]" -- not a score, a flag for staff to evaluate.
+
+---
+
+## LONGITUDINAL DEEP DIVE
+
+A longitudinal deep dive is triggered when staff uploads a longitudinal report for a flagged host or cluster. This is most useful for **medium-confidence cases** where the weekly signals are suggestive but not conclusive, and you want to see whether the pattern holds across the host's full history.
+
+**When to request one:**
+Staff pulls the longitudinal report manually from Salesforce -- all non-Aborted dinners for the host (or all cluster hosts in one file), with the following columns. The agent cannot pull this directly.
+
+**Expected columns:**
+Campaign ID, Campaign Name, Campaign Status, Campaign Description, Campaign Member Email, First Name, Last Name, Contact ID, Host?, Platform Profile ID, Platform Bio, RSVP Type, AI Not Pass Summary, Bounce Type, Bounce Reason, Dinner Sub Status, Member Status, Mailing Zip/Postal Code, Area, Unique guests, Guest Count Met?, RSVP Device Fingerprint ID, RSVP IP, Dinner Created Device ID, Dinner Created IP, Device ID, IP Address Reservation, Profile Created Device ID, Profile Created IP, Contact: Created Date, Reservation Created, Recent dinner guested
+
+**What the agent evaluates when a longitudinal report is uploaded:**
+
+**Recycled bounced guest lists (sig15, weight 3, needs pairing)**
+Check whether the same email address appears as a guest across 2+ of the host's dinners AND that email has bounced. A real person RSVPs and is invited again -- that's normal. A bounced email appearing on multiple dinners means a fake account is being recycled. Score +3 if triggered, requires at least one other guest integrity signal.
+
+**Description quality degradation (sig18, weight 3, needs pairing)**
+Compare dinner descriptions chronologically. Flag if: earlier dinners have rich, specific descriptions and later ones are generic or templated; or descriptions are copy-pasted with minor edits; or the same template appears across cluster hosts. Score +3 if triggered, requires at least one other signal.
+
+**Reservation timing pattern across history**
+Check whether RSVPs cluster in tight windows across multiple dinners, and whether account creation dates match RSVP dates. Does not score -- surfaces as a narrative note.
+
+**Guest list recycling across dinners**
+Check whether the same guest accounts (by Contact ID or email) appear across multiple dinners. Exact repetition across all dinners is suspicious. Some overlap is normal for real social circles. Note the overlap rate.
+
+**Deliberate fraud / identity change suggestion (sig22/sig23 -- no score, staff judgment)**
+If the longitudinal report shows: email swaps across accounts on the same device, replacement accounts created immediately before a new dinner, name variations that look like the same person, or any pattern suggesting active evasion of detection -- flag it explicitly:
+"⚠ Sig22/sig23 consideration: [description]. This pattern suggests [deliberate fraud / identity change]. Staff should evaluate whether this warrants escalation beyond the score-based tier."
+Do not score. This is a flag for staff judgment only.
+
+**Output format:**
+After evaluating a longitudinal report, produce a structured **Longitudinal Deep Dive Summary** covering: signals triggered (with weights and score impact), patterns observed, counter-signals, and a revised score and tier if any longitudinal signals fired. Append this to the existing case summary or present it standalone if the case is already closed.
 
 ---
 
