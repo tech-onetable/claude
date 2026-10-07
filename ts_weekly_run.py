@@ -62,7 +62,14 @@ SIGNAL_WEIGHTS = {
     'sig22': 10, # Deliberate fraud (standalone, staff judgment)
     'sig23': 8,  # Deliberate identity change (standalone, staff judgment)
 }
-STANDALONE = {'sig1', 'sig12', 'sig22', 'sig23', 'sig14', 'sig14_low'}
+# Signals that qualify as High confidence when triggered at threshold.
+# sig1    = shared device FP host+guest (50%+)
+# sig12   = bounces 75%+
+# sig14   = sequential PIDs 100% of profiled guests
+# sig21   = reports from other users
+# sig22   = deliberate fraud (staff judgment)
+# sig23   = deliberate identity change (staff judgment)
+STANDALONE = {'sig1', 'sig12', 'sig14', 'sig21', 'sig22', 'sig23'}
 GUEST_INTEGRITY_SIGNALS = {'sig12', 'sig12_low', 'sig14', 'sig14_low', 'sig10'}
 SF_BASE = "https://onetable.lightning.force.com/lightning/r/Contact/{}/view"
 SF_CAMPAIGN_BASE = "https://onetable.lightning.force.com/lightning/r/Campaign/{}/view"
@@ -246,6 +253,7 @@ def score_campaign(cid, camp, cross_dinner, high_volume, campaigns=None):
     def add_sig(key, desc, observed, threshold, threshold_met, contribution=None):
         w = SIGNAL_WEIGHTS[key]
         raw[key] = {
+            'sig_key': key,
             'name': SIG_NAMES[key],
             'weight': w,
             'desc': desc,
@@ -667,22 +675,32 @@ def build_bullets(host_data, scored_signals, score, tier, sf_contact):
         key=lambda x: -x['score_contribution']
     )
 
-    # Confidence bullet
-    has_bounce = any(v for v in triggered if 'bounce' in v['name'].lower())
-    has_cross = any(v for v in triggered if 'cross-dinner' in v['name'].lower())
-    has_pid = any(v for v in triggered if 'Profile IDs' in v['name'])
-    if has_bounce:
+    # Confidence determination -- based on signal hierarchy:
+    # High   = any standalone-eligible signal triggered at threshold
+    # Medium = 2+ corroborating signals, no standalone
+    # Low    = 1 corroborating signal only, no standalone
+    standalone_triggered = [v for v in triggered if v.get('sig_key') in STANDALONE]
+    corroborating_count = len([v for v in triggered if v.get('sig_key') not in STANDALONE])
+
+    if standalone_triggered:
         conf = "High"
-        reason = "Hard bounces are high-confidence. Guest emails confirmed non-existent."
-    elif has_cross and has_pid:
-        conf = "High"
-        reason = "Cross-dinner device fingerprint paired with sequential PIDs."
-    elif has_cross:
+        sig_name = standalone_triggered[0]['name'].lower()
+        if 'bounce' in sig_name:
+            reason = "Hard bounces are high-confidence. Guest emails confirmed non-existent."
+        elif 'profile id' in sig_name or 'sequential' in sig_name:
+            reason = "100% sequential guest Profile IDs is high-confidence evidence of batch account creation."
+        elif 'host and guest' in sig_name or 'host/guest' in sig_name:
+            reason = "Shared device fingerprint between host and guest is high-confidence."
+        elif 'report' in sig_name:
+            reason = "Reports from other users add credibility and warrant immediate investigation."
+        else:
+            reason = f"{standalone_triggered[0]['name']} is a high-confidence signal."
+    elif corroborating_count >= 2:
         conf = "Medium"
-        reason = "Cross-dinner device fingerprint(s) with within-dinner concentration. No bounce or PID signals."
+        reason = "Multiple corroborating signals present. No single high-confidence signal."
     else:
-        conf = "Medium"
-        reason = "Multiple corroborating signals."
+        conf = "Low"
+        reason = "Single corroborating signal only. Exhaust alternative explanations before actioning."
     bullets.append(f"**Confidence: {conf}.** {reason}")
 
     # Top signal bullets (max 2)
