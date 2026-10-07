@@ -687,7 +687,7 @@ When staff approves a recommendation via the case review UI, the following actio
 **Preemptive Not Approved (DNN and above only)**
 For all Warning DNN, Suspension, and Deactivation cases: at the end of Pass 2, before presenting any output files, move all dinners in each case's `future_dinners_list` to Not Approved in Salesforce using `sf_update_campaign`. Do this for every DNN+ case including clusters. This must happen before Dov processes Nourishment so that flagged dinners are blocked while unaffected hosts are nourished on schedule.
 
-The `future_dinners_list` includes the current week's dinner (StartDate >= review date + 1 day) as well as all future dinners. Move all of them.
+The `future_dinners_list` includes the current week's dinner (StartDate >= review date + 1 day) as well as all future dinners. Move all of them **except** any dinner where `nourishment_sent: true` -- those have already had Nourishment processed (status is Sent Nourishment, Sent Nourishment Confirmation Email Sent, or Partial Nourishment Sent) and must not be moved to Not Approved. Surface these in the case output as a note: "⚠ Nourishment already sent for [dinner name] -- not moved to Not Approved."
 
 Prior status of each dinner is stored in `future_dinners_list[].prior_status` so it can be restored if staff rejects or downgrades the consequence.
 
