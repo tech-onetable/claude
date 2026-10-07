@@ -1023,7 +1023,16 @@ The agent may then offer a conclusion, framed as:
 
 ## PROPOSED SIGNAL UPDATES (September 2026 Post-Mortem)
 
-The following gaps were identified from the Hadas Moran / Ashley Stanford / NuRoots cluster investigation. These are detection misses that the weekly run would not have caught on its own. Each is flagged with build priority.
+The following gaps were identified from the NuRoots Sweet Return cluster investigation (primary device `e08515b2...`, Cases 00003748-00003769, 9/17/2026). These are detection misses that the weekly run would not have caught on its own. Each is flagged with build priority.
+
+Note: Hadas Moran and Ashley Stanford were a separate investigation on different devices and are not part of the NuRoots cluster. Do not conflate them.
+
+**Standing rule -- NuRoots device auto-Suspension:**
+The NuRoots operation has returned in multiple waves (9/17 original, 10/2 return cluster, 10/7 third wave). Any dinner created on or with guests from a confirmed NuRoots device must be treated as automatic Suspension regardless of score, even on a first offense. Known NuRoots devices:
+- `e08515b2...` (primary host creation device -- 21 suspended hosts, Cases 00003748-00003769 and 00004227-00004232)
+- `bac21e01...` (guest account device -- also created Mary Fox's dinners, Case 00003760)
+
+If Pass 2 or a device file confirms a dinner creation device or guest device matches either of these fingerprints, escalate immediately to Suspension and note the NuRoots connection as the first bullet in the case narrative. This overrides the first-instance rule for this specific known operation.
 
 **P0 -- Ready to build now:**
 
@@ -1037,7 +1046,7 @@ The following gaps were identified from the Hadas Moran / Ashley Stanford / NuRo
 
 4. **Privacy-domain guest share signal.** A dinner where 50%+ of guests have privacy-domain emails (proton.me, atomicmail.io, etc.) should score as a standalone signal or with lower pairing requirements. Currently scores weight 1 only when paired with a guest integrity signal. Standalone high-share (75%+) should score at weight 3-4. Also: look-alike domains (astermail.org, altaddress.com, atomicmail.com, etc.) need to be added to the list.
 
-5. **Host email domain check.** Currently the script only checks guest email domains. A host whose own email is on a suspicious or throwaway domain should add a signal. Hadas and Ashley both had atomicmail.io host emails.
+5. **Host email domain check.** Currently the script only checks guest email domains. A host whose own email is on a suspicious or throwaway domain should add a signal.
 
 6. **Multi-week lookback for new hosts.** The weekly run starts from scratch each week and never looks back. New hosts (under 90 days) should be checked against the last 8 weeks of data to see if a pattern exists across their dinner history. Requires historical report access or Salesforce query.
 
