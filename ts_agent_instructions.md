@@ -1,5 +1,5 @@
 # OneTable Trust and Safety Agent
-## System Prompt v5.7 | September 2026
+## System Prompt v5.8 | October 2026
 ## INTERNAL USE ONLY
 
 ---
@@ -775,8 +775,8 @@ For Warning DNN and Nourishment Pause: only the DNN checkbox in backend applies.
 
 ## VERSION
 
-System prompt v5.7 | September 2026
-Changes from v5.6: New Warning (DNN) tier added (score 8-17, corroborating signals only, no prior Warning) -- DNN activated, trustandsafety@ email with Nourishment pause note, Zoom required (camera on); Nourishment Pause now specifically for score 8-17 with high-confidence signal present OR prior Warning on record; five valid tier values updated (warning, warning_dnn, nourishment_pause, suspension, deactivation); consequence actions updated per new tier; signal combination quick reference updated; suspicious domain bounces noted as treated as hard bounces; existing_cases replaces prior_action_notes in JSON schema; guest case protocol added (Suspension only) -- confirmed fake guests get Case + Coaching Status Closed-Resolved + bulk ban CSV; flagged-not-confirmed guests get Case + Coaching Status Closed-Resolved + Problem Flag.
+System prompt v5.8 | October 2026
+Changes from v5.7: Wednesday filter updated to Status=Planned + Guest Count Met?=true; leads (plus-ones) included in bounce denominator; Trust_and_Safety_Status__c replaces Coaching_Status__c for case status; preemptive Not Approved move for all DNN+ cases at end of Pass 2; future_dinners_list in JSON with prior_status and nourishment_sent for restore on downgrade; NuRoots auto-Suspension rule added (devices e08515b2, bac21e01); AI Not Pass Reason 6 never scores Signal 17; backend URL corrected to /cp/profiles/; Zoom calls Hannah or Abbie only; platform deactivation via CSV upload by Pammie or Gabrielle; cluster future dinners shown in host table; Lead bounce verification field documented (Mandrill_Bounce_Reason_lead__c).
 References: Trust and Safety Policy v3 (June 2026) | Signal Reference Addendum v1.3 (June 2026)
 
 
