@@ -347,7 +347,14 @@ function buildReviewView() {
     ${(state.current.field_alerts||[]).map(a=>{const crit=a.includes('CRITICAL');return `<div style="padding:10px 14px;border-radius:8px;margin-bottom:8px;font-size:13px;font-weight:500;background:${crit?'#FEF2F2':'#FFFBEB'};color:${crit?'#991B1B':'#633806'};border-left:3px solid ${crit?'#991B1B':'#F59E0B'}">${a.replace('⚠ CRITICAL: ','🚨 ').replace('⚠ WARNING: ','⚠️ ')}</div>`;}).join('')}
     ${(()=>{
       const existingCases = state.current.existing_cases||[];
-      const actionNeeded = existingCases.filter(c=>c.existing_case_type==='suspension'||c.existing_case_type==='open_case');
+      const runDate = (state.current.run?.run_date||'').slice(0,10);
+      // Suspended hosts whose case was created on the run date = action needed this week
+      // Suspended hosts with older cases = previously actioned, softer section
+      const suspendedNew = existingCases.filter(c=>c.existing_case_type==='suspension'&&(!c.most_recent_case_date||c.most_recent_case_date>=runDate));
+      const suspendedOld = existingCases.filter(c=>c.existing_case_type==='suspension'&&c.most_recent_case_date&&c.most_recent_case_date<runDate);
+      const openCases = existingCases.filter(c=>c.existing_case_type==='open_case');
+      const actionNeeded = [...suspendedNew, ...openCases];
+      const previouslyActioned = suspendedOld;
       const noActionNeeded = existingCases.filter(c=>c.existing_case_type==='dnn'||c.existing_case_type==='warning_dnn');
       let ecHtml = '';
 
@@ -376,6 +383,17 @@ function buildReviewView() {
             <span style="color:#C2410C;font-size:12px">${open?'▲':'▼'}</span>
           </div>
           ${open?`<div style="padding:0 16px 12px">${actionNeeded.map(c=>renderRow(c,'#FED7AA')).join('')}</div>`:''}
+        </div>`;
+      }
+
+      if (previouslyActioned.length > 0) {
+        const open = state.existingCasesPrevOpen === true;
+        ecHtml += `<div style="background:var(--surface);border:0.5px solid var(--border);border-radius:8px;margin-bottom:8px;overflow:hidden">
+          <div onclick="state.existingCasesPrevOpen=!state.existingCasesPrevOpen;render()" style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;cursor:pointer">
+            <div style="font-weight:500;color:var(--text-sec);font-size:13px">Previously actioned · ${previouslyActioned.length} suspended host${previouslyActioned.length>1?'s':''} (case predates this run · dinner already blocked)</div>
+            <span style="color:var(--text-sec);font-size:12px">${open?'▲':'▼'}</span>
+          </div>
+          ${open?`<div style="padding:0 16px 12px">${previouslyActioned.map(c=>renderRow(c,'var(--border)')).join('')}</div>`:''}
         </div>`;
       }
 
