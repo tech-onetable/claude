@@ -703,16 +703,16 @@ When staff approves a recommendation via the case review UI, the following actio
 - Check Suspended_Flag__c on Contact first -- set to true via sf_update_contact_flags only if not already true
 - Move all future dinners to Not Approved campaign status via sf_update_campaign (same query as DNN above)
 - Check Grant Application Status first -- set to "Suspended" via sf_update_grant_application only if not already "Suspended" or "Deactivated"
-- Surface all associated Device IDs in the case output as a checklist for manual deactivation: query `SELECT DISTINCT Dinner_Created_Device_ID__c FROM Campaign WHERE ContactId = '[id]' AND Dinner_Created_Device_ID__c != null` and `SELECT DISTINCT Device_ID__c FROM CampaignMember WHERE ContactId = '[id]' AND Device_ID__c != null`. List each device ID with a note: "⚠ Manual: deactivate device session in backend." (Pending ImagineX bulk device deactivation endpoint.)
+- Surface all associated Device IDs in the case output as a checklist for manual deactivation: query `SELECT DISTINCT Dinner_Created_Device_ID__c FROM Campaign WHERE ContactId = '[id]' AND Dinner_Created_Device_ID__c != null` and `SELECT DISTINCT Device_ID__c FROM CampaignMember WHERE ContactId = '[id]' AND Device_ID__c != null`. List each device ID with a note: "⚠ Manual: deactivate device session in backend." (Bulk device deactivation endpoint pending.)
 
 **Deactivation (scores 40+, post-reinstatement or second formal consequence only)**
 - All of the above
 - Alert Amalia before proceeding
-- Create Zendesk ticket for build team to action IP/account ban (manual platform action)
+- Platform deactivation is handled via ban CSV upload by Pammie or Gabrielle -- not ImagineX
 
 **Coaching status logic**
 - **Warning:** Case auto-opens. Coaching_Status__c should auto-set to "Closed - Resolved" after warning email sends -- no response expected, case is informational only. ⚠ Requires Salesforce Flow from Amalia: trigger on consequence_recommended = "Warning" + send_warning_email = true → set Coaching_Status__c = "Closed - Resolved".
-- **Warning DNN / Suspension / Nourishment Pause:** Case auto-opens (Dov's flow sets to Open). Stays open until Zoom call happens. Staff closes manually after conversation -- "Closed - Resolved" if resolved, "Closed - Unresolved" if host never responded (after 2 weeks).
+- **Warning DNN / Suspension / Nourishment Pause:** Case auto-opens (Dov's flow sets to Open). Stays open until Zoom call happens. Zoom calls are scheduled and conducted by Hannah or Abbie -- Dov is not involved. Staff closes manually after conversation -- "Closed - Resolved" if resolved, "Closed - Unresolved" if host never responded (after 2 weeks).
 - **No response after 2 weeks:** Staff sets Coaching_Status__c = "Closed - Unresolved". Restrictions remain in place.
 - **Guest cases:** Set Coaching_Status__c = "Closed - Resolved" immediately on case creation -- no follow-up needed.
 
@@ -735,7 +735,7 @@ The following actions require manual backend access or are pending build. The UI
 - [ ] Check DNN checkbox on host user record in backend (manual until bulk upload is built)
 - [ ] Confirm future dinners updated to Not Approved via sf_update_campaign (automated -- verify landed)
 
-**DNN bulk upload output (pending ImagineX build)**
+**DNN bulk upload output**
 When a DNN case is approved, add the host Contact ID to a weekly DNN bulk upload CSV. This mirrors the guest ban CSV pattern and will be used to mark hosts as "not eligible for Nourishment" in bulk once the backend upload tool is available. Until then, the DNN checkbox is checked manually per the checklist above.
 
 **Post-approval checklist -- displayed in UI after Suspension is approved**
