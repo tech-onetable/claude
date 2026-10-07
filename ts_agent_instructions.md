@@ -797,6 +797,9 @@ At the end of the deep dive, state:
 
 ---
 
+**0. Reservation timing (clusters only)**
+The CSV includes a `Reservation Created` field. For cluster cases, query or inspect the RSVP timestamps for each dinner's guests. Look for: all guests RSVPing within a very tight window (minutes apart) AND accounts created the same day as the RSVP. This combination strongly suggests scripted account creation. Do not score this as a standalone signal -- use it as corroborating evidence in the narrative alongside device, PID, and bounce signals. A tight RSVP window with established accounts (joined months earlier) is not suspicious.
+
 **1. Historical date overlap (clusters only)**
 Query: `SELECT Campaign.StartDate, Campaign.Name FROM CampaignMember WHERE Status = 'Host' AND ContactId = '[id]' ORDER BY Campaign.StartDate DESC LIMIT 20` for each cluster host. Compare dates across hosts and flag any where 2+ hosts posted on the same night.
 Finding: Flag / No flag / Inconclusive. Does not score -- informational only.
