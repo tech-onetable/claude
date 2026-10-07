@@ -924,7 +924,7 @@ def build_case_json(cid, camp, scored_signals, score, tier, sf_data=None):
         'nourishment_eligible_this_dinner': nourishment_eligible_str,
         'nourishment_requested': nourishment_requested_str,
         'future_dinners': future_dinners_str,
-        'future_dinners_list': [{'id': d['id'], 'name': d['name'], 'date': d['date'], 'prior_status': d['status']} for d in future_list] if tier in ('warning_dnn', 'suspension', 'deactivation') else [],
+        'future_dinners_list': [{'id': d['id'], 'name': d['name'], 'date': d['date'], 'prior_status': d['status'], 'nourishment_sent': d.get('nourishment_sent', False)} for d in future_list] if tier in ('warning_dnn', 'suspension', 'deactivation') else [],
         'suspended': suspended,
         'dnn': dnn,
         'collapsed_summary': collapsed,
@@ -1051,7 +1051,7 @@ def run(csv_path, lead_path=None, wednesday_mode=False):
             cid: camp for cid, camp in campaigns.items()
             if (
                 str(camp.get('host', {}).get('Campaign Status', '') or '').strip().lower() == 'planned'
-                and str(camp.get('host', {}).get('Guest Count Met?', '') or '').strip().lower() == 'true'
+                and str(camp.get('host', {}).get('Guest Count Met?', '') or '').strip().lower() in ('true', '1')
             ) or (
                 str(camp.get('host', {}).get('Campaign Status', '') or '').strip().lower() in SENT_STATUSES
             )
@@ -1607,7 +1607,7 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
                 'score': d['score'],
                 'nourishment_received': n_str,
                 'future_dinners': str(len(sf.get('_future_dinners', []))),
-                'future_dinners_list': [{'id': fd['id'], 'name': fd['name'], 'date': fd['date'], 'prior_status': fd['status']} for fd in sf.get('_future_dinners', [])],
+                'future_dinners_list': [{'id': fd['id'], 'name': fd['name'], 'date': fd['date'], 'prior_status': fd['status'], 'nourishment_sent': fd.get('nourishment_sent', False)} for fd in sf.get('_future_dinners', [])],
                 'address': addr,
                 'address_type': addr_type,
                 'area': camp_host.get('Area', '') or '',
