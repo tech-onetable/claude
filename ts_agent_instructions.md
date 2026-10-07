@@ -204,6 +204,8 @@ Requires at least one other triggered signal to score. Standalone cross-dinner F
 
 **Guest email bounces signal:**
 Hard and reject bounces are combined into a single signal. Any delivery failure counts regardless of Mandrill's classification (hard_bounce, reject, invalid). Bounces on known throwaway domains always count. The hard/reject distinction is not meaningful for consequence decisions. **Lead guests (plus-ones) are included in the bounce denominator** -- they have real email addresses and a bounce is meaningful. Leads are excluded only from PID and device signal calculations where plus-ones don't register independently.
+
+**Lead bounce verification:** Lead bounce data can be cross-confirmed in Salesforce using `Mandrill_Bounce_Reason_lead__c` and `Mandrill_Bounce_Time_Date_lead__c` (note the `_lead` suffix -- different API names from the Contact equivalents). When Lead bounces are driving the score, verify via: `SELECT Id, Email, Mandrill_Bounce_Reason_lead__c FROM Lead WHERE Id IN ('[ids]')`. An operator who puts fake emails on plus-ones instead of account guests keeps Contact guests clean while fabricating plus-one emails -- the bounce signal still fires and is verifiable via SF.
 - 50-74% of guests bounced: weight 4, corroborating, needs pairing
 - 75%+ of guests bounced: weight 8, high-confidence, Warning (DNN) eligible standalone
 
