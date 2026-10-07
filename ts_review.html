@@ -922,16 +922,34 @@ function buildFlagCard(f) {
 function buildInsights() {
   const ins = state.current?.insights;
   if (!ins) return '';
+
+  // Split patterns and trends into bullets on sentence boundaries
+  const toBullets = (text) => {
+    if (!text) return '';
+    const sentences = text.split(/(?<=[.!?])\s+/).filter(s=>s.trim().length>0);
+    if (sentences.length <= 1) return `<li style="font-size:13px;color:var(--text-sec);margin-bottom:4px">${text}</li>`;
+    return sentences.map(s=>`<li style="font-size:13px;color:var(--text-sec);margin-bottom:4px">${s}</li>`).join('');
+  };
+
+  // Split open questions into urgent (needs action) vs FYI
+  const urgentKeywords = /before nourishment|before next run|confirm|hold|review before|should already|staff should|pending/i;
+  const allQs = ins.open_questions || [];
+  // Use explicit arrays if provided, otherwise auto-classify
+  const urgentQs = ins.open_questions_urgent || allQs.filter(q => urgentKeywords.test(q));
+  const fiyQs = ins.open_questions_fyi || allQs.filter(q => !urgentKeywords.test(q));
+
   return `<div class="collapsible" style="margin-top:16px;">
     <div class="collapsible-header" onclick="toggleCollapsible(this)">Weekly Insights <span class="chevron">▾</span></div>
     <div class="collapsible-body">
-      ${ins.patterns?`<div class="section-label">Patterns</div><p style="font-size:13px;color:var(--text-sec);margin-bottom:12px">${ins.patterns}</p>`:''}
-      ${ins.emerging_trends?`<div class="section-label">Emerging Trends</div><p style="font-size:13px;color:var(--text-sec);margin-bottom:12px">${ins.emerging_trends}</p>`:''}
+      ${ins.patterns?`<div class="section-label">Patterns</div><ul style="padding-left:16px;margin-bottom:12px">${toBullets(ins.patterns)}</ul>`:''}
+      ${ins.emerging_trends?`<div class="section-label">Emerging Trends</div><ul style="padding-left:16px;margin-bottom:12px">${toBullets(ins.emerging_trends)}</ul>`:''}
       ${ins.below_threshold?.length?`<div class="section-label">Below-threshold signals</div>
         <table class="insights-table"><thead><tr><th>Signal</th><th>Count</th><th>Threshold</th><th>Avg observed</th></tr></thead>
         <tbody>${ins.below_threshold.map(b=>`<tr><td>${b.signal}</td><td>${b.count}</td><td>${b.threshold}</td><td>${b.avg_observed}</td></tr>`).join('')}</tbody></table>`:''}
-      ${ins.open_questions?.length?`<div class="section-label">Open Questions</div>
-        <ul style="padding-left:16px">${ins.open_questions.map(q=>`<li style="font-size:13px;color:var(--text-sec);margin-bottom:4px">${q}</li>`).join('')}</ul>`:''}
+      ${urgentQs.length?`<div class="section-label" style="color:var(--wine)">⚠ Needs action</div>
+        <ul style="padding-left:16px;margin-bottom:12px">${urgentQs.map(q=>`<li style="font-size:13px;color:var(--text-sec);margin-bottom:6px">${q}</li>`).join('')}</ul>`:''}
+      ${fiyQs.length?`<div class="section-label">FYI / longer term</div>
+        <ul style="padding-left:16px">${fiyQs.map(q=>`<li style="font-size:13px;color:var(--text-sec);margin-bottom:6px">${q}</li>`).join('')}</ul>`:''}
     </div>
   </div>`;
 }
