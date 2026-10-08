@@ -1881,6 +1881,7 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
 
         # Reconstruct scored_signals for case building
         scored_signals = {k: {
+            'sig_key': k,
             'name': v['name'],
             'weight': v['weight'],
             'observed': v.get('observed', ''),
