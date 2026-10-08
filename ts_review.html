@@ -341,13 +341,15 @@ function buildReviewView() {
     ${(()=>{
       const existingCases = state.current.existing_cases||[];
       const runDate = (state.current.run?.run_date||'').slice(0,10);
-      // Suspended hosts whose case was created on the run date = action needed this week
-      // Suspended hosts with older cases = previously actioned, softer section
-      const suspendedNew = existingCases.filter(c=>c.existing_case_type==='suspension'&&(!c.most_recent_case_date||c.most_recent_case_date>=runDate));
-      const suspendedOld = existingCases.filter(c=>c.existing_case_type==='suspension'&&c.most_recent_case_date&&c.most_recent_case_date<runDate);
+      const BLOCKED_STATUSES = ['not approved','sent nourishment','sent nourishment, confirmation email sent','partial nourishment sent','aborted','not nourishing'];
+      const isBlocked = c => BLOCKED_STATUSES.includes((c.campaign_status||'').toLowerCase());
+      // Action needed: suspended host with an active dinner that isn't blocked
+      // Previously actioned: suspended host whose dinner is already Not Approved, Sent, or Aborted
+      const suspendedAction = existingCases.filter(c=>c.existing_case_type==='suspension'&&!isBlocked(c));
+      const suspendedPrev = existingCases.filter(c=>c.existing_case_type==='suspension'&&isBlocked(c));
       const openCases = existingCases.filter(c=>c.existing_case_type==='open_case');
-      const actionNeeded = [...suspendedNew, ...openCases];
-      const previouslyActioned = suspendedOld;
+      const actionNeeded = [...suspendedAction, ...openCases];
+      const previouslyActioned = suspendedPrev;
       const noActionNeeded = existingCases.filter(c=>c.existing_case_type==='dnn'||c.existing_case_type==='warning_dnn');
       let ecHtml = '';
 
