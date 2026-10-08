@@ -165,23 +165,20 @@ After all cases are reviewed in the UI each run, the agent writes to the T&S Wee
 **Doc:** https://claude.ai/code/artifact/7011cc2f-da31-4c99-8ddf-f4251039fc3a
 
 **Steps:**
-1. Open the doc and find the current week's section (heading: `week of [Friday dinner date]`, e.g. `week of 2026-10-09`). If it doesn't exist, create it.
-2. Write this run's summary line:
-   - `Wednesday: N cases, N DNN (N dinners Not Approved), N Suspensions: [Last names]`
-   - `Thursday: N cases, N DNN (N dinners Not Approved), N Suspensions: [Last names]`
-3. **Thursday only:** if both lines are now present, assemble and send the combined Slack to #trust-and-safety (C07RKSVHXJ4) via the Slack MCP connector. Tag @pammie.
+1. Open the doc and find the row for this run (Week of = Friday dinner date, Run = Wednesday or Thursday). If the row doesn't exist, add it.
+2. Fill in: Cases, DNN, DNN dinners Not Approved, Suspensions (last names only), Suspension dinners Not Approved, Notes (one sentence if needed).
+3. **Thursday only:** if the Wednesday row for this week is already filled, assemble and send the combined Slack to #trust-and-safety (C07RKSVHXJ4) via Slack MCP. Tag @pammie.
 
-**Combined Slack message format:**
+**Combined Slack format:**
 ```
 @pammie T&S update · week of [Friday date] (Wed + Thu reviews)
-• [N] total cases
-• [N] DNN — [N] future dinners moved to Not Approved
+• [total cases] total cases
+• [DNN total] DNN — [N] future dinners moved to Not Approved
 • [N] Suspensions: [Last name] / [Last name]
   · [One sentence: what connected them or why flagged]
   · [N] future dinners moved to Not Approved
 ```
-
-Rules: DNN totals only, no names. Suspensions: last names only, no case numbers. Under 10 lines. Friday date = the dinner date for that week's dinners (not the run date).
+DNN: totals only, no names. Suspensions: last names only. Under 10 lines. Friday date = dinner date, not run date.
 
 **Post-action verification (required at end of every weekly run AND every investigation):**
 Before closing out, query Salesforce directly to verify every action requested or approved during the session actually completed. Do not rely on earlier tool call results or session memory.
