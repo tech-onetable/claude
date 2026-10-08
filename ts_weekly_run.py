@@ -32,7 +32,7 @@ SUSPICIOUS_DOMAINS = {
     # Added 2026-10-01 from Alfie Elliott case
     'hudzer.com','flakeian.com','cwsgear.com','mail2usa.com',
 }
-HIGH_VOLUME_THRESHOLD = 10   # FP on 10+ dinners = shared infrastructure, not scored
+HIGH_VOLUME_THRESHOLD = 8    # FP on 8+ dinners = shared infrastructure, not scored
 SIGNAL_WEIGHTS = {
     'sig1': 7,   # Shared device FP host+guest (standalone)
     'sig2': 7,   # Cross-dinner device FP match (needs pairing)
@@ -63,13 +63,13 @@ SIGNAL_WEIGHTS = {
     'sig23': 8,  # Deliberate identity change (standalone, staff judgment)
 }
 # Signals that qualify as High confidence when triggered at threshold.
-# sig1    = shared device FP host+guest (50%+)
+# sig1    = shared device FP host+guest (>50%)
 # sig12   = bounces 75%+
-# sig14   = sequential PIDs 100% of profiled guests
 # sig21   = reports from other users
 # sig22   = deliberate fraud (staff judgment)
 # sig23   = deliberate identity change (staff judgment)
-STANDALONE = {'sig1', 'sig12', 'sig14', 'sig21', 'sig22', 'sig23'}
+# Note: sig14 (100% PIDs) is NOT standalone -- requires at least one pairing signal
+STANDALONE = {'sig1', 'sig12', 'sig21', 'sig22', 'sig23'}
 GUEST_INTEGRITY_SIGNALS = {'sig12', 'sig12_low', 'sig14', 'sig14_low', 'sig10'}
 SF_BASE = "https://onetable.lightning.force.com/lightning/r/Contact/{}/view"
 SF_CAMPAIGN_BASE = "https://onetable.lightning.force.com/lightning/r/Campaign/{}/view"
@@ -505,9 +505,12 @@ def score_campaign(cid, camp, cross_dinner, high_volume, campaigns=None):
 
     # ── Signal 11: Host/guest email similarity (needs pairing, 50%+) ──────────
     # Only meaningful when host uses a non-common domain shared with guests
+    # Privacy domains are used by many unrelated people -- shared domain alone is not meaningful
     COMMON_DOMAINS = {'gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com',
                       'icloud.com', 'aol.com', 'me.com', 'live.com', 'msn.com',
-                      'mac.com', 'ymail.com', 'googlemail.com'}
+                      'mac.com', 'ymail.com', 'googlemail.com',
+                      'proton.me', 'protonmail.com', 'tutanota.com', 'tutamail.com',
+                      'hey.com', 'fastmail.com', 'pm.me'}
     host_email = host.get('Campaign Member Email', '').lower().strip() if host else ''
     if host_email and '@' in host_email:
         host_domain = host_email.split('@')[1]
@@ -529,10 +532,10 @@ def score_campaign(cid, camp, cross_dinner, high_volume, campaigns=None):
                     similar_guests.append(g_email)
         if n > 0 and len(similar_guests) >= 2:
             pct = len(similar_guests) / n
-            met = pct >= 0.5
+            met = pct > 0.5
             add_sig('sig11',
-                    f"Host/guest email similarity: {len(similar_guests)}/{n} ({round(100*pct)}%) guests share domain or pattern with host ({host_email})",
-                    f"{round(100*pct)}% ({len(similar_guests)}/{n} guests)", "50%+ and ≥2 guests (non-common domain match)", met)
+                    f"Host/guest email similarity: {len(similar_guests)}/{n} ({round(100*pct)}%) guests share username pattern with host ({host_email})",
+                    f"{round(100*pct)}% ({len(similar_guests)}/{n} guests)", ">50% and ≥2 guests (username pattern match, non-common domain)", met)
 
     # ── Signal 10: Suspicious phone number patterns (needs pairing, 50%+) ─────
     # Sequential or patterned phone numbers suggest bulk account creation
