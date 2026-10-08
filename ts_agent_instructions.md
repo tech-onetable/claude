@@ -386,6 +386,18 @@ Fields monitored: RSVP Device Fingerprint ID, RSVP IP, Mandrill Bounce Reason, P
 - Campaign Status = 'Not Approved' or 'Aborted' → skip entirely, do not surface anywhere in the output. These are already handled.
 - Any other Campaign Status → surface in a dedicated "Existing Cases -- Active While Suspended" section at the top of the output, above all scored cases. Flag that a new dinner is active while the host is suspended. Do not re-score these hosts -- note the existing suspension and the active campaign status only.
 
+**DNN host rescore rule:** When a host with an existing Warning DNN case scores higher in a subsequent run, two things must happen:
+
+1. **Add a Salesforce case note** to their existing case explaining what changed. Format:
+   "Rescore [run date]: [host name] scored [new score] this week on their [date] dinner, up from [prior score] on their [prior date] dinner. [What changed -- e.g. bounce rate reached 75%+ tier (+8 vs +4), or new dinner with stronger device concentration.] [Whether this is a new dinner posted after DNN or the same dinner with updated data.] Score breakdown: [signal breakdown]. Recommend staff review for escalation."
+
+2. **Surface in open_questions_urgent:** "Rescore: [host name] scored [N] this week (prior case: [N]). [One-line summary of what changed.] Staff should review for escalation -- [specific reason: new dinner after DNN / stronger evidence on same dinner]."
+
+**New dinner after DNN rule:** If a host posts a new dinner after their Warning DNN consequence was applied (dinner creation date > case creation date), this is an escalation trigger regardless of score. Flag explicitly:
+- In the case note: "New dinner posted [date] after DNN applied [case date] -- this is an escalation trigger per policy."
+- In open_questions_urgent: "New dinner after DNN: [host name] created a new dinner on [date], after DNN was applied on [case date]. Staff to review for escalation."
+- Do not automatically escalate -- surface for staff judgment.
+
 **Step 3 -- Auto-include check**
 
 The script auto-flags suspended and DNN hosts. Additionally flag for Pass 2:
