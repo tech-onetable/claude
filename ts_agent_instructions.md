@@ -815,8 +815,8 @@ At the end of the deep dive, state:
 **0. Cross-dinner device FP enrichment (individual cases with sig2 triggered)**
 When an individual (non-cluster) case has the cross-dinner device fingerprint signal triggered, the script description includes the full fingerprint and the other dinner Campaign IDs it appeared on. During Pass 2, for each such case:
 - Query the other dinner Campaign IDs to get host names: `SELECT Id, Name, ContactId, Contact.Name FROM Campaign WHERE Id IN ('[other_cids]')`
-- Add a bullet to the case narrative: "**Cross-dinner device [fp truncated to 8 chars]...:** This device also appeared at [N] other dinner(s) this week: [host name(s)]. [If any of those hosts are flagged or suspended: note the connection explicitly.]"
-- If any of the connected hosts are in this week's scored cases or are suspended, flag immediately -- this may be an undetected cluster.
+- Add a bullet to the case `bullets` array (so it appears in the Summary section of the UI card): "**Cross-dinner device [fp first 8 chars]...:** Also appeared at [N] other dinner(s) this week -- [host name 1], [host name 2], etc. [If any are flagged/suspended: 'Including [name] who is suspended.'] [If device is high-volume (8+ dinners): 'Device appears on [N] dinners total -- likely shared infrastructure, weight accordingly.']"
+- If any connected hosts are in this week's scored cases or are suspended, flag immediately in open_questions_urgent -- this may be an undetected cluster.
 
 **0. Reservation timing (clusters only)**
 The CSV includes a `Reservation Created` field. For cluster cases, query or inspect the RSVP timestamps for each dinner's guests. Look for: all guests RSVPing within a very tight window (minutes apart) AND accounts created the same day as the RSVP. This combination strongly suggests scripted account creation. Do not score this as a standalone signal -- use it as corroborating evidence in the narrative alongside device, PID, and bounce signals. A tight RSVP window with established accounts (joined months earlier) is not suspicious.
