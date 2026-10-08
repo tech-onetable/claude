@@ -61,6 +61,7 @@ SIGNAL_WEIGHTS = {
     'sig21': 6,  # Reports from users (standalone)
     'sig22': 10, # Deliberate fraud (standalone, staff judgment)
     'sig23': 8,  # Deliberate identity change (standalone, staff judgment)
+    'sig_addr': 2, # Same dinner address as another host this week (corroborating)
 }
 # Signals that qualify as High confidence when triggered at threshold.
 # sig1    = shared device FP host+guest (>50%)
@@ -767,6 +768,7 @@ SIG_NAMES = {
     'sig21': 'Reports from other users',
     'sig22': 'Deliberate activity to defraud the program',
     'sig23': 'Deliberate identity change',
+    'sig_addr': 'Same dinner address as another host this week',
 }
 
 
@@ -1352,6 +1354,40 @@ def run(csv_path, lead_path=None, wednesday_mode=False):
                 'eligible': eligible_str,
             })
     same_address = {addr: hosts for addr, hosts in addresses.items() if len(hosts) >= 2}
+
+    # Inject sig_addr into scored_signals for hosts sharing an address with another host this week.
+    # Corroborating only -- needs at least one other signal to score.
+    # Build a lookup: cid -> list of other host names at same address
+    addr_cid_to_others = {}
+    for addr, hosts in same_address.items():
+        cids = [h['cid'] for h in hosts]
+        names = [h['name'] for h in hosts]
+        for h in hosts:
+            others = [n for n in names if n != h['name']]
+            addr_cid_to_others[h['cid']] = {'addr': addr, 'others': others}
+
+    for cid, d in all_scored.items():
+        if cid not in addr_cid_to_others:
+            continue
+        info = addr_cid_to_others[cid]
+        others_str = ', '.join(info['others'])
+        # Add sig_addr to scored_signals -- only scores if paired with another signal
+        companions = {k for k, v in d['scored_signals'].items() if v['threshold_met'] and k != 'sig_addr'}
+        met = bool(companions)
+        d['scored_signals']['sig_addr'] = {
+            'sig_key': 'sig_addr',
+            'name': SIG_NAMES['sig_addr'],
+            'weight': SIGNAL_WEIGHTS['sig_addr'],
+            'desc': f"Shares address ({info['addr']}) with: {others_str}",
+            'observed': f"{others_str}",
+            'threshold': 'Any (needs pairing)',
+            'threshold_met': True,
+            'score_contribution': SIGNAL_WEIGHTS['sig_addr'] if met else 0,
+            'triggered': met,
+        }
+        if met:
+            d['score'] += SIGNAL_WEIGHTS['sig_addr']
+            d['tier'] = tier_from_score(d['score'])
 
     # Save intermediate for agent to use
     output = {
