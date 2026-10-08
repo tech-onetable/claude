@@ -779,6 +779,7 @@ def build_signals_array(scored_signals):
                 'triggered': True,
                 'weight': v['weight'],
                 'observed': v['observed'],
+                'desc': v.get('desc', ''),
                 'threshold': v['threshold'],
                 'threshold_met': v['threshold_met'],
                 'score_contribution': v['score_contribution'],
