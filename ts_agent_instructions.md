@@ -244,9 +244,9 @@ A single geographic mismatch signal does not score and does not trigger a Warnin
 
 | # | Category | Signal | Weight | Threshold | Notes |
 |---|---|---|---|---|---|
-| 1 | Network and Device | Shared device fingerprint, host and guest | 7 | 50%+ | High confidence. Requires minimum 3 guests at dinner. |
+| 1 | Network and Device | Shared device fingerprint, host and guest | 7 | >50% | High confidence. Requires minimum 3 guests at dinner. |
 | 2 | Network and Device | Cross-dinner device fingerprint match | 7 | Any | Must combine with at least one other signal to score. Requires minimum 3 guests at dinner. Standalone is a watch flag only. High confidence when combined with other signals. |
-| 3 | Network and Device | Same device fingerprint across guests | 5 | 50%+ | Must combine with at least one other signal to score. Requires minimum 3 guests at dinner and at least 3 guests sharing the fingerprint. Standalone is a watch flag only -- does not score. |
+| 3 | Network and Device | Same device fingerprint across guests | 5 | >50% | Must combine with at least one other signal to score. Requires minimum 3 guests at dinner and at least 3 guests sharing the fingerprint. Standalone is a watch flag only -- does not score. |
 | 4 | Network and Device | Sequential RSVP timing -- tight | 5 | Any | 1-2 minutes between RSVPs. Must combine with at least one other signal to score. |
 | 5 | Network and Device | VPN use across multiple guests/hosts | 3 | Any | Must combine with at least one other signal to score. |
 | 6 | Network and Device | Geographic mismatch | 0 | Any | Internal watch flag only -- does not score. Single signal triggers monitoring note, not Warning. |
@@ -255,7 +255,7 @@ A single geographic mismatch signal does not score and does not trigger a Warnin
 | 9 | Account and Identity | Suspicious guest email patterns | 4 | 50%+ | Duplicate, clearly fake, or offensive/inappropriate email addresses. Must combine with at least one other signal to score. |
 | 10 | Account and Identity | Suspicious phone number patterns | 4 | 50%+ | Sequential or patterned phone numbers. Must combine with at least one other signal to score. |
 | 11 | Account and Identity | Host/guest email similarity | 4 | Any | Does not score when shared last name explains similarity. Must combine with at least one other signal to score. |
-| 12 | Guest List Integrity | Guest email bounces | 4 or 8 | 50%+ | Hard and reject combined. 50-74% = weight 4, corroborating. 75%+ = weight 8, high-confidence, Warning DNN standalone. Throwaway domain bounces always count regardless of Mandrill type. |
+| 12 | Guest List Integrity | Guest email bounces | 4 or 8 | >50% | Hard and reject combined. >50-74% = weight 4, corroborating. 75%+ = weight 8, high-confidence, Warning DNN standalone. Throwaway domain bounces always count regardless of Mandrill type. |
 | 13 | Guest List Integrity | Sequential guest Profile IDs | 3 or 6 | 55%+ of profiled guests | Denominator = guests WITH Profile IDs only; plus-ones excluded. 55-99% = weight 3, corroborating, can score standalone. 100% = weight 6, Warning-eligible standalone. Sequential = PIDs within 1-2 of each other. |
 | 14 | Guest List Integrity | Recycled bounced guest list | 3 | Any | Same exact guest email across 2+ dinners AND those guests have bounces (any type). Clean recycled guests do not score. Needs pairing. |
 | 15 | Guest List Integrity | Privacy domain, no bounce | 1 | Any | Must combine with at least one guest integrity signal to score. |
