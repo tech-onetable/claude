@@ -22,7 +22,7 @@ Two separate Slack messages are sent at different points:
 
 1. **Mid-run status ping → #trustandsafety-agent-status** (C0BDAGF6A8Z): sent automatically by the agent after Pass 2 via the Slack MCP connector (slack_send_message). See step 5 in the weekly run output section. Status only -- no host names or scores.
 
-2. **End-of-review summary → #trust-and-safety**: sent from within ts_review.html after all cases are reviewed and approved by staff. This is a UI action, not an agent action.
+2. **End-of-review summary → #trust-and-safety**: after all cases are reviewed in ts_review.html, the agent writes a summary line to the T&S Weekly Run Accumulator doc (https://claude.ai/code/artifact/7011cc2f-da31-4c99-8ddf-f4251039fc3a) and, on Thursday, sends the combined Slack message. See WEEKLY ACCUMULATOR section below.
 
 ---
 
@@ -156,7 +156,32 @@ Every time a consequence is applied -- Warning, Warning DNN, Nourishment Pause, 
 5. **Mid-run Slack notification to #trustandsafety-agent-status (C0BDAGF6A8Z)** -- after Pass 2 is complete and before pausing for device files or presenting output, send a status ping using the Slack MCP connector (slack_send_message). Format: "@pammie ✅ T&S review complete · week of [week_of] · [X] suspensions · [X] warning DNNs · [X] warnings · [X] clusters." Then add either "⏳ Paused: device files needed for [N] cluster(s)." or "Files ready for review in ts_review.html." Status ping only -- no host names, scores, or case details. Do not use curl or a bot token.
 6. Post-action verification -- see below.
 
-The end-of-process Slack summary to #trust-and-safety (after all cases are reviewed and approved) is sent from within ts_review.html -- not by the agent. The cross-host sheet and Elliana draft (step 4) happen only when cross_host_flags is non-empty.
+The cross-host sheet and Elliana draft (step 4) happen only when cross_host_flags is non-empty. The combined #trust-and-safety Slack message is handled via the Weekly Accumulator doc (see WEEKLY ACCUMULATOR section below).
+
+## WEEKLY ACCUMULATOR
+
+After all cases are reviewed in the UI each run, the agent writes to the T&S Weekly Run Accumulator doc and, Thursday only, sends the combined Slack to #trust-and-safety.
+
+**Doc:** https://claude.ai/code/artifact/7011cc2f-da31-4c99-8ddf-f4251039fc3a
+
+**Steps:**
+1. Open the doc and find the current week's section (heading: `week of [Friday dinner date]`, e.g. `week of 2026-10-09`). If it doesn't exist, create it.
+2. Write this run's summary line:
+   - `Wednesday: N cases, N DNN (N dinners Not Approved), N Suspensions: [Last names]`
+   - `Thursday: N cases, N DNN (N dinners Not Approved), N Suspensions: [Last names]`
+3. **Thursday only:** if both lines are now present, assemble and send the combined Slack to #trust-and-safety (C07RKSVHXJ4) via the Slack MCP connector. Tag @pammie.
+
+**Combined Slack message format:**
+```
+@pammie T&S update · week of [Friday date] (Wed + Thu reviews)
+• [N] total cases
+• [N] DNN — [N] future dinners moved to Not Approved
+• [N] Suspensions: [Last name] / [Last name]
+  · [One sentence: what connected them or why flagged]
+  · [N] future dinners moved to Not Approved
+```
+
+Rules: DNN totals only, no names. Suspensions: last names only, no case numbers. Under 10 lines. Friday date = the dinner date for that week's dinners (not the run date).
 
 **Post-action verification (required at end of every weekly run AND every investigation):**
 Before closing out, query Salesforce directly to verify every action requested or approved during the session actually completed. Do not rely on earlier tool call results or session memory.
