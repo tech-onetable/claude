@@ -271,10 +271,10 @@ def score_campaign(cid, camp, cross_dinner, high_volume, campaigns=None):
     if host_fp and n >= 3:  # min 3 guests required for device FP signals
         shared = [fp for fp in guest_fps if fp == host_fp]
         pct = len(shared) / n
-        met = pct >= 0.50
+        met = pct > 0.50
         add_sig('sig1',
                 f"Shared device fingerprint host and guest: {len(shared)}/{n} ({round(100*pct)}%) [{host_fp}]",
-                f"{round(100*pct)}% ({len(shared)}/{n} guests)", "50%+ (min 3 guests)", met)
+                f"{round(100*pct)}% ({len(shared)}/{n} guests)", ">50% (min 3 guests)", met)
 
     # ── Signal 2: Cross-dinner FP match (needs pairing, any, skip high-volume) ──
     # Only score if 2+ guests in this dinner share the cross-dinner FP
@@ -297,7 +297,7 @@ def score_campaign(cid, camp, cross_dinner, high_volume, campaigns=None):
                 if not other_guests:
                     continue
                 other_fp_count = sum(1 for g in other_guests if g.get('RSVP Device Fingerprint ID','') == fp or g.get('Device ID','') == fp)
-                if len(other_guests) >= 3 and other_fp_count / len(other_guests) >= 0.50:
+                if len(other_guests) >= 3 and other_fp_count / len(other_guests) > 0.50:
                     high_conc_other = True
                     break
             if high_conc_other:
@@ -323,7 +323,7 @@ def score_campaign(cid, camp, cross_dinner, high_volume, campaigns=None):
         if top_fp not in high_volume:
             pct = top_count / n
             # Require at least 2 guests sharing the same FP -- 1 guest is not meaningful
-            met = pct >= 0.50 and top_count >= 3
+            met = pct > 0.50 and top_count >= 3
             add_sig('sig3',
                     f"Same device fingerprint across guests: {top_count}/{n} ({round(100*pct)}%) [{top_fp}]",
                     f"{round(100*pct)}% ({top_count}/{n} guests)", "50%+ and ≥3 guests sharing (min 3 guests total)", met)
@@ -349,10 +349,10 @@ def score_campaign(cid, camp, cross_dinner, high_volume, campaigns=None):
             add_sig('sig12',
                     f"Guest email bounces (75%+): {len(bounced)}/{n} ({round(100*pct)}%) -- any bounce type",
                     f"{round(100*pct)}% ({len(bounced)}/{n} guests)", "75%+", True)
-        elif pct >= 0.50:
+        elif pct > 0.50:
             add_sig('sig12_low',
                     f"Guest email bounces (50-74%): {len(bounced)}/{n} ({round(100*pct)}%) -- any bounce type",
-                    f"{round(100*pct)}% ({len(bounced)}/{n} guests)", "50-74% (needs pairing)", True)
+                    f"{round(100*pct)}% ({len(bounced)}/{n} guests)", ">50-74% (needs pairing)", True)
 
     # ── Signal 14: Sequential PIDs (profiled guests only as denominator) ────────
     # 55-99% of profiled = weight 3 corroborating (sig14_low, can score standalone)
