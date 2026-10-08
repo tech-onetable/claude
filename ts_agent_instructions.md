@@ -393,10 +393,10 @@ Fields monitored: RSVP Device Fingerprint ID, RSVP IP, Mandrill Bounce Reason, P
 
 2. **Surface in open_questions_urgent:** "Rescore: [host name] scored [N] this week (prior case: [N]). [One-line summary of what changed.] Staff should review for escalation -- [specific reason: new dinner after DNN / stronger evidence on same dinner]."
 
-**New dinner after DNN rule:** If a host posts a new dinner after their Warning DNN consequence was applied (dinner creation date > case creation date), this is an escalation trigger regardless of score. Flag explicitly:
-- In the case note: "New dinner posted [date] after DNN applied [case date] -- this is an escalation trigger per policy."
-- In open_questions_urgent: "New dinner after DNN: [host name] created a new dinner on [date], after DNN was applied on [case date]. Staff to review for escalation."
-- Do not automatically escalate -- surface for staff judgment.
+**New dinner after DNN rule:** If a host posts a genuinely new dinner after their Warning DNN consequence was applied, this is an escalation trigger regardless of score. "Genuinely new" means: the dinner's **Platform_Create_Date__c** (creation date, not StartDate) is after the case creation date. Do not assume a dinner is new based on StartDate alone -- a dinner can have a future StartDate but have been created before the consequence. Verify the creation date in Salesforce before flagging. If confirmed new:
+- In the case note: "New dinner created [creation date] after DNN applied [case date] -- this is an escalation trigger per policy."
+- In open_questions_urgent: "New dinner after DNN: [host name] created a new dinner on [creation date], after DNN was applied on [case date]. Staff to review for escalation."
+- Do not automatically escalate -- surface for staff judgment. If the dinner was created before the consequence (common -- hosts post in advance), do not flag as a new-dinner trigger; treat it as a rescore only.
 
 **Step 3 -- Auto-include check**
 
