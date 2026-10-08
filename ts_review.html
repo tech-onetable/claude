@@ -699,7 +699,8 @@ function buildCaseBody(c, a, actioned, displayTier) {
         <div class="collapsible-header" onclick="toggleCollapsible(this)">Signals &amp; Score <span class="chevron">▾</span></div>
         <div class="collapsible-body">
           ${(c.signals||[]).filter(s=>s.triggered&&s.score_contribution>0).sort((a,b)=>b.score_contribution-a.score_contribution).map(s=>`
-            <div class="breakdown-row"><span style="color:var(--text-sec)">${s.name} <span style="font-size:12px;color:var(--text-ter)">${s.observed||''}</span></span><span class="breakdown-contrib">+${s.score_contribution}</span></div>`).join('')}
+            <div class="breakdown-row"><span style="color:var(--text-sec)">${s.name} <span style="font-size:12px;color:var(--text-ter)">${s.observed||''}</span>${s.desc&&s.desc!==s.name?`<div style="font-size:11px;color:var(--text-ter);margin-top:2px;word-break:break-all">${s.desc}</div>`:''}
+            </span><span class="breakdown-contrib">+${s.score_contribution}</span></div>`).join('')}
           ${(()=>{
             // Ensure sequential PID signals always appear even if not evaluated for this dinner
             const sigs = c.signals||[];
