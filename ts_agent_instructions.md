@@ -386,17 +386,13 @@ Fields monitored: RSVP Device Fingerprint ID, RSVP IP, Mandrill Bounce Reason, P
 - Campaign Status = 'Not Approved' or 'Aborted' → skip entirely, do not surface anywhere in the output. These are already handled.
 - Any other Campaign Status → surface in a dedicated "Existing Cases -- Active While Suspended" section at the top of the output, above all scored cases. Flag that a new dinner is active while the host is suspended. Do not re-score these hosts -- note the existing suspension and the active campaign status only.
 
-**DNN host rescore rule:** When a host with an existing Warning DNN case scores higher in a subsequent run, two things must happen:
+**DNN host case note rule:** When a host with an existing Warning DNN case appears in a subsequent run -- whether they rescored higher or posted a new dinner -- add a note to their existing Salesforce case. Keep it brief and factual. No open_questions_urgent entry needed; the DNN guardrail is already blocking their dinners.
 
-1. **Add a Salesforce case note** to their existing case explaining what changed. Format:
-   "Rescore [run date]: [host name] scored [new score] this week on their [date] dinner, up from [prior score] on their [prior date] dinner. [What changed -- e.g. bounce rate reached 75%+ tier (+8 vs +4), or new dinner with stronger device concentration.] [Whether this is a new dinner posted after DNN or the same dinner with updated data.] Score breakdown: [signal breakdown]. Recommend staff review for escalation."
+Format for a rescore: "Run [date]: scored [new score] on [dinner name] ([date]), up from [prior score]. [One sentence on what changed -- e.g. 'Bounce rate reached 75%+ tier on 10/9 dinner (+8 vs +4 prior).']"
 
-2. **Surface in open_questions_urgent:** "Rescore: [host name] scored [N] this week (prior case: [N]). [One-line summary of what changed.] Staff should review for escalation -- [specific reason: new dinner after DNN / stronger evidence on same dinner]."
+Format for a new dinner (confirmed by Platform_Create_Date__c after case creation date): "Run [date]: new dinner '[name]' created [creation date], after DNN applied [case date]. Dinner is Not Approved. No action needed -- noting for the record."
 
-**New dinner after DNN rule:** If a host posts a genuinely new dinner after their Warning DNN consequence was applied, this is an escalation trigger regardless of score. "Genuinely new" means: the dinner's **Platform_Create_Date__c** (creation date, not StartDate) is after the case creation date. Do not assume a dinner is new based on StartDate alone -- a dinner can have a future StartDate but have been created before the consequence. Verify the creation date in Salesforce before flagging. If confirmed new:
-- In the case note: "New dinner created [creation date] after DNN applied [case date] -- this is an escalation trigger per policy."
-- In open_questions_urgent: "New dinner after DNN: [host name] created a new dinner on [creation date], after DNN was applied on [case date]. Staff to review for escalation."
-- Do not automatically escalate -- surface for staff judgment. If the dinner was created before the consequence (common -- hosts post in advance), do not flag as a new-dinner trigger; treat it as a rescore only.
+Do not assume a dinner is new based on StartDate alone. Verify Platform_Create_Date__c in Salesforce first.
 
 **Step 3 -- Auto-include check**
 
