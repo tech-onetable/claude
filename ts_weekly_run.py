@@ -1479,7 +1479,13 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
                 'nourishment_received': f"${float(host.get('Total Nourishment Received', 0) or 0):,.0f}",
                 'nourishment_eligible': f"${float(host.get('Total Eligible Nourishment', 0) or 0):,.0f}",
                 'note': (
-                    f"Suspended host with active dinner status: {camp.get('_suspended_status','')}. Review immediately -- Nourishment may have been sent while account was suspended."
+                    (
+                        f"Suspended host -- dinner already blocked (status: {camp.get('_suspended_status','')}). No action needed."
+                        if camp.get('_suspended_status','').lower() in ['not approved','aborted','not nourishing']
+                        else f"Suspended host -- Nourishment already sent (status: {camp.get('_suspended_status','')}). Suspended after nourishment ran. No action needed."
+                        if 'sent nourishment' in camp.get('_suspended_status','').lower() or 'partial nourishment' in camp.get('_suspended_status','').lower()
+                        else f"Suspended host with active dinner (status: {camp.get('_suspended_status','')}). Review -- new dinner may need to be blocked."
+                    )
                     if camp.get('_existing_case_type') == 'suspension'
                     else f"DNN host posted a new dinner (status: {camp.get('_suspended_status','')}). Check in before approving Nourishment -- may be returning after a gap."
                 ),
