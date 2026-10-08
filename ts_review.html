@@ -1010,6 +1010,7 @@ function buildSlack(allActioned) {
     <div style="font-weight:500;font-size:14px;margin-bottom:10px">Slack summary — #trust-and-safety</div>
     <textarea class="slack-draft" id="slack-draft">${draft}</textarea>
     <button class="btn btn-primary" id="slack-send-btn" onclick="sendSlack()">Send to #trust-and-safety</button>
+    <button class="btn btn-secondary" style="margin-left:8px" onclick="finalizeRun()" id="finalize-btn">Finalize run → update accumulator</button>
   </div>`;
 }
 
@@ -1265,6 +1266,25 @@ function saveNote(id, val) {
     const idx = state.runs.findIndex(r=>r.id===state.current.id);
     if (idx>=0) { state.runs[idx]._actionState=state.actionState; saveRuns(state.runs); }
   }
+}
+
+function finalizeRun() {
+  const btn = document.getElementById('finalize-btn');
+  if (btn) { btn.textContent = '⏳ Updating...'; btn.disabled = true; }
+  const sl = state.current?.slack_summary||{};
+  const t = sl.totals||{};
+  const run = state.current?.run||{};
+  const wednesday = run.wednesday_mode ? 'Wednesday' : 'Thursday';
+  const weekOf = sl.week_of || run.week_of || '';
+  const actioned = Object.values(state.actionState||{});
+  const suspended = actioned.filter(a=>a.tier==='suspension'||a.tier==='deactivation').map(a=>a.name||'').filter(Boolean);
+  const dnn = (t.warning_dnn||0) + (t.nourishment_pause||0);
+  const suspText = suspended.length ? suspended.map(n=>n.split(' ').pop()).join(' / ') : (t.suspension||0) > 0 ? `${t.suspension} suspension${t.suspension>1?'s':''}` : 'none';
+  const msg = `All cases reviewed. Please update the T&S Weekly Run Accumulator (https://claude.ai/code/artifact/7011cc2f-da31-4c99-8ddf-f4251039fc3a) with this run's numbers:\n\n${wednesday}: ${(t.suspension||0)+(t.warning_dnn||0)+(t.warning||0)} cases, ${dnn} DNN, ${t.suspension||0} Suspensions: ${suspText}\n\nIf today is Thursday and the Wednesday row for week of ${weekOf} is already filled, send the combined Slack to #trust-and-safety and tag @pammie.`;
+  sendPrompt(msg);
+  setTimeout(() => {
+    if (btn) { btn.textContent = '✓ Sent'; }
+  }, 1500);
 }
 
 function sendSlack() {
