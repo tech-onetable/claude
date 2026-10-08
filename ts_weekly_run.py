@@ -1453,7 +1453,7 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
             continue
         for cid, ip_note in cluster.get('ip_adjacent', {}).items():
             cluster_name = ' / '.join(
-                pass1_output['campaigns'].get(m, {}).get('host_name', '').split()[-1]
+                n.split()[-1] if (n := pass1_output['campaigns'].get(m, {}).get('host_name', '')) else '?'
                 for m in cluster['members']
             )
             ip_adjacent_lookup[cid] = {'cluster_name': cluster_name, 'ip_note': ip_note}
@@ -1493,10 +1493,19 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
 
     # Mark cluster members -- device FP clusters only
     # IP-only cluster members still appear as individual cases with a shared IP note
+    # Only mark a host as a cluster_member if their cluster has at least one other member
+    # that is NOT an existing case. If all cluster partners are existing cases,
+    # the host should appear as an individual case rather than being dropped.
     cluster_members = set()
     for cluster in pass1_output['clusters']:
-        if cluster.get('fp'):  # device FP clusters only
-            cluster_members.update(cluster['members'])
+        if not cluster.get('fp'):
+            continue
+        members = cluster['members']
+        active_members = [m for m in members if m not in existing_case_cids]
+        if len(active_members) >= 2:
+            # At least 2 active (non-existing-case) members -- all are cluster members
+            cluster_members.update(active_members)
+        # If only 1 active member, they get surfaced as an individual case, not a cluster
 
     # Build cluster cases -- device FP clusters only
     # IP-only clusters surface in cross_host_flags for program team, not as scored cases
