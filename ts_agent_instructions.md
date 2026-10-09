@@ -916,6 +916,8 @@ Staff pulls the longitudinal report manually from Salesforce -- all non-Aborted 
 **Expected columns:**
 Campaign ID, Campaign Name, Campaign Status, Campaign Description, Campaign Member Email, First Name, Last Name, Contact ID, Host?, Platform Profile ID, Platform Bio, RSVP Type, AI Not Pass Summary, Bounce Type, Bounce Reason, Dinner Sub Status, Member Status, Mailing Zip/Postal Code, Area, Unique guests, Guest Count Met?, RSVP Device Fingerprint ID, RSVP IP, Dinner Created Device ID, Dinner Created IP, Device ID, IP Address Reservation, Profile Created Device ID, Profile Created IP, Contact: Created Date, Reservation Created, Recent dinner guested
 
+**Profile Created IP / Device ID availability:** `Profile_Created_IP__c` and `Profile_Created_Device_ID__c` (CSV columns Profile Created IP and Profile Created Device ID) began populating on 2026-10-09 (from about 12:30 PM ET) and apply only to profiles created from then on. Older profiles are not backfilled, and some new ones are still blank. A blank value means no data, never a mismatch or a negative finding. Do not count a missing profile-created value toward any signal or cite it as evidence either way.
+
 **What the agent evaluates when a longitudinal report is uploaded:**
 
 **Recycled bounced guest lists (sig15, weight 3, needs pairing)**
