@@ -189,11 +189,13 @@ Before closing out, query Salesforce directly to verify every action requested o
 - **Future dinners moved to Not Approved:** query `SELECT Id, Name, Status FROM Campaign WHERE ContactId = '[id]' AND StartDate >= TODAY AND Status NOT IN ('Not Approved', 'Sent Nourishment, Confirmation Email Sent', 'Aborted')` -- this should return zero rows if all eligible dinners were moved. Confirm Status = 'Not Approved' and Further_Review_Reason__c = 'Trust & Safety Issue'. This is now automated via sf_update_campaign but verify it landed.
 - **Suspended/DNN consistency:** for any host set to Suspended this session, confirm DNN is also set. A host that is Suspended but not DNN is an incomplete action. Query `SELECT Id, Name, Do_Not_Nourish__c, Suspended_Flag__c FROM Contact WHERE Id IN ('[ids]')` and flag any row where Suspended_Flag__c = true AND Do_Not_Nourish__c = false.
 - **Case status:** for any case created this session, confirm Trust_and_Safety_Status__c is not stuck at New when it should have progressed. Flag cases still at New after a bulk action for manual follow-up.
+- **T&S email sent (only once the Salesforce T&S email flow is active and `send_trust_and_safety_email` was set on the case):** query `SELECT Id, CaseNumber, T_S_Email_Sent__c FROM Case WHERE Id = '[case_id]'`. The flow sets `T_S_Email_Sent__c = true` after the email sends successfully, so it should already be true. Also confirm the email was logged on the case: `SELECT Id, Subject, Incoming, MessageDate FROM EmailMessage WHERE ParentId = '[case_id]'` should show one outbound message (`Incoming = false`). If `T_S_Email_Sent__c` is still false or no outbound message exists, the send failed or the flow did not run: check for an admin error task (`SELECT Id, Subject FROM Task WHERE WhatId = '[case_id]'`) and report ❌ Failed. Do NOT re-set `send_trust_and_safety_email` to retry, and do not uncheck `T_S_Email_Sent__c` yourself; flag it for staff. While the flow is not yet active, skip this check because emails are sent from Gmail drafts.
 
 Present as a brief checklist:
 - ✅ Case created: [Host name] — Case [number]
 - ✅ DNN set: [Host name]
 - ✅ Suspended: [Host name]
+- ✅ T&S email sent and logged on case: [Host name] (only once the flow is active)
 - ⚠ Manual required: [Host name] — [dinner IDs] need Not Approved status set in backend
 - ❌ Failed: [Host name] — [what failed and why]
 
