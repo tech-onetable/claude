@@ -513,7 +513,7 @@ Produce all output only after both passes are complete.
 
 All three files must be presented regardless of how Pass 2 was run (script built-in SF connection or MCP). If the script's wrapper was used to feed in MCP results, the CSV generation step must still be run explicitly. Never treat "no narrative text" as a reason to suppress the CSV files -- they are required outputs on every run.
 
-**Ban CSV spot-check (required before presenting ban CSV):** Before presenting `ts_ban_YYYYMMDD.csv`, pick 2-3 rows at random and verify each one via Salesforce MCP: query the Contact by email and confirm the Platform_Profile_ID__c in the CSV matches what Salesforce returns for that email. If email and ID belong to different people, or if a Contact cannot be found for the email, stop and flag the mismatch before presenting the file. Never present the ban CSV without completing this check -- the 163 wrong bans on 2026-10-05 were caused by an undetected ID type mismatch that a row-one check would have caught.
+**Ban and DNN CSV spot-check (required before presenting either CSV):** Before presenting `ts_ban_YYYYMMDD.csv` or `ts_dnn_YYYYMMDD.csv`, pick 2-3 rows from each at random and verify each one via Salesforce MCP: query the Contact by email and confirm the Platform_Profile_ID__c in the CSV matches what Salesforce returns for that email. If email and ID belong to different people, or if a Contact cannot be found for the email, stop and flag the mismatch before presenting the file. Never present a ban or DNN CSV without completing this check -- the 163 wrong bans on 2026-10-05 were caused by an undetected ID type mismatch that a row-one check would have caught.
 
 The JSON block powers the visual case review interface.
 
@@ -774,7 +774,7 @@ Prior status of each dinner is stored in `future_dinners_list[].prior_status` so
 **Guest case protocol (Suspension level only -- triggered when staff approves a Suspension recommendation)**
 When staff approves a host case at Suspension tier via the review UI, guest accounts associated with the flagged dinner(s) also need to be actioned at the same time. Two categories:
 
-- **Clearly fake guests** (confirmed fabricated: hard bounce AND throwaway domain, or obviously fake identity confirmed): Create Salesforce Case linked to the guest Contact. Description must include: host name, host SF Contact link, dinner name, dinner Campaign link, and reason flagged (e.g. "Hard bounce + throwaway domain. Associated with [Host Name] dinner [Dinner Name] ([Campaign link])."). Set Trust_and_Safety_Status__c = "Closed - Resolved" immediately. Add guest Contact ID to bulk ban CSV for upload to build team. Staff (Pammie) handles the CSV upload directly.
+- **Clearly fake guests** (confirmed fabricated: hard bounce AND throwaway domain, or obviously fake identity confirmed): Create Salesforce Case linked to the guest Contact. Description must include: host name, host SF Contact link, dinner name, dinner Campaign link, and reason flagged (e.g. "Hard bounce + throwaway domain. Associated with [Host Name] dinner [Dinner Name] ([Campaign link])."). Set Trust_and_Safety_Status__c = "Closed - Resolved" immediately. Add the guest's Profile ID (Platform_Profile_ID__c) and email to the bulk ban CSV; a guest with no Profile ID cannot be uploaded. Staff (Pammie) handles the CSV upload directly.
 - **Flagged but not confirmed fake** (shared device fingerprint, cross-host appearance, suspicious but unproven): Create Salesforce Case linked to the guest Contact. Description must include: host name, host SF Contact link, dinner name, dinner Campaign link, and reason flagged. Set Trust_and_Safety_Status__c = "Closed - Resolved" immediately. Set Problem_Flag__c = true on Contact for monitoring.
 
 This protocol is triggered by staff approval of a Suspension -- not by the agent recommendation alone. Do not create guest cases at Warning or Nourishment Pause level, and do not create them until staff has explicitly approved the host case at Suspension tier.
@@ -787,22 +787,22 @@ This protocol is triggered by staff approval of a Suspension -- not by the agent
 **Post-approval checklist -- Warning DNN and Nourishment Pause**
 The following actions require manual backend access or are pending build. The UI displays these as a checklist after DNN is approved:
 
-- [ ] Check DNN checkbox on host user record in backend (manual until bulk upload is built)
+- [ ] Upload the DNN CSV (Profile ID, Email) to apply Do Not Nourish in the backend (Pammie handles; Profile ID upload tested and approved in production 2026-10-09)
 - [ ] Confirm future dinners updated to Not Approved via sf_update_campaign (automated -- verify landed)
 
 **DNN bulk upload output**
-When a DNN case is approved, add the host Contact ID to a weekly DNN bulk upload CSV. This mirrors the guest ban CSV pattern and will be used to mark hosts as "not eligible for Nourishment" in bulk once the backend upload tool is available. Until then, the DNN checkbox is checked manually per the checklist above.
+When a DNN case is approved, add the host's Profile ID and email to the weekly DNN CSV (`ts_dnn_YYYYMMDD.csv`, columns Profile ID, Email). DNN is applied in the backend by uploading this CSV. Backend DNN works through Profile ID (tested and approved in production, 2026-10-09).
 
 **Post-approval checklist -- displayed in UI after Suspension is approved**
 The following actions require manual backend access and cannot be automated via MCP. The UI displays these as a checklist for staff to complete after approving a Suspension:
 
-- [ ] Check "Banned" checkbox on host user record in backend (prevents platform access)
+- [ ] Upload the ban CSV (Profile ID, Email) to ban the account in the backend (Pammie handles; Profile ID upload tested and approved in production 2026-10-09)
 - [ ] Deactivate any known device IDs associated with the host account in backend
-- [ ] Confirm DNN checkbox is checked on host user record in backend
+- [ ] Confirm DNN was applied in the backend (included in the DNN CSV upload)
 - [ ] Confirm future dinners updated to Not Approved via sf_update_campaign (automated -- verify landed)
 - [ ] Upload bulk ban CSV to build team if guest cases were created (Pammie handles)
 
-For Warning DNN and Nourishment Pause: only the DNN checkbox in backend applies. No ban, no device deactivation.
+For Warning DNN and Nourishment Pause: only DNN applies in the backend (via the DNN CSV upload). No ban, no device deactivation.
 
 ---
 
