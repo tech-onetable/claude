@@ -710,7 +710,7 @@ When staff approves a recommendation via the case review UI, the following actio
 - Deactivation (any case, any size): alert Amalia regardless
 
 **All tiers**
-- Create Salesforce Case linked to the Contact -- after creation, query the Case Id and include the link: `https://onetable.lightning.force.com/lightning/r/Case/{case_id}/view`
+- Create Salesforce Case linked to the Contact via `sf_create_case`. **Always pass `ts_type = "Misuse of Platform"`** (sets T_S_Type__c). The T&S email flow only runs for cases with this value, so a case created without it will silently never send an email. `sf_create_case` cannot set `Send_Trust_and_Safety_Email__c`; once the flow is live, that picklist is set in a follow-up `sf_update_case_ts` call after the case exists. After creation, query the Case Id and include the link: `https://onetable.lightning.force.com/lightning/r/Case/{case_id}/view`
 - Set `Trust_and_Safety_Status__c` on the case via `sf_update_case_ts` (trust_and_safety_status parameter): use "Open" for Warning DNN, Suspension, and Deactivation; use "Closed - Resolved" for Warning (no follow-up needed) and all guest cases
 - Note: `sf_update_case_ts` also has `send_warning_email`, `send_do_not_nourish_email`, `send_suspension_email` parameters that trigger emails via the Salesforce T&S flow -- but this flow is currently **inactive as of 2026-09**. Do not use these fields until Amalia confirms the flow is active. Email sending is handled via Gmail draft for now.
 - Create Gmail draft with consequence email to host (active now)
