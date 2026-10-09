@@ -653,7 +653,6 @@ Triggered when given an email address, Contact ID, or Campaign ID. Run Pass 2 di
 | 2+ corroborating signals, no high-confidence, score 9-17, no prior Warning | Warning (DNN) | trustandsafety@ email, DNN activated, Zoom required (camera on) |
 | 2+ corroborating signals, score 9-17, prior Warning on record | Nourishment Pause | trustandsafety@ email, Zoom required |
 | Any high-confidence signal, score 9-17 | Nourishment Pause | trustandsafety@ email, Zoom required |
-| 1+ high-confidence signals, score 9-17 | Nourishment Pause | Written check-in if ambiguous; Zoom if stronger |
 | Multiple high-confidence signals, score 18-24, intent ambiguous | Suspension | Zoom; softer email |
 | Multiple high-confidence signals, score 25-39, deliberate fraud indicated | Suspension | Zoom; stricter email |
 | Deliberate activity to defraud or deliberate identity change present | Suspension (stricter) minimum | Zoom; strict email |
@@ -661,6 +660,8 @@ Triggered when given an email address, Contact ID, or Campaign ID. Run Pass 2 di
 | Post-reinstatement misuse | Minimum one tier above score | Agent recommends; staff approves |
 | Pattern reflects legitimate use | Program Policy -- Not Fraud | No consequence; case noted |
 | Confirmed cluster of hosts | Cluster case -- highest priority | Per individual tiers within cluster |
+
+**Nourishment Pause communication (only approved option):** a camera-on Zoom call is the only approved way to connect with a host at this tier. A written check-in has never been approved: never recommend one, in any case summary, email recommendation, or insight. Abbie and Hannah are considering having hosts record a video answering questions as a first step; this is NOT approved, so do not recommend it. There are two Nourishment Pause emails, a softer tone (for medium confidence) and a standard tone (for high confidence). They have the same outcome, Do Not Nourish applied and a camera-on Zoom required, and differ only in tone and language.
 
 ---
 
