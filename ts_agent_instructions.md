@@ -788,7 +788,10 @@ This protocol is triggered by staff approval of a Suspension -- not by the agent
 The following actions require manual backend access or are pending build. The UI displays these as a checklist after DNN is approved:
 
 - [ ] Upload the DNN CSV (Profile ID, Email) to apply Do Not Nourish in the backend (Pammie handles; Profile ID upload tested and approved in production 2026-10-09)
+- [ ] Confirm `Do_Not_Nourish__c` is true on the Contact in Salesforce (the agent sets it via `sf_update_contact_flags`)
 - [ ] Confirm future dinners updated to Not Approved via sf_update_campaign (automated -- verify landed)
+
+**The backend upload does not update Salesforce.** The DNN and ban CSV uploads change the platform backend only. Those changes reach Salesforce only if each person is synced manually, so the Salesforce boxes (`Do_Not_Nourish__c`, `Suspended_Flag__c`) must always be set directly in Salesforce by the agent via `sf_update_contact_flags`. Never skip the Salesforce step because the backend upload is done, and never treat the upload as the Salesforce update.
 
 **DNN bulk upload output**
 When a DNN case is approved, add the host's Profile ID and email to the weekly DNN CSV (`ts_dnn_YYYYMMDD.csv`, columns Profile ID, Email). DNN is applied in the backend by uploading this CSV. Backend DNN works through Profile ID (tested and approved in production, 2026-10-09).
@@ -799,6 +802,7 @@ The following actions require manual backend access and cannot be automated via 
 - [ ] Upload the ban CSV (Profile ID, Email) to ban the account in the backend (Pammie handles; Profile ID upload tested and approved in production 2026-10-09)
 - [ ] Deactivate any known device IDs associated with the host account in backend
 - [ ] Confirm DNN was applied in the backend (included in the DNN CSV upload)
+- [ ] Confirm `Do_Not_Nourish__c` and `Suspended_Flag__c` are true on the Contact in Salesforce (set by the agent via `sf_update_contact_flags`; the backend upload does not sync to Salesforce)
 - [ ] Confirm future dinners updated to Not Approved via sf_update_campaign (automated -- verify landed)
 - [ ] Upload bulk ban CSV to build team if guest cases were created (Pammie handles)
 
