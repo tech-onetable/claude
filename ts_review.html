@@ -1048,13 +1048,49 @@ function buildInsights() {
 }
 
 // ── slack ──────────────────────────────────────────────────────────────────
+// Slack lines: which opportunities are linked, to which hosts, and how many dinners are involved.
+// Same naming rule as the rest of the Slack summary: host names only for Suspension and Deactivation
+// (and hosts already suspended); every other tier is counted, not named.
+function buildOppSlackLines() {
+  const cur = state.current;
+  if (!cur) return [];
+  const tierName = t => ({suspension:'Suspension', deactivation:'Deactivation', warning_dnn:'Nourishment Pause', warning:'Warning'}[t] || t);
+  const NAMED = new Set(['Suspension', 'Deactivation', 'already suspended']);
+  const groups = new Map();
+  const add = (o, host, tier, dinnerId) => {
+    const key = o.type + '|' + (o.url || o.value);
+    if (!groups.has(key)) groups.set(key, { label: o.label, value: o.value, url: o.url, named: new Map(), counts: new Map(), dinners: new Set() });
+    const g = groups.get(key);
+    if (NAMED.has(tier)) g.named.set(host, tier);
+    else g.counts.set(tier, (g.counts.get(tier) || 0) + 1);
+    g.dinners.add(dinnerId);
+  };
+  (cur.cases||[]).forEach(c => {
+    if (c.is_cluster) {
+      (c.cluster_hosts||[]).forEach(h => (h.opportunities||[]).forEach(o => add(o, h.name, tierName(c.tier), h.campaign_id)));
+    } else {
+      (c.opportunities||[]).forEach(o => add(o, c.name, tierName(c.tier), c.campaign_id));
+    }
+  });
+  (cur.existing_cases||[]).forEach(e => (e.opportunities||[]).forEach(o => add(o, e.host_name, e.existing_case_type==='suspension' ? 'already suspended' : e.existing_case_type==='open_case' ? 'open case' : 'DNN', e.campaign_id)));
+  return [...groups.values()].map(g => {
+    const name = g.url ? `<${g.url}|${g.value}>` : g.value;
+    const parts = [...g.named.entries()].map(([h, t]) => `${h} (${t})`);
+    g.counts.forEach((n, t) => parts.push(`${n} ${t} host${n>1 ? 's' : ''}`));
+    const n = g.dinners.size;
+    return `• ${g.label}: ${name} · ${parts.join(', ')}${n>1 ? ` · ${n} dinners` : ''}`;
+  });
+}
+
 function buildSlack(allActioned) {
   if (!allActioned) return `<div class="slack-locked">🔒 Slack summary unlocks after all cases are actioned</div>`;
   const sl = state.current?.slack_summary||{};
   const t = sl.totals||{};
+  const oppLines = buildOppSlackLines();
   const draft = [`*Trust and Safety · Week of ${sl.week_of||runDate()}*`,
     `${t.suspension||0} suspensions · ${t.warning_dnn||0} Nourishment pauses · ${t.warning||0} warnings · ${t.clusters||0} clusters`,
     sl.actioned?.length?`\n*Actioned this week:*\n${sl.actioned.map(a=>`• ${a.name} · ${a.tier}${a.note?' · '+a.note:''}`).join('\n')}`:null,
+    oppLines.length?`\n*★ Linked to opportunities:*\n${oppLines.join('\n')}`:null,
     sl.trends?`\n*Trends:* ${sl.trends}`:null,
     sl.urgent?`\n⚠ *Urgent:* ${sl.urgent}`:null,
   ].filter(Boolean).join('\n');
