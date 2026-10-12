@@ -991,9 +991,28 @@ function buildFlagCard(f) {
 }
 
 // ── insights ───────────────────────────────────────────────────────────────
+// Every case whose dinner is linked to an opportunity (scored cases of any tier, clusters, existing cases)
+function buildOppRows() {
+  const cur = state.current;
+  if (!cur) return [];
+  const rows = [];
+  (cur.cases||[]).forEach(c => {
+    const opps = caseOpps(c);
+    if (!opps.length) return;
+    rows.push({ name: c.name, url: c.sf_url, tier: c.is_cluster ? '⚠ Cluster' : tierLabel(c.tier, c.score), dinner: c.is_cluster ? '' : c.dinner_name, opps });
+  });
+  (cur.existing_cases||[]).forEach(e => {
+    const opps = e.opportunities || [];
+    if (!opps.length) return;
+    rows.push({ name: e.host_name, url: e.sf_url, tier: e.existing_case_type==='suspension' ? 'Suspended' : e.existing_case_type==='open_case' ? 'Open case' : 'DNN', dinner: e.dinner_name, opps });
+  });
+  return rows;
+}
+
 function buildInsights() {
-  const ins = state.current?.insights;
-  if (!ins) return '';
+  const oppRows = buildOppRows();
+  const ins = state.current?.insights || {};
+  if (!state.current?.insights && !oppRows.length) return '';
 
   // Split patterns and trends into bullets on sentence boundaries
   const toBullets = (text) => {
@@ -1011,8 +1030,10 @@ function buildInsights() {
   const fiyQs = ins.open_questions_fyi || allQs.filter(q => !urgentKeywords.test(q));
 
   return `<div class="collapsible" style="margin-top:16px;">
-    <div class="collapsible-header" onclick="toggleCollapsible(this)">Weekly Insights <span class="chevron">▾</span></div>
+    <div class="collapsible-header" onclick="toggleCollapsible(this)">Weekly Insights ${oppRows.length?`<span class="opp-badge" style="margin-left:8px">★ ${oppRows.length} linked to ${oppRows.length>1?'opportunities':'an opportunity'}</span>`:''} <span class="chevron">▾</span></div>
     <div class="collapsible-body">
+      ${oppRows.length?`<div class="section-label" style="color:#3B3F9E">★ Linked to opportunities</div>
+        <ul style="padding-left:16px;margin-bottom:12px">${oppRows.map(r=>`<li style="font-size:13px;color:var(--text-sec);margin-bottom:6px"><a class="purple-link" href="${oppEsc(r.url||'#')}" target="_blank">${oppEsc(r.name)} ↗</a> · ${oppEsc(r.tier)}${r.dinner?` · ${oppEsc(r.dinner)}`:''} · ${r.opps.map(o=>`<strong style="color:#3B3F9E">${oppEsc(o.label)}</strong>${o.value?`: ${o.url?`<a class="purple-link" href="${oppEsc(o.url)}" target="_blank">${oppEsc(o.value)} ↗</a>`:oppEsc(o.value)}`:''}${o.host?` (${oppEsc(o.host)})`:''}`).join(' · ')}</li>`).join('')}</ul>`:''}
       ${ins.patterns?`<div class="section-label">Patterns</div><ul style="padding-left:16px;margin-bottom:12px">${toBullets(ins.patterns)}</ul>`:''}
       ${ins.emerging_trends?`<div class="section-label">Emerging Trends</div><ul style="padding-left:16px;margin-bottom:12px">${toBullets(ins.emerging_trends)}</ul>`:''}
       ${ins.below_threshold?.length?`<div class="section-label">Below-threshold signals</div>
