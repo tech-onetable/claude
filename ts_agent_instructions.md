@@ -187,6 +187,8 @@ After all cases are reviewed in the UI each run, the agent writes to the T&S Wee
 ```
 DNN: totals only, no names. Suspensions: last names only. Under 10 lines. Friday date = dinner date, not run date.
 
+**Opportunity-linked cases:** if any case carries `opportunities` (a dinner linked to a partnership, gift card, or splashy event opportunity), add one line per linked opportunity: the opportunity type and name, the hosts (last names for Suspension and Deactivation, counts only for every other tier), and how many dinners are involved when more than one. Example: `• ★ Partnership opportunity: Hillel Partner Dinner — Smith (Suspension), 1 Warning host · 2 dinners`. Omit the lines when there are none.
+
 **Post-action verification (required at end of every weekly run AND every investigation):**
 Before closing out, query Salesforce directly to verify every action requested or approved during the session actually completed. Do not rely on earlier tool call results or session memory.
 
@@ -641,6 +643,7 @@ The `slack_summary` block powers the Slack post to #trust-and-safety after all c
 - Nourishment Pause and Warning cases appear in totals only -- no names or links
 - trends should be written for a mixed audience -- no jargon, no signal numbers, plain language
 - urgent is null if nothing requires immediate action
+- Opportunity-linked cases: the review UI adds the opportunity lines to the Slack draft automatically from the `opportunities` data (names only for Suspension and Deactivation, counts for other tiers, dinner count when more than one). Do not repeat them in `trends`.
 
 ### Case Review Artifact
 
