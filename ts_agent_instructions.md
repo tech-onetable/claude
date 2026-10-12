@@ -460,8 +460,11 @@ The script produces a complete, verified JSON. The agent's only job after runnin
 - `nourishment_received` -- canonical Contact field from SF
 - `collapsed_summary` -- auto-generated from structured fields
 - `suspended`, `dnn` -- set by script from SF data
+- `opportunities` -- set by script from the report's opportunity columns (see Opportunity links below)
 
 If there is nothing meaningful to add to a field, leave it as the script-generated value. Do not pad bullets or insights with generic observations.
+
+**Opportunity links (added 2026-10-12):** The weekly report has three dinner-level columns: Partnership Opportunity, Gift Card Opportunity, and Splashy Event Opportunity (Campaign lookups to Opportunity records: `Partner_Opportunity__c`, `Gift_Card_Opportunity__c`, `Splashy_Event_Opportunity__c`). The script reads any that are populated and writes an `opportunities` list on each case, existing case, and cluster host; the review UI calls them out with a purple badge on the case, a banner when it is opened, a count in the summary bar, and an Opportunity filter. They are informational only: they never change a score or tier, and the agent must not edit the field. Do not speculate about the opportunity; if a case carries one and the detail matters, query the Opportunity record in Salesforce and cite it. If a run has none of the three columns at all, say so once in `insights.open_questions_fyi`.
 
 **Salesforce MCP tool notes:**
 - `sf_run_query` requires parameter name `soql` (not `query`)
@@ -923,6 +926,7 @@ Staff pulls the longitudinal report manually from Salesforce -- all non-Aborted 
 
 **Expected columns:**
 Campaign ID, Campaign Name, Campaign Status, Campaign Description, Campaign Member Email, First Name, Last Name, Contact ID, Host?, Platform Profile ID, Platform Bio, RSVP Type, AI Not Pass Summary, Bounce Type, Bounce Reason, Dinner Sub Status, Member Status, Mailing Zip/Postal Code, Area, Unique guests, Guest Count Met?, RSVP Device Fingerprint ID, RSVP IP, Dinner Created Device ID, Dinner Created IP, Device ID, IP Address Reservation, Profile Created Device ID, Profile Created IP, Contact: Created Date, Reservation Created, Recent dinner guested
+Optional dinner-level opportunity columns (added 2026-10-12): Partnership Opportunity, Gift Card Opportunity, Splashy Event Opportunity.
 
 **Profile Created IP / Device ID availability:** `Profile_Created_IP__c` and `Profile_Created_Device_ID__c` (CSV columns Profile Created IP and Profile Created Device ID) began populating on 2026-10-09 (from about 12:30 PM ET) and apply only to profiles created from then on. Older profiles are not backfilled, and some new ones are still blank. A blank value means no data, never a mismatch or a negative finding. Do not count a missing profile-created value toward any signal or cite it as evidence either way.
 
