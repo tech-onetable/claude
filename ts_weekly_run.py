@@ -76,6 +76,49 @@ SF_BASE = "https://onetable.lightning.force.com/lightning/r/Contact/{}/view"
 SF_CAMPAIGN_BASE = "https://onetable.lightning.force.com/lightning/r/Campaign/{}/view"
 TS_RECORD_TYPE_ID = '012PO000001F53dYAC'  # Trust and Safety record type for Salesforce Cases
 FP_BASE = "https://api.onetable.org/cp/device_activity/details?fingerprint={}"
+SF_OPP_BASE = "https://onetable.lightning.force.com/lightning/r/Opportunity/{}/view"
+
+# Dinner-level opportunity links (Campaign lookups to Opportunity records). The three columns were
+# added to the weekly report on 2026-10-12. They never change scores or tiers: they only make the
+# review UI call out any case whose dinner is linked to a partnership, gift card, or splashy event opportunity.
+OPPORTUNITY_TYPES = [
+    ('partnership', 'Partnership opportunity', 'Partnership Opportunity'),
+    ('gift_card', 'Gift card opportunity', 'Gift Card Opportunity'),
+    ('splashy_event', 'Splashy event opportunity', 'Splashy Event Opportunity'),
+]
+OPP_BLANKS = {'', '-', '--', '\u2014', 'n/a', 'na', 'none', 'null', 'nan', 'false', '0'}
+
+
+def _opportunity_header(header):
+    """Map a report column header to a canonical opportunity column, or None.
+    Tolerant of how the report labels the lookup, e.g. 'Partnership Opportunity' or
+    'Partnership Opportunity: Opportunity Name'."""
+    h = (header or '').lower()
+    if 'opportunit' not in h:
+        return None
+    if 'partner' in h:
+        return 'Partnership Opportunity'
+    if 'gift' in h and 'card' in h:
+        return 'Gift Card Opportunity'
+    if 'splashy' in h:
+        return 'Splashy Event Opportunity'
+    return None
+
+
+def get_opportunities(camp):
+    """Opportunity associations for one dinner (campaign), as read from the weekly report."""
+    out = []
+    opps = (camp or {}).get('_opps') or {}
+    for key, label, header in OPPORTUNITY_TYPES:
+        v = opps.get(header)
+        if not v:
+            continue
+        item = {'type': key, 'label': label, 'value': v, 'url': ''}
+        if re.fullmatch(r'006[A-Za-z0-9]{12}(?:[A-Za-z0-9]{3})?', v):
+            item['url'] = SF_OPP_BASE.format(v)
+            item['value'] = 'Opportunity record'
+        out.append(item)
+    return out
 
 
 def sf_15_to_18(id15):
@@ -124,6 +167,13 @@ def parse_csv(contact_path, lead_path=None):
             reader = csv.DictReader(f)
             for row in reader:
                 r = {k: row.get(k, '').strip() for k in reader.fieldnames if k in KEEP}
+                # Dinner-level opportunity links (columns added 2026-10-12); headers matched loosely
+                for k in reader.fieldnames:
+                    canon = _opportunity_header(k)
+                    if canon:
+                        v = (row.get(k, '') or '').strip()
+                        if v.lower() not in OPP_BLANKS and not r.get(canon):
+                            r[canon] = v
                 # Normalise email field -- Lead rows may use 'Email' instead of 'Campaign Member Email'
                 if not r.get('Campaign Member Email') and r.get('Email'):
                     r['Campaign Member Email'] = r.pop('Email', '')
@@ -157,7 +207,7 @@ def parse_csv(contact_path, lead_path=None):
 
     campaigns = collections.defaultdict(lambda: {
         'host': None, 'guests': [], 'name': '', 'address': '', 'description': '',
-        '_skip': False, '_existing_case': False, '_suspended_status': ''
+        '_skip': False, '_existing_case': False, '_suspended_status': '', '_opps': {}
     })
 
     for row in all_rows:
@@ -199,6 +249,11 @@ def parse_csv(contact_path, lead_path=None):
 
         elif ms in ('Attended', 'Applied', 'Pending', 'Guest of Guest'):
             campaigns[cid]['guests'].append(row)
+
+        for _h in ('Partnership Opportunity', 'Gift Card Opportunity', 'Splashy Event Opportunity'):
+            _v = row.get(_h, '')
+            if _v and _h not in campaigns[cid]['_opps']:
+                campaigns[cid]['_opps'][_h] = _v
 
         if not campaigns[cid]['description'] and row.get('Campaign Description', '').strip():
             campaigns[cid]['description'] = row.get('Campaign Description', '')
@@ -935,6 +990,7 @@ def build_case_json(cid, camp, scored_signals, score, tier, sf_data=None):
         'dinner_description': (camp.get('description', '') or ''),
         'guest_count': len([g for g in camp.get('guests', []) if g.get('Member Status','').lower() != 'host']),
         'campaign_id': cid,
+        'opportunities': get_opportunities(camp),
         'email': sf_data.get('Email', host.get('Campaign Member Email', '')) if sf_data else host.get('Campaign Member Email', ''),
         'contact_id': host.get('Contact ID', '') if host else '',
         'platform_profile_id': sf_data.get('Platform_Profile_ID__c', '') if sf_data else '',
@@ -1511,6 +1567,7 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
                 'campaign_id': cid,
                 'campaign_url': SF_CAMPAIGN_BASE.format(cid),
                 'dinner_name': camp.get('name', ''),
+                'opportunities': get_opportunities(camp),
                 'campaign_status': camp.get('_suspended_status', ''),
                 'nourishment_received': f"${float(host.get('Total Nourishment Received', 0) or 0):,.0f}",
                 'nourishment_eligible': f"${float(host.get('Total Eligible Nourishment', 0) or 0):,.0f}",
@@ -1673,6 +1730,7 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
                 'sf_url': SF_BASE.format(host_id_18),
                 'campaign_id': cid,
                 'campaign_url': SF_CAMPAIGN_BASE.format(cid),
+                'opportunities': get_opportunities(campaigns.get(cid, {})),
                 'platform_id': platform_id,
                 'be_url': f"https://api.onetable.org/cp/profiles/{platform_id}" if platform_id else '',
                 'score': d['score'],
@@ -1885,6 +1943,7 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
                 f"Guest overlap: {guest_breakdown}. " +
                 f"Combined Nourishment: {combined_n}."
             ),
+            'opportunities': [dict(o, host=h['name']) for h in cluster_hosts for o in h.get('opportunities', [])],
             'cluster_hosts': cluster_hosts,
         })
 
@@ -1915,6 +1974,7 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
                 'campaign_id': cid,
                 'campaign_url': SF_CAMPAIGN_BASE.format(cid),
                 'dinner_name': camp.get('name', ''),
+                'opportunities': get_opportunities(camp),
                 'campaign_status': host.get('Campaign Status', '') if host else '',
                 'nourishment_received': f"${float(host.get('Total Nourishment Received', 0) or 0):,.0f}" if host else '—',
                 'nourishment_eligible': f"${float(host.get('Total Eligible Nourishment', 0) or 0):,.0f}" if host else '—',
@@ -2072,6 +2132,7 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
         'warning': len([c for c in cases if c.get('tier') == 'warning']),
         'clusters': len([c for c in cases if c.get('is_cluster')]),
         'cluster_hosts': sum(len(c.get('cluster_hosts', [])) for c in cases if c.get('is_cluster')),
+        'opportunity_cases': len([c for c in cases if c.get('opportunities')]) + len([e for e in existing_cases if e.get('opportunities')]),
     }
 
     ts_ui_data = {
