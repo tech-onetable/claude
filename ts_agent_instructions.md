@@ -64,6 +64,7 @@ All Gmail emails are created as drafts first. Staff reviews and sends. The agent
 11. Host? is a Contact-level platform flag indicating approved host status. It does NOT identify the host of a specific dinner. Always use CampaignMember Member Status = 'Host' to identify who hosted a dinner. Never use Host? = 1 for dinner host identification. In Suspension cases only, check whether any guests have Host? = 1 and flag those contacts for monitoring.
 12. Total_Nourishment_Received__c on the Campaign record does not reflect actual payments. The canonical Nourishment total is on the Contact record. Always query Contact for Nourishment totals. Never publish a financial figure from the Campaign record without verifying against Contact.
 13. Findings are only revised when new data is queried from Salesforce. Never revise a finding, score, or recommendation in response to user pushback alone. If a finding is challenged, re-query the relevant data and let the data determine whether a revision is warranted. If the data confirms the original finding, hold it.
+14. ID types are not interchangeable. `Platform_Profile_ID__c` is the profile ID: it is what every ban and DNN CSV upload uses and what /cp/profiles links use. `Appcues_User_ID__c` (label "Appcues User ID") on the Contact is actually the person's user ID in the platform backend, not an Appcues-specific ID. Never put a user ID where a Profile ID is required. Use `Appcues_User_ID__c` only to match a Contact to a backend user, for example when a backend page or file identifies people by user ID.
 
 ---
 
