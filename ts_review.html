@@ -94,6 +94,8 @@
   .badge.actioned { background: var(--olive-light); color: var(--green); font-size: 11px; padding: 2px 8px; }
   .badge.flag-confirm { background: var(--amber); color: var(--amber-dark); }
   .badge.flag-program { background: var(--green-light); color: var(--green); }
+  .opp-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; background: #E0E2FF; color: #3B3F9E; border: 0.5px solid var(--purple); white-space: nowrap; }
+  .opp-banner { background: #EEF0FF; border-left: 3px solid var(--purple); border-radius: 0 6px 6px 0; padding: 10px 14px; margin: 8px 0; font-size: 13px; line-height: 1.6; color: #2E3190; }
   .action-box { margin-top: 10px; padding: 10px 12px; border-radius: 8px; }
   .action-box.ts { background: var(--wine-light); }
   .action-box.dismiss-box { background: #F0F0EE; }
@@ -220,6 +222,26 @@ function sfCampaignUrl(c) {
   if (c.campaign_id) return `https://onetable.lightning.force.com/lightning/r/Campaign/${c.campaign_id}/view`;
   return '';
 }
+// ── opportunity call-outs ──────────────────────────────────────────────────
+// A dinner linked to a partnership, gift card, or splashy event opportunity (weekly report columns).
+// Informational only: these never change a score or tier.
+function oppEsc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function caseOpps(c){
+  const own=(c&&c.opportunities)||[];
+  if(own.length) return own;
+  return ((c&&c.cluster_hosts)||[]).flatMap(h=>(h.opportunities||[]).map(o=>({...o,host:h.name})));
+}
+function oppBadges(opps){
+  const seen=new Set();
+  return (opps||[]).filter(o=>{if(seen.has(o.type))return false;seen.add(o.type);return true;})
+    .map(o=>`<span class="opp-badge" title="${oppEsc(o.value||o.label)}">★ ${oppEsc(o.label)}</span>`).join('');
+}
+function oppBanner(c){
+  const opps=caseOpps(c);
+  if(!opps.length) return '';
+  return `<div class="opp-banner"><strong>★ Linked to ${opps.length>1?'opportunities':'an opportunity'}</strong>${opps.map(o=>`<div>${oppEsc(o.label)}${o.host?` · ${oppEsc(o.host)}`:''}: ${o.url?`<a class="purple-link" href="${oppEsc(o.url)}" target="_blank" onclick="event.stopPropagation()">${oppEsc(o.value||'View')} ↗</a>`:`<strong>${oppEsc(o.value)}</strong>`}</div>`).join('')}</div>`;
+}
+
 function runDate() { return state.current?.run?.run_date || state.current?.run?.week_of || ''; }
 
 // ── file load ──────────────────────────────────────────────────────────────
@@ -286,6 +308,7 @@ function buildReviewView() {
   const filtered = cases.filter(c=>{
     if (state.filter==='all') return true;
     if (state.filter==='cluster') return c.is_cluster;
+    if (state.filter==='opportunity') return caseOpps(c).length>0;
     return c.tier===state.filter;
   }).sort((a,b)=>{
     // Clusters first
@@ -323,19 +346,21 @@ function buildReviewView() {
     (state.current.cases||[]).filter(c => c.is_cluster && c.tier === 'warning_dnn').length;
   const countWarning = validCases.filter(c => c.tier === 'warning').length;
   const countClusters = (state.current.cases||[]).filter(c => c.is_cluster).length;
+  const countOpp = (state.current.cases||[]).filter(c => caseOpps(c).length>0).length + (state.current.existing_cases||[]).filter(c => (c.opportunities||[]).length>0).length;
   return `
     <div class="summary-bar">
       <div class="summary-card"><div class="summary-num" style="color:var(--wine)">${countSuspension}</div><div class="summary-label">Suspension</div></div>
       <div class="summary-card"><div class="summary-num" style="color:var(--amber-dark)">${countPause}</div><div class="summary-label">Warning (DNN)</div></div>
       <div class="summary-card"><div class="summary-num" style="color:var(--olive)">${countWarning}</div><div class="summary-label">Warning</div></div>
       <div class="summary-card"><div class="summary-num" style="color:var(--text-sec)">${countClusters}</div><div class="summary-label">Clusters</div></div>
+      ${countOpp>0?`<div class="summary-card"><div class="summary-num" style="color:#3B3F9E">${countOpp}</div><div class="summary-label">★ Opportunity</div></div>`:''}
     </div>
     <div class="run-info">
       <div class="run-meta">Week of ${state.current.run?.week_of} · Run date: ${runDate()} · Agent v5.2</div>
       <button class="btn btn-secondary" onclick="switchView('load')" style="font-size:12px;padding:4px 10px;">+ Load new run</button>
     </div>
     <div class="filter-bar">
-      ${[['all','All'],['cluster','⚠ Cluster'],['suspension','Suspension'],['warning_dnn','Warning DNN'],['warning_dnn','Warning (DNN)'],['warning','Warning']].map(([f,l])=>`<button class="filter-btn ${state.filter===f?'active':''}" onclick="setFilter('${f}')">${l}</button>`).join('')}
+      ${[['all','All'],['cluster','⚠ Cluster'],['suspension','Suspension'],['warning_dnn','Warning DNN'],['warning_dnn','Warning (DNN)'],['warning','Warning'],['opportunity','★ Opportunity']].map(([f,l])=>`<button class="filter-btn ${state.filter===f?'active':''}" onclick="setFilter('${f}')">${l}</button>`).join('')}
     </div>
     ${buildInsights()}
     ${(state.current.field_alerts||[]).map(a=>{const crit=a.includes('CRITICAL');return `<div style="padding:10px 14px;border-radius:8px;margin-bottom:8px;font-size:13px;font-weight:500;background:${crit?'#FEF2F2':'#FFFBEB'};color:${crit?'#991B1B':'#633806'};border-left:3px solid ${crit?'#991B1B':'#F59E0B'}">${a.replace('⚠ CRITICAL: ','🚨 ').replace('⚠ WARNING: ','⚠️ ')}</div>`;}).join('')}
@@ -377,6 +402,7 @@ function buildReviewView() {
             <div style="display:flex;align-items:center;gap:10px">
               <span style="font-size:13px;font-weight:600;color:#92400E">⚠ Warnings · High Nourishment</span>
               <span style="font-size:12px;color:#92400E">${highNourWarnings.length} cases · $1,000+ received · review with Abbie</span>
+              ${highNourWarnings.some(c=>caseOpps(c).length>0)?`<span class="opp-badge">★ ${highNourWarnings.filter(c=>caseOpps(c).length>0).length} linked to an opportunity</span>`:''}
             </div>
             <span style="font-size:14px;color:#92400E;transform:${isExpanded?'rotate(180deg)':'rotate(0)'};transition:transform .2s">▾</span>
           </div>
@@ -390,7 +416,7 @@ function buildReviewView() {
                 <th style="padding:8px 16px;text-align:right;font-weight:500">Links</th>
               </tr></thead>
               <tbody>${highNourWarnings.map((c,i)=>`<tr style="border-top:0.5px solid #FED7AA;background:${i%2===0?'#fff':'#FFFBEB'}">
-                <td style="padding:10px 16px"><a href="${c.sf_url}" target="_blank" style="color:var(--text);text-decoration:underline;font-weight:500">${c.name}</a></td>
+                <td style="padding:10px 16px"><a href="${c.sf_url}" target="_blank" style="color:var(--text);text-decoration:underline;font-weight:500">${c.name}</a>${caseOpps(c).length?` <span style="margin-left:6px">${oppBadges(caseOpps(c))}</span>`:''}</td>
                 <td style="padding:10px 16px;color:var(--text-sec)">${(c.signals||[]).filter(s=>s.score_contribution>0).map(s=>s.name).join(', ')}</td>
                 <td style="padding:10px 8px;text-align:center;font-weight:500">${c.score}</td>
                 <td style="padding:10px 16px;text-align:right;font-weight:600;color:#92400E">${c.nourishment_received||'—'}</td>
@@ -412,6 +438,7 @@ function buildReviewView() {
             <div style="display:flex;align-items:center;gap:10px">
               <span style="font-size:13px;font-weight:600;color:var(--olive)">Warnings</span>
               <span style="font-size:12px;color:var(--text-sec)">${stdWarnings.length} cases · auto-sent · no review needed</span>
+              ${stdWarnings.some(c=>caseOpps(c).length>0)?`<span class="opp-badge">★ ${stdWarnings.filter(c=>caseOpps(c).length>0).length} linked to an opportunity</span>`:''}
             </div>
             <span style="font-size:14px;color:var(--text-sec);transform:${isExpanded?'rotate(180deg)':'rotate(0)'};transition:transform .2s">▾</span>
           </div>
@@ -425,7 +452,7 @@ function buildReviewView() {
                 <th style="padding:8px 16px;text-align:right;font-weight:500">Links</th>
               </tr></thead>
               <tbody>${stdWarnings.map((c,i)=>`<tr style="border-top:0.5px solid var(--border);background:${i%2===0?'#fff':'#FAFAF8'}">
-                <td style="padding:10px 16px"><a href="${c.sf_url}" target="_blank" style="color:var(--text);text-decoration:underline;font-weight:500">${c.name}</a></td>
+                <td style="padding:10px 16px"><a href="${c.sf_url}" target="_blank" style="color:var(--text);text-decoration:underline;font-weight:500">${c.name}</a>${caseOpps(c).length?` <span style="margin-left:6px">${oppBadges(caseOpps(c))}</span>`:''}</td>
                 <td style="padding:10px 16px;color:var(--text-sec)">${(c.signals||[]).filter(s=>s.score_contribution>0).map(s=>s.name).join(', ')}</td>
                 <td style="padding:10px 8px;text-align:center;font-weight:500">${c.score}</td>
                 <td style="padding:10px 16px;text-align:right;color:var(--text-sec)">${c.nourishment_received||'—'}</td>
@@ -466,6 +493,7 @@ function buildReviewView() {
               c.existing_case_type==='suspension'?'SUSPENDED':
               c.existing_case_type==='open_case'?'OPEN CASE':
               'DNN'}</span>
+            ${(c.opportunities||[]).length?`<span style="margin-left:6px">${oppBadges(c.opportunities)}</span>`:''}
             · ${c.dinner_name} · <strong>${c.campaign_status}</strong>
             <div style="font-size:12px;color:#92400E;margin-top:3px">${c.note}</div>
           </div>
@@ -547,6 +575,7 @@ function buildCaseCard(c) {
           ${sfCampaignUrl(c)?`<button onclick="event.stopPropagation();window.open('${sfCampaignUrl(c)}','_blank')" style="font-size:11px;padding:2px 6px;border:0.5px solid var(--border);border-radius:4px;background:transparent;color:var(--text-sec);cursor:pointer">Dinner</button>`:''}
           ${c.email?`<button onclick="event.stopPropagation();navigator.clipboard.writeText('${c.email}').then(()=>{this.textContent='✓';setTimeout(()=>this.textContent='Copy email',1200)})" style="font-size:11px;padding:2px 6px;border:0.5px solid var(--border);border-radius:4px;background:transparent;color:var(--text-sec);cursor:pointer">Copy email</button>`:''}
           <span class="badge ${tierClass(displayTier)}" style="font-size:11px">${tierLabel(displayTier, c.score)}</span>
+          ${oppBadges(caseOpps(c))}
           <span style="font-size:12px;color:var(--text-sec);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${signalSummary}</span>
           ${actioned?'<span class="badge actioned" style="font-size:11px">✓ Reviewed</span>':''}
         </div>
@@ -582,6 +611,7 @@ function buildCaseCard(c) {
             const style=lvl==='Low'?'font-style:italic;':'';
             return `<span style="font-size:11px;font-weight:${wt};color:${col};${style}">● ${lvl} confidence</span>`;
           })()}
+          ${oppBadges(caseOpps(c))}
           ${actioned?'<span class="badge actioned">✓ Actioned</span>':''}
         </div>
         <div class="case-stats">
@@ -609,6 +639,7 @@ function buildCaseBody(c, a, actioned, displayTier) {
   const clusterWarn = state.clusterWarning===c.id;
 
   return `<div class="case-body">
+    ${oppBanner(c)}
     ${c.is_cluster&&c.cluster_note?`<div class="cluster-banner" style="font-size:13px;line-height:1.6">${md(c.cluster_note)}</div>`:''}
     ${c.is_cluster&&c.connected_unscored?`<div style="background:#FEF3C7;border-left:3px solid #D97706;border-radius:0 6px 6px 0;padding:10px 14px;margin:8px 0;font-size:13px;line-height:1.6;color:#92400E"><strong>🔍 Unscored hosts tied to this network:</strong> ${md(c.connected_unscored)}</div>`:''}
     ${c.is_cluster&&c.device_table&&c.device_table.length>0?`
@@ -1368,6 +1399,7 @@ function normaliseLoadedCase(c) {
     collapsed_summary: c.collapsed_summary || c.pattern_summary || '',
     signals: (c.signals||[]),
     bullets: (c.bullets||[]),
+    opportunities: c.opportunities || [],
     future_dinners: c.future_dinners || '0',
   };
 }
