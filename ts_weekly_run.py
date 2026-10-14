@@ -2291,6 +2291,41 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
         'opportunity_cases': len([c for c in cases if c.get('opportunities')]) + len([e for e in existing_cases if e.get('opportunities')]),
     }
 
+    # Accumulator row (added 2026-10-14): pre-filled from the script's tiers so the agent copies it into the
+    # T&S Weekly Run Accumulator instead of building it by hand. Counts are by host. Case numbers, dinners
+    # actually moved to Not Approved, and guest case ranges only exist after Salesforce actions, so the
+    # agent fills them in after post-action verification and adjusts counts for any staff tier changes.
+    def _tier_hosts(tiers):
+        out = []
+        for c in cases:
+            if c.get('tier') not in tiers:
+                continue
+            if c.get('is_cluster') and c.get('cluster_hosts'):
+                out += [{'name': h.get('name', ''), 'campaign_id': h.get('campaign_id', '')} for h in c['cluster_hosts']]
+            else:
+                out.append({'name': c.get('name', ''), 'campaign_id': c.get('campaign_id', '')})
+        return out
+    _sus = _tier_hosts(('suspension', 'deactivation'))
+    _dnn = _tier_hosts(('warning_dnn',))
+    _warn = _tier_hosts(('warning',))
+    accumulator_row = {
+        'week_of': DINNER_FRIDAY.strftime('%Y-%m-%d'),
+        'run': 'Wednesday' if wednesday_mode else 'Thursday',
+        'run_date': datetime.now().strftime('%Y-%m-%d'),
+        'cases': len(_sus) + len(_dnn) + len(_warn),
+        'dnn': len(_dnn),
+        'dnn_dinners_not_approved': None,          # agent: from post-action verification
+        'suspensions': len(_sus),
+        'suspension_last_names': sorted({(h['name'].split() or [''])[-1] for h in _sus} - {''}),
+        'suspension_dinners_not_approved': None,   # agent: from post-action verification
+        'warnings': len(_warn),
+        'clusters': final_summary['clusters'],
+        'case_numbers': {'suspension': [], 'dnn': [], 'warning': []},  # agent: after cases are created
+        'guest_case_ranges': '',                   # agent: e.g. "00004300-00004340"
+        'notes': '',
+        '_hosts': {'suspension': _sus, 'dnn': _dnn, 'warning': _warn},  # for the agent; not written to the doc
+    }
+
     ts_ui_data = {
         'run': {
             'week_of': DINNER_FRIDAY.strftime('%Y-%m-%d'),
@@ -2320,6 +2355,7 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
             'trends': '',
             'urgent': None,
         },
+        'accumulator_row': accumulator_row,
     }
 
     return ts_ui_data

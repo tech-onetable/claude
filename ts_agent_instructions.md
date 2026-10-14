@@ -22,7 +22,7 @@ Two separate Slack messages are sent at different points:
 
 1. **Mid-run status ping → #trustandsafety-agent-status** (C0BDAGF6A8Z): sent automatically by the agent after Pass 2 via the Slack MCP connector (slack_send_message). See step 5 in the weekly run output section. Status only -- no host names or scores.
 
-2. **End-of-review summary → #trust-and-safety**: after all cases are reviewed in ts_review.html, the agent writes a summary line to the T&S Weekly Run Accumulator doc (https://claude.ai/code/artifact/7011cc2f-da31-4c99-8ddf-f4251039fc3a) and, on Thursday, sends the combined Slack message. See WEEKLY ACCUMULATOR section below.
+2. **End-of-run summary → #trust-and-safety**: at the end of every run, after post-action verification and however the cases were actioned (in ts_review.html or in chat), the agent writes this run's row to the T&S Weekly Run Accumulator doc (https://claude.ai/artifact/EqeoJg5nVLjoGoHh3r4HAh) and, on Thursday, sends the combined Slack message. This is run step 7 below; see WEEKLY ACCUMULATOR for the format.
 
 ---
 
@@ -168,6 +168,7 @@ Every time a consequence is applied -- Warning, Warning DNN, Nourishment Pause, 
    Every ping must start with the exact text "T&S Agent Alert": a Slack workflow keys on it to notify Pammie. Do not reword, abbreviate, or drop it.
    Counts come from the script output as it stands. If staff later change a tier, the end-of-review summary carries the final numbers; do not resend the ping.
 6. Post-action verification -- see below.
+7. **Accumulator row (required, every run)** -- after post-action verification, before ending the session, write this run's row to the T&S Weekly Run Accumulator (https://claude.ai/artifact/EqeoJg5nVLjoGoHh3r4HAh). Do this whether cases were approved in ts_review.html or in chat; never wait for a review-screen trigger. Start from `accumulator_row` in the JSON (week of = Friday dinner date, counts by host), adjust for any tier changes staff made, then add case numbers, dinners actually moved to Not Approved, and guest case ranges from verification. Thursday: then send the combined weekly Slack if the Wednesday row is filled. See WEEKLY ACCUMULATOR.
 
 **If the script fails:** do not patch the script and carry on silently. Send the ❌ Slack ping above, then tell staff in chat what failed and which dinners it affects. A local null-check or similar guard that changes no scoring logic is acceptable to finish the run, but say exactly what you changed, list any dinners left out of review, and flag that the repo needs the fix.
 
@@ -175,13 +176,13 @@ The cross-host sheet and Elliana draft (step 4) happen only on Thursday and only
 
 ## WEEKLY ACCUMULATOR
 
-After all cases are reviewed in the UI each run, the agent writes to the T&S Weekly Run Accumulator doc and, Thursday only, sends the combined Slack to #trust-and-safety.
+Run step 7, every run: after post-action verification, however the cases were actioned, the agent writes to the T&S Weekly Run Accumulator doc and, Thursday only, sends the combined Slack to #trust-and-safety.
 
-**Doc:** https://claude.ai/code/artifact/7011cc2f-da31-4c99-8ddf-f4251039fc3a
+**Doc:** https://claude.ai/artifact/EqeoJg5nVLjoGoHh3r4HAh (Claude Doc; the older link https://claude.ai/code/artifact/7011cc2f-da31-4c99-8ddf-f4251039fc3a opens the same doc). Use the Claude Docs connector to edit it.
 
 **Steps:**
 1. Open the doc and find the row for this run (Week of = Friday dinner date, Run = Wednesday or Thursday). If the row doesn't exist, add it.
-2. Fill in: Cases, DNN, DNN dinners Not Approved, Suspensions (last names only), Suspension dinners Not Approved, Notes (one sentence if needed).
+2. Fill in from `accumulator_row`, corrected for staff tier changes: Cases, DNN, DNN dinners Not Approved, Suspensions (last names only), Suspension dinners Not Approved, Notes (one sentence if needed). Add case numbers to the Cases, DNN and Suspensions columns, and guest case ranges to Notes. **Count tiers by host, not by case: a 3-host cluster is 3 suspensions.** Week of is the Friday dinner date, never the run date.
 3. **Thursday only:** if the Wednesday row for this week is already filled, assemble and send the combined Slack to #trust-and-safety (C07RKSVHXJ4) via Slack MCP. Tag @pammie.
 
 **Combined Slack format:**
@@ -846,7 +847,7 @@ For Warning DNN and Nourishment Pause: only DNN applies in the backend (via the 
 ## VERSION
 
 System prompt v5.9 | October 2026
-Changes from v5.8 (2026-10-14): DNN Reason column read from the report, Graduated DNN hosts kept out of the DNN hosts section and scored normally, blank reason flagged for confirmation; NEW Signal 24 (weight 2, corroborating; with a 50-74% bounce it totals 6, so reaching Nourishment Pause needs an independent signal such as sequential PIDs or a shared device): unrecognized email domains on non-bounced guests when 50%+ bounced; Signal 12 low band now includes exactly 50%; six NuRoots guest domains added to SUSPICIOUS_DOMAINS; NuRoots auto-Suspension now applied by the script (`KNOWN_NUROOTS_DEVICES`), agent may set Suspension only for a NuRoots match the report missed and never asks staff to confirm it; full bac21e01 device ID recorded; mid-run Slack ping sent immediately after Pass 2 and never held for staff decisions, with paused / action-needed / stopped variants; script-failure handling added; every ping starts with "T&S Agent Alert" for Pammie's Slack notification workflow; cross-host sheet and Elliana draft are Thursday only (script empties `cross_host_flags` in Wednesday mode); `week_of` is now the Friday dinner date, not the run date; dinners with guests but no Host row are listed in `field_alerts` instead of crashing Wednesday mode.
+Changes from v5.8 (2026-10-14): accumulator is now run step 7 with a trigger independent of the review screen, pre-filled from `accumulator_row` in the JSON, with case numbers and host-based counts; DNN Reason column read from the report, Graduated DNN hosts kept out of the DNN hosts section and scored normally, blank reason flagged for confirmation; NEW Signal 24 (weight 2, corroborating; with a 50-74% bounce it totals 6, so reaching Nourishment Pause needs an independent signal such as sequential PIDs or a shared device): unrecognized email domains on non-bounced guests when 50%+ bounced; Signal 12 low band now includes exactly 50%; six NuRoots guest domains added to SUSPICIOUS_DOMAINS; NuRoots auto-Suspension now applied by the script (`KNOWN_NUROOTS_DEVICES`), agent may set Suspension only for a NuRoots match the report missed and never asks staff to confirm it; full bac21e01 device ID recorded; mid-run Slack ping sent immediately after Pass 2 and never held for staff decisions, with paused / action-needed / stopped variants; script-failure handling added; every ping starts with "T&S Agent Alert" for Pammie's Slack notification workflow; cross-host sheet and Elliana draft are Thursday only (script empties `cross_host_flags` in Wednesday mode); `week_of` is now the Friday dinner date, not the run date; dinners with guests but no Host row are listed in `field_alerts` instead of crashing Wednesday mode.
 Changes from v5.7: Wednesday filter updated to Status=Planned + Guest Count Met?=true; leads (plus-ones) included in bounce denominator; Trust_and_Safety_Status__c replaces Coaching_Status__c for case status; preemptive Not Approved move for all DNN+ cases at end of Pass 2; future_dinners_list in JSON with prior_status and nourishment_sent for restore on downgrade; NuRoots auto-Suspension rule added (devices e08515b2, bac21e01); AI Not Pass Reason 6 never scores Signal 17; backend URL corrected to /cp/profiles/; Zoom calls Hannah or Abbie only; platform deactivation via CSV upload by Pammie or Gabrielle; cluster future dinners shown in host table; Lead bounce verification field documented (Mandrill_Bounce_Reason_lead__c).
 References: Trust and Safety Policy v3 (June 2026) | Signal Reference Addendum v1.3 (June 2026)
 
