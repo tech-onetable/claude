@@ -87,7 +87,7 @@ SIGNAL_WEIGHTS = {
     'sig14_none': 0,  # No profiled guests -- PID check not possible
     'sig15': 3,  # Recycled bounced guest lists (needs pairing -- same exact email across 2+ dinners AND bounced)
     'sig16': 1,  # Privacy domain no bounce (needs pairing)
-    'sig24': 3,  # NEW 2026-10-14: half or more of guests bounced AND non-bounced guests mostly on unrecognized domains (corroborating)
+    'sig24': 2,  # NEW 2026-10-14 (lowered from 3 same day so bounces + domains alone stay at 6 and Pause needs independent evidence): half or more of guests bounced AND non-bounced guests mostly on unrecognized domains (corroborating)
     'sig17': 3,  # AI not pass (needs guest integrity signal)
     'sig18': 3,  # Description degradation (needs pairing)
     'sig19': 2,  # Privacy type mismatch (needs pairing)
