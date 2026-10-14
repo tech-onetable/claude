@@ -273,7 +273,7 @@ function buildApp() {
 // ── version ────────────────────────────────────────────────────────────────
 // Bump UI_VERSION and UI_UPDATED on every change to this file. The page checks GitHub's copy and
 // warns if it is newer. The check fails quietly (no warning) once the repo is private or offline.
-const UI_VERSION = 'v4.0';
+const UI_VERSION = 'v4.1';
 const UI_UPDATED = '2026-10-14';
 const UI_LATEST_URL = 'https://raw.githubusercontent.com/tech-onetable/claude/main/ts_review.html';
 let uiLatest = null; // {version, updated} from GitHub, or null if the check could not run
@@ -371,11 +371,12 @@ function buildReviewView() {
 
   // Derive counts from actual cases, not the summary object which may be stale
   const validCases = (state.current.cases||[]).filter(c => ['warning','warning_dnn','warning_dnn','suspension','deactivation'].includes(c.tier));
-  const countSuspension = validCases.filter(c => ['suspension','deactivation'].includes(c.tier) && !c.is_cluster).length +
-    (state.current.cases||[]).filter(c => c.is_cluster && ['suspension','deactivation'].includes(c.tier)).length;
-  const countPause = validCases.filter(c => c.tier === 'warning_dnn' && !c.is_cluster).length +
-    (state.current.cases||[]).filter(c => c.is_cluster && c.tier === 'warning_dnn').length;
-  const countWarning = validCases.filter(c => c.tier === 'warning').length;
+  // Tier totals count hosts: a cluster counts once per host in it (v4.1)
+  const hostCount = c => c.is_cluster ? ((c.cluster_hosts||[]).length || 1) : 1;
+  const sumHosts = arr => arr.reduce((n, c) => n + hostCount(c), 0);
+  const countSuspension = sumHosts(validCases.filter(c => ['suspension','deactivation'].includes(c.tier)));
+  const countPause = sumHosts(validCases.filter(c => c.tier === 'warning_dnn'));
+  const countWarning = sumHosts(validCases.filter(c => c.tier === 'warning'));
   const countClusters = (state.current.cases||[]).filter(c => c.is_cluster).length;
   const countOpp = (state.current.cases||[]).filter(c => caseOpps(c).length>0).length + (state.current.existing_cases||[]).filter(c => (c.opportunities||[]).length>0).length;
   return `

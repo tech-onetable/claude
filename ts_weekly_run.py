@@ -2278,10 +2278,14 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
         patterns.append(f"{len(addr_flags)} same-address group{'s' if len(addr_flags)>1 else ''} routed to program team.")
 
     # Recompute summary from final cases list -- Pass 1 summary is stale after cluster merging
+    # Tier totals count HOSTS, not cases: a cluster case counts once per host in it (fixed 2026-10-14,
+    # a 3-host cluster previously showed as 1 suspension). 'clusters' still counts cluster cases.
+    def _hosts(c):
+        return len(c.get('cluster_hosts') or []) or 1 if c.get('is_cluster') else 1
     final_summary = {
-        'suspension': len([c for c in cases if c.get('tier') in ('suspension', 'deactivation')]),
-        'warning_dnn': len([c for c in cases if c.get('tier') == 'warning_dnn']),
-        'warning': len([c for c in cases if c.get('tier') == 'warning']),
+        'suspension': sum(_hosts(c) for c in cases if c.get('tier') in ('suspension', 'deactivation')),
+        'warning_dnn': sum(_hosts(c) for c in cases if c.get('tier') == 'warning_dnn'),
+        'warning': sum(_hosts(c) for c in cases if c.get('tier') == 'warning'),
         'clusters': len([c for c in cases if c.get('is_cluster')]),
         'cluster_hosts': sum(len(c.get('cluster_hosts', [])) for c in cases if c.get('is_cluster')),
         'opportunity_cases': len([c for c in cases if c.get('opportunities')]) + len([e for e in existing_cases if e.get('opportunities')]),
