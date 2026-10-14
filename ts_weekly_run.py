@@ -169,6 +169,15 @@ def sf_15_to_18(id15):
     return id15 + suffix
 
 
+# DNN Reason column (DNN_Reason__c on Contact; added to the report 2026-10-14). Values today:
+# "Trust & Safety", "Graduated", or blank. Graduated hosts are not T&S cases and do not belong in the
+# DNN hosts section. Header matched loosely (e.g. "DNN Reason", "Contact: DNN Reason").
+DNN_REASON_SEEN = {'column': False}
+def _is_dnn_reason_header(k):
+    norm = re.sub(r'[^a-z]', '', (k or '').lower())
+    return norm.endswith('dnnreason') or norm.endswith('donotnourishreason')
+
+
 def parse_csv(contact_path, lead_path=None):
     """Parse a single combined CSV (or Contact + Lead CSVs) into campaigns dict.
     
@@ -209,6 +218,12 @@ def parse_csv(contact_path, lead_path=None):
                         v = (row.get(k, '') or '').strip()
                         if v.lower() not in OPP_BLANKS and not r.get(canon):
                             r[canon] = v
+                for k in reader.fieldnames:
+                    if _is_dnn_reason_header(k):
+                        DNN_REASON_SEEN['column'] = True
+                        v = (row.get(k, '') or '').strip()
+                        if v and v.lower() not in ('nan', 'none', '-') and not r.get('DNN Reason'):
+                            r['DNN Reason'] = v
                 # Normalise email field -- Lead rows may use 'Email' instead of 'Campaign Member Email'
                 if not r.get('Campaign Member Email') and r.get('Email'):
                     r['Campaign Member Email'] = r.pop('Email', '')
@@ -276,11 +291,21 @@ def parse_csv(contact_path, lead_path=None):
                 campaigns[cid]['_suspended_status'] = row.get('Campaign Status', '')
                 campaigns[cid]['_existing_case_type'] = 'suspension'
 
+            # Graduated hosts carry Do Not Nourish but are not T&S cases. Score them like any other host
+            # and keep them out of the DNN hosts section. The original value is kept for context.
+            dnn_reason = (row.get('DNN Reason', '') or '').strip()
+            if dnn and not suspended and dnn_reason.lower() == 'graduated':
+                row['_dnn_original'] = row.get('Do Not Nourish', '')
+                row['Do Not Nourish'] = ''
+                campaigns[cid]['_dnn_graduated'] = True
+                dnn = False
+
             # DNN (not suspended) with active dinner → existing cases, softer flag
             elif dnn and not suspended and status not in ('not nourishing', 'aborted'):
                 campaigns[cid]['_existing_case'] = True
                 campaigns[cid]['_suspended_status'] = row.get('Campaign Status', '')
                 campaigns[cid]['_existing_case_type'] = 'dnn'
+                campaigns[cid]['_dnn_reason'] = dnn_reason
 
         elif ms in ('Attended', 'Applied', 'Pending', 'Guest of Guest'):
             campaigns[cid]['guests'].append(row)
@@ -1245,6 +1270,12 @@ def run(csv_path, lead_path=None, wednesday_mode=False):
 
     # Store alerts for inclusion in JSON output
     field_alerts = alerts if total_guests > 0 else []
+    if not DNN_REASON_SEEN['column']:
+        field_alerts.append("⚠ WARNING: no DNN Reason column in the report. Graduated hosts cannot be told apart from Trust & Safety DNN hosts and may appear in the DNN hosts section.")
+    else:
+        _grad = sum(1 for c in campaigns.values() if c.get('_dnn_graduated'))
+        if _grad:
+            print(f"[T&S] {_grad} Graduated DNN host dinner(s) scored as regular hosts, not listed in the DNN hosts section", file=sys.stderr)
     if no_host_cids:
         msg = (f"⚠ WARNING: {len(no_host_cids)} dinner(s) have guests but no Host row in the report and were not scored. "
                f"Review manually: {', '.join(no_host_cids)}.")
@@ -1681,8 +1712,15 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
                         else f"Suspended host with active dinner (status: {camp.get('_suspended_status','')}). Review -- new dinner may need to be blocked."
                     )
                     if camp.get('_existing_case_type') == 'suspension'
-                    else f"DNN host posted a new dinner (status: {camp.get('_suspended_status','')}). Check in before approving Nourishment -- may be returning after a gap."
+                    else (
+                        f"DNN host (reason: Trust & Safety) posted a new dinner (status: {camp.get('_suspended_status','')}). Check in before approving Nourishment -- may be returning after a gap."
+                        if (camp.get('_dnn_reason','') or '').lower().startswith('trust')
+                        else f"DNN host (reason: {camp.get('_dnn_reason')}) posted a new dinner (status: {camp.get('_suspended_status','')}). Confirm the reason before acting."
+                        if camp.get('_dnn_reason')
+                        else f"DNN host posted a new dinner (status: {camp.get('_suspended_status','')}). DNN reason is blank: confirm whether it is Trust & Safety or Graduated before acting."
+                    )
                 ),
+                'dnn_reason': camp.get('_dnn_reason', '') if camp.get('_existing_case_type') == 'dnn' else '',
                 'existing_case_type': camp.get('_existing_case_type', 'suspension'),
                 'most_recent_case_date': max((c.get('created_date','') for c in sf_results.get(contact_id,{}).get('_open_ts_cases',[])), default=''),
             })
