@@ -25,6 +25,25 @@ from datetime import datetime, date
 
 # ── config ────────────────────────────────────────────────────────────────────
 REVIEW_DATE = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)  # Set dynamically at runtime
+# Dinner week this run covers: the Friday on or after the run date (Wed run -> +2 days, Thu run -> +1).
+# Used for week_of in the JSON, Slack ping and accumulator so Wednesday and Thursday runs share one week key.
+from datetime import timedelta
+DINNER_FRIDAY = REVIEW_DATE + timedelta(days=(4 - REVIEW_DATE.weekday()) % 7)
+# Known NuRoots devices (standing rule: automatic Suspension, overrides the first-instance rule).
+# Matched by prefix so a full ID or the documented 8-character prefix both work.
+KNOWN_NUROOTS_DEVICES = {
+    'e08515b2': 'primary host creation device (Cases 00003748-00003769, 00004227-00004232)',
+    'bac21e01d395e0c7d6854b82f068e257': 'guest account device (also Mary Fox, Case 00003760)',
+}
+def nuroots_match(fp):
+    fp = (fp or '').strip().lower()
+    if len(fp) < 8 or fp in ('nan', 'none'):
+        return None
+    for known in KNOWN_NUROOTS_DEVICES:
+        k = known.lower()
+        if fp.startswith(k) or k.startswith(fp):
+            return known
+    return None
 SUSPICIOUS_DOMAINS = {
     'atomicmail.io','mailshield.org','tutamail.com','otheremail.org',
     'bumpmail.io','simplelogin.com','membermail.net','freemail.is','ourisp.net',
@@ -1114,6 +1133,10 @@ def run(csv_path, lead_path=None, wednesday_mode=False):
     campaigns, total_rows = parse_csv(csv_path, lead_path)
     print(f"[T&S] {total_rows} rows, {len(campaigns)} campaigns", file=sys.stderr)
 
+    # Campaigns with guest rows but no Host row cannot be scored. Surface them for a manual look
+    # instead of dropping them silently (this crashed Wednesday mode on 2026-10-14).
+    no_host_cids = sorted(cid for cid, camp in campaigns.items() if not camp.get('host') and camp.get('guests'))
+
     if wednesday_mode:
         # Wednesday mode: score campaigns that are Planned with Guest Count Met? = true,
         # OR already sent (Dov may have started processing).
@@ -1128,10 +1151,10 @@ def run(csv_path, lead_path=None, wednesday_mode=False):
         campaigns = {
             cid: camp for cid, camp in campaigns.items()
             if (
-                str(camp.get('host', {}).get('Campaign Status', '') or '').strip().lower() == 'planned'
-                and str(camp.get('host', {}).get('Guest Count Met?', '') or '').strip().lower() in ('true', '1')
+                str((camp.get('host') or {}).get('Campaign Status', '') or '').strip().lower() == 'planned'
+                and str((camp.get('host') or {}).get('Guest Count Met?', '') or '').strip().lower() in ('true', '1')
             ) or (
-                str(camp.get('host', {}).get('Campaign Status', '') or '').strip().lower() in SENT_STATUSES
+                str((camp.get('host') or {}).get('Campaign Status', '') or '').strip().lower() in SENT_STATUSES
             )
         }
         print(f"[T&S] Wednesday filter: {len(campaigns)} eligible campaigns (Planned+GuestCountMet or already Sent) of {before} total", file=sys.stderr)
@@ -1144,6 +1167,7 @@ def run(csv_path, lead_path=None, wednesday_mode=False):
         all_guest_rows.extend(camp.get('guests', []))
 
     total_guests = len(all_guest_rows)
+    alerts = []
     if total_guests > 0:
         CRITICAL_FIELDS = {
             'RSVP Device Fingerprint ID': 'Device fingerprint signals (Signals 1-3) will not score',
@@ -1176,6 +1200,11 @@ def run(csv_path, lead_path=None, wednesday_mode=False):
 
     # Store alerts for inclusion in JSON output
     field_alerts = alerts if total_guests > 0 else []
+    if no_host_cids:
+        msg = (f"⚠ WARNING: {len(no_host_cids)} dinner(s) have guests but no Host row in the report and were not scored. "
+               f"Review manually: {', '.join(no_host_cids)}.")
+        field_alerts.append(msg)
+        print(f"[T&S] {msg}", file=sys.stderr)
 
     high_volume, cross_dinner, all_cross, all_fps = build_fp_maps(campaigns)
     print(f"[T&S] High-volume FPs (20+, not scored): {len(high_volume)}", file=sys.stderr)
@@ -1385,6 +1414,31 @@ def run(csv_path, lead_path=None, wednesday_mode=False):
             all_scored[cid]['tier'] = 'warning_dnn'
             all_scored[cid]['_cluster_override'] = True
 
+    # NuRoots standing rule: any dinner created on, or with guests from, a known NuRoots device
+    # is automatic Suspension regardless of score, even on a first offense. Applied in the script
+    # so the agent never has to override the script's tier.
+    for cid, camp in campaigns.items():
+        host = camp.get('host')
+        if not host:
+            continue
+        fps = [camp.get('dinner_created_device_id', ''), host.get('Dinner Created Device ID', ''),
+               host.get('Profile Created Device ID', ''), host.get('RSVP Device Fingerprint ID', '')]
+        fps += [g.get('RSVP Device Fingerprint ID', '') for g in camp.get('guests', [])]
+        hit = next((nuroots_match(f) for f in fps if nuroots_match(f)), None)
+        if not hit:
+            continue
+        if cid not in all_scored:
+            all_scored[cid] = {
+                'score': 0,
+                'tier': 'suspension',
+                'scored_signals': score_campaign(cid, camp, cross_dinner, high_volume, campaigns=campaigns),
+                'suspended': host.get('Suspended Flag', '') in ('1', '1.0'),
+                'dnn': host.get('Do Not Nourish', '') in ('1', '1.0'),
+            }
+        all_scored[cid]['tier'] = 'suspension'
+        all_scored[cid]['_nuroots_match'] = hit
+        print(f"[T&S] NuRoots device match on {cid} ({hit[:8]}...): tier set to Suspension", file=sys.stderr)
+
     # Remove existing cases (suspended + active status) from scored output
     existing_case_cids = {cid for cid, camp in campaigns.items() if camp.get('_existing_case')}
     all_scored = {cid: d for cid, d in all_scored.items() if cid not in existing_case_cids}
@@ -1443,13 +1497,15 @@ def run(csv_path, lead_path=None, wednesday_mode=False):
         }
         if met:
             d['score'] += SIGNAL_WEIGHTS['sig_addr']
-            d['tier'] = tier_from_score(d['score'])
+            if not d.get('_nuroots_match'):
+                d['tier'] = tier_from_score(d['score'])
 
     # Save intermediate for agent to use
     output = {
         'campaigns': {cid: {
             'score': d['score'],
             'tier': d['tier'],
+            'nuroots_match': d.get('_nuroots_match'),
             'suspended': d['suspended'],
             'dnn': d['dnn'],
             'host_id_15': campaigns[cid]['host'].get('Contact ID', '') if campaigns[cid]['host'] else '',
@@ -1679,7 +1735,7 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
                 'prior_ts_cases': str(int(prior_cases)) if prior_cases is not None else 'pending',
                 'suspended': 'Yes · active' if suspended_sf else 'No',
                 'new_host': f"Yes · approved {app_date}" if new_host_flag and app_date else ('No' if not new_host_flag else 'pending'),
-                'unique_guests_12mo': str(int(sf['Unique_Guests_Last_12_Months__c'])) if sf.get('Unique_Guests_Last_12_Months__c') is not None else (campaigns.get(cid, {}).get('host', {}).get('Unique guests', '').strip() or 'pending'),
+                'unique_guests_12mo': str(int(sf['Unique_Guests_Last_12_Months__c'])) if sf.get('Unique_Guests_Last_12_Months__c') is not None else ((campaigns.get(cid, {}).get('host') or {}).get('Unique guests', '').strip() or 'pending'),
                 'guest_to_host': 'Yes' if sf.get('Guest_to_Host_formula__c') else ('No' if sf.get('Guest_to_Host_formula__c') is not None else 'pending'),
                 'times_attended_as_guest': str(int(sf['Times_Attended_as_Guest__c'])) if sf.get('Times_Attended_as_Guest__c') is not None else 'pending',
             }
@@ -1719,7 +1775,7 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
                 addr_type = 'city-only'
 
             # Platform ID for BE link
-            camp_host = campaigns.get(cid, {}).get('host', {}) or {}
+            camp_host = (campaigns.get(cid, {}).get('host') or {}) or {}
             platform_id = str(camp_host.get('Platform ID', '') or '').split('.')[0]
 
             cluster_hosts.append({
@@ -1766,6 +1822,9 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
         # Cluster minimum is warning_dnn -- never just warning
         if tier == 'warning':
             tier = 'warning_dnn'
+        nuroots_hits = sorted({pass1_output['campaigns'][c].get('nuroots_match') for c in members} - {None})
+        if nuroots_hits:
+            tier = 'suspension'
         combined_n = f"${total_nourishment:,.0f} combined (Contact)" if nourishment_verified else "pending Contact verification"
 
         # Build cluster signals from highest-scoring member
@@ -1907,7 +1966,8 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
             'dnn': False,
             'collapsed_summary': f"{len(members)}-host cluster · top score {top_score} · {combined_n}",
             'narrative_summary': None,  # Populated by agent during Pass 2 investigation
-            'bullets': [
+            'nuroots_match': nuroots_hits[0] if nuroots_hits else None,
+            'bullets': ([f"**NuRoots device match ({', '.join(h[:8] + '...' for h in nuroots_hits)}):** automatic Suspension under the standing NuRoots rule, overriding the first-instance rule. Score is informational."] if nuroots_hits else []) + [
                 (f"**{len(members)}-host cluster** linked by device{('s' if len(all_cluster_fps)>1 else '')} {fp_links_str}." if fp else f"**{len(members)}-host cluster** linked by {ip_note}."),
                 f"**Guest device concentration:** {guest_breakdown}." + (f" {host_device_str}" if host_device_str else ""),
                 f"**Individual scores:** {scores_str}. Score shown is the highest individual score, not a combined total.",
@@ -1954,7 +2014,7 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
         if cid in existing_case_cids:
             continue
         d = pass1_output['campaigns'][cid]
-        if d['score'] == 0 and not d['suspended'] and not d['dnn']:
+        if d['score'] == 0 and not d['suspended'] and not d['dnn'] and not d.get('nuroots_match'):
             continue
 
         sf = sf_results.get(d['host_id_15'], {})
@@ -1963,7 +2023,7 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
         # If host has open T&S cases, surface in existing_cases rather than scored queue
         open_cases = sf.get('_open_ts_cases', [])
         if open_cases:
-            host = camp.get('host', {})
+            host = (camp.get('host') or {})
             contact_id = host.get('Contact ID', '') if host else ''
             host_id_18 = sf.get('Id', sf_15_to_18(contact_id)) if contact_id else ''
             case_refs = '; '.join(f"Case {c['case_number']} ({c['status']})" for c in open_cases)
@@ -2002,6 +2062,9 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
             camp['host']['_future_dinner_count'] = len(sf.get('_future_dinners', []))
         case = build_case_json(cid, camp, scored_signals, d['score'],
                                d['tier'] or 'watch', sf)
+        if d.get('nuroots_match'):
+            case['nuroots_match'] = d['nuroots_match']
+            case['bullets'] = [f"**NuRoots device match ({d['nuroots_match'][:8]}...):** automatic Suspension under the standing NuRoots rule, overriding the first-instance rule. Score is informational."] + case.get('bullets', [])
         # Resolve cross-dinner FP host names in sig2 description
         for sig in case.get('signals', []):
             if sig.get('name','').startswith('Cross-dinner') and 'other dinners:' in sig.get('name',''):
@@ -2012,7 +2075,7 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
                     for other_cid in cids_str.split(', '):
                         other_cid = other_cid.strip()
                         other_camp = campaigns.get(other_cid, {})
-                        other_host = other_camp.get('host', {})
+                        other_host = (other_camp.get('host') or {})
                         if other_host:
                             other_name = f"{other_host.get('First Name','')} {other_host.get('Last Name','')}".strip()
                             other_dinner = other_camp.get('name', '')
@@ -2035,7 +2098,7 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
                 partner_names = []
                 for pcid in partner_cids:
                     pcamp = campaigns.get(pcid, {})
-                    phost = pcamp.get('host', {})
+                    phost = (pcamp.get('host') or {})
                     if phost:
                         pname = f"{phost.get('First Name','')} {phost.get('Last Name','')}".strip()
                         partner_names.append(pname)
@@ -2137,7 +2200,7 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
 
     ts_ui_data = {
         'run': {
-            'week_of': REVIEW_DATE.strftime('%Y-%m-%d'),
+            'week_of': DINNER_FRIDAY.strftime('%Y-%m-%d'),
             'run_date': datetime.now().strftime('%Y-%m-%d'),
             'dinners_reviewed': pass1_output['total_dinners'],
             'summary': final_summary,
@@ -2158,7 +2221,7 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
             'top_signals_this_week': [{'name': n, 'count': c} for n, c in top_signals],
         },
         'slack_summary': {
-            'week_of': REVIEW_DATE.strftime('%Y-%m-%d'),
+            'week_of': DINNER_FRIDAY.strftime('%Y-%m-%d'),
             'totals': final_summary,
             'actioned': [],
             'trends': '',
