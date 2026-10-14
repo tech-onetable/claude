@@ -50,7 +50,22 @@ SUSPICIOUS_DOMAINS = {
     'altaddress.org','dropons.com','jourrapide.com','armyspy.com','teleworm.us','dayrep.com',
     # Added 2026-10-01 from Alfie Elliott case
     'hudzer.com','flakeian.com','cwsgear.com','mail2usa.com',
+    # Added 2026-10-14: non-bounced guest accounts made on the NuRoots guest device (Coleman/Schneider/Kimber)
+    'psmscientific.com','mailserv.info','dailynutria.com','p-ttc.top','vipaccfb.cc','d4ngerssquy.info',
 }
+# Mainstream consumer and institutional email providers. Used only by sig24: when half or more of a
+# dinner's guests bounce, non-bounced guests on domains outside this list (and outside .edu/.gov) are
+# counted as unrecognized. Work domains will land in "unrecognized" too, which is why sig24 is gated
+# on bounces and only corroborates.
+RECOGNIZED_EMAIL_DOMAINS = {
+    'gmail.com','googlemail.com','yahoo.com','ymail.com','rocketmail.com','outlook.com','hotmail.com',
+    'live.com','msn.com','icloud.com','me.com','mac.com','aol.com','comcast.net','verizon.net','att.net',
+    'sbcglobal.net','bellsouth.net','cox.net','charter.net','optonline.net','earthlink.net','duck.com',
+    'yahoo.co.uk','hotmail.co.uk','outlook.co.uk','btinternet.com','yahoo.ca','hotmail.ca','rogers.com',
+    'gmx.com','gmx.de','web.de','yandex.com','yandex.ru','mail.ru','walla.co.il','walla.com','fastmail.com',
+    'protonmail.com','proton.me','pm.me','tutanota.com','tuta.io',  # privacy domains are scored by sig16, not here
+}
+SUSPICIOUS_TLDS = {'top','cc','info','xyz','icu','site','online','shop','buzz','click','fun','rest','cyou','sbs','pw','lol'}
 HIGH_VOLUME_THRESHOLD = 8    # FP on 8+ dinners = shared infrastructure, not scored
 SIGNAL_WEIGHTS = {
     'sig1': 7,   # Shared device FP host+guest (standalone)
@@ -72,6 +87,7 @@ SIGNAL_WEIGHTS = {
     'sig14_none': 0,  # No profiled guests -- PID check not possible
     'sig15': 3,  # Recycled bounced guest lists (needs pairing -- same exact email across 2+ dinners AND bounced)
     'sig16': 1,  # Privacy domain no bounce (needs pairing)
+    'sig24': 3,  # NEW 2026-10-14: half or more of guests bounced AND non-bounced guests mostly on unrecognized domains (corroborating)
     'sig17': 3,  # AI not pass (needs guest integrity signal)
     'sig18': 3,  # Description degradation (needs pairing)
     'sig19': 2,  # Privacy type mismatch (needs pairing)
@@ -90,7 +106,7 @@ SIGNAL_WEIGHTS = {
 # sig23   = deliberate identity change (staff judgment)
 # Note: sig14 (100% PIDs) is NOT standalone -- requires at least one pairing signal
 STANDALONE = {'sig1', 'sig12', 'sig21', 'sig22', 'sig23'}
-GUEST_INTEGRITY_SIGNALS = {'sig12', 'sig12_low', 'sig14', 'sig14_low', 'sig10'}
+GUEST_INTEGRITY_SIGNALS = {'sig12', 'sig12_low', 'sig14', 'sig14_low', 'sig10', 'sig24'}
 SF_BASE = "https://onetable.lightning.force.com/lightning/r/Contact/{}/view"
 SF_CAMPAIGN_BASE = "https://onetable.lightning.force.com/lightning/r/Campaign/{}/view"
 TS_RECORD_TYPE_ID = '012PO000001F53dYAC'  # Trust and Safety record type for Salesforce Cases
@@ -424,10 +440,38 @@ def score_campaign(cid, camp, cross_dinner, high_volume, campaigns=None):
             add_sig('sig12',
                     f"Guest email bounces (75%+): {len(bounced)}/{n} ({round(100*pct)}%) -- any bounce type",
                     f"{round(100*pct)}% ({len(bounced)}/{n} guests)", "75%+", True)
-        elif pct > 0.50:
+        elif pct >= 0.50:
             add_sig('sig12_low',
                     f"Guest email bounces (50-74%): {len(bounced)}/{n} ({round(100*pct)}%) -- any bounce type",
-                    f"{round(100*pct)}% ({len(bounced)}/{n} guests)", ">50-74% (needs pairing)", True)
+                    f"{round(100*pct)}% ({len(bounced)}/{n} guests)", "50-74% (needs pairing)", True)
+
+        # ── Signal 24 (NEW 2026-10-14): unrecognized domains on the guests who did NOT bounce ──
+        # When half or more of a dinner's guests bounce, the remaining guests are suspect too. If most of
+        # them use domains outside mainstream providers (temp-mail style domains such as mailserv.info,
+        # p-ttc.top), score a corroborating signal. Gated on bounces, so it never scores on domain alone.
+        if pct >= 0.50:
+            def _dom(g):
+                e = (g.get('Campaign Member Email', '') or '').strip().lower()
+                return e.split('@', 1)[1] if '@' in e else ''
+            bounced_ids = {id(g) for g in bounced}
+            not_bounced = [g for g in guests if id(g) not in bounced_ids and _dom(g)]
+            def _unrecognized(d):
+                if d in RECOGNIZED_EMAIL_DOMAINS: return False
+                if d.endswith('.edu') or d.endswith('.gov') or '.ac.' in d or d.endswith('.mil'): return False
+                return True
+            odd = [g for g in not_bounced if _unrecognized(_dom(g))]
+            if not_bounced and odd:
+                odd_pct = len(odd) / len(not_bounced)
+                met = len(odd) >= 2 and odd_pct >= 0.50
+                doms = sorted({_dom(g) for g in odd})
+                odd_tld = [d for d in doms if d.rsplit('.', 1)[-1] in SUSPICIOUS_TLDS or d in SUSPICIOUS_DOMAINS]
+                add_sig('sig24',
+                        f"Unrecognized email domains on non-bounced guests: {len(odd)}/{len(not_bounced)} non-bounced guests "
+                        f"({round(100*odd_pct)}%) after {len(bounced)}/{n} bounced. Domains: {', '.join(doms[:6])}"
+                        + (f". Temp-mail style or known-bad: {', '.join(odd_tld[:6])}" if odd_tld else "")
+                        + ". Verify in Salesforce (account creation time, device) before treating as fake.",
+                        f"{len(odd)}/{len(not_bounced)} non-bounced guests ({round(100*odd_pct)}%)",
+                        "50%+ bounced, then 50%+ of non-bounced on unrecognized domains and ≥2 guests", met)
 
     # ── Signal 14: Sequential PIDs (profiled guests only as denominator) ────────
     # 55-99% of profiled = weight 3 corroborating (sig14_low, can score standalone)
@@ -832,6 +876,7 @@ SIG_NAMES = {
     'sig14_low': 'Sequential guest Profile IDs (55-99%)',
     'sig15': 'Recycled bounced guest list',
     'sig16': 'Privacy domain, no bounce',
+    'sig24': 'Unrecognized domains on non-bounced guests (half or more bounced)',
     'sig17': 'AI-generated or templated description',
     'sig18': 'Description quality degradation over time',
     'sig19': 'Privacy type mismatch',
