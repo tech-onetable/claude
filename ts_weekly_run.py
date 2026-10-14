@@ -2149,6 +2149,12 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
     # Shared IP without device corroboration is not actionable for the program team.
     # IP-adjacent hosts with their own scored signals surface as individual cases with a soft connection note.
 
+    # Cross-host flags (sheet and draft to Elliana) are Thursday only: they need the full week's
+    # dinner list, and Wednesday mode only sees the pre-Nourishment subset.
+    if wednesday_mode and cross_host_flags:
+        print(f"[T&S] Wednesday mode: {len(cross_host_flags)} cross-host flag group(s) held for Thursday's full run", file=sys.stderr)
+        cross_host_flags = []
+
     # Note: cross-host PID batches are surfaced in insights, not cross_host_flags,
     # because single-week false positive rate is too high for program team action.
     # They become meaningful when the same batch recurs across multiple weeks.
