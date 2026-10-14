@@ -31,7 +31,10 @@
   .signal-contrib { font-size: 12px; font-weight: 600; color: var(--wine); flex-shrink: 0; padding-top: 2px; }
   .signal-contrib-zero { font-size: 11px; color: var(--text-ter); flex-shrink: 0; padding-top: 3px; font-style: italic; }
   .signal-row-header { font-size: 11px; font-weight: 600; color: var(--text-ter); text-transform: uppercase; letter-spacing: .05em; margin-top: 4px; padding: 0 2px; }
+  .header { background: var(--wine); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; padding: 10px 16px; }
   .header-left { display: flex; align-items: center; gap: 12px; }
+  .version-line { font-size: 12px; color: var(--text-sec); margin: 6px 0 14px; }
+  .version-line.stale { color: var(--wine); font-weight: 600; }
   .header-brand { color: #fff; font-weight: 600; font-size: 16px; }
   .header-sub { color: rgba(255,255,255,0.6); font-size: 14px; }
   .header-tabs { display: flex; gap: 4px; }
@@ -267,10 +270,36 @@ function buildApp() {
     ${state.activeChat ? buildChatPanel() : ''}`;
 }
 
+// ── version ────────────────────────────────────────────────────────────────
+// Bump UI_VERSION and UI_UPDATED on every change to this file. The page checks GitHub's copy and
+// warns if it is newer. The check fails quietly (no warning) once the repo is private or offline.
+const UI_VERSION = 'v4.0';
+const UI_UPDATED = '2026-10-14';
+const UI_LATEST_URL = 'https://raw.githubusercontent.com/tech-onetable/claude/main/ts_review.html';
+let uiLatest = null; // {version, updated} from GitHub, or null if the check could not run
+function fmtUiDate(d) { try { return new Date(d + 'T12:00:00').toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'}); } catch(e) { return d; } }
+function uiIsStale() { return uiLatest && uiLatest.version && uiLatest.version !== UI_VERSION; }
+function versionLine() {
+  const mine = `${UI_VERSION} · updated ${fmtUiDate(UI_UPDATED)}`;
+  if (uiIsStale()) return `<div class="version-line stale">⚠ ${mine}. A newer version is on GitHub: ${uiLatest.version} (${fmtUiDate(uiLatest.updated)}). Download the latest ts_review.html before reviewing.</div>`;
+  if (uiLatest) return `<div class="version-line">${mine} · latest ✓</div>`;
+  return `<div class="version-line">${mine}</div>`;
+}
+async function checkUiVersion() {
+  try {
+    const r = await fetch(UI_LATEST_URL + '?t=' + Date.now(), {cache: 'no-store'});
+    if (!r.ok) return;
+    const t = await r.text();
+    const v = (t.match(/const UI_VERSION = '([^']+)'/) || [])[1];
+    const u = (t.match(/const UI_UPDATED = '([^']+)'/) || [])[1];
+    if (v) { uiLatest = {version: v, updated: u || ''}; render(); }
+  } catch (e) { /* offline or private repo: show local version only */ }
+}
+
 // ── header ─────────────────────────────────────────────────────────────────
 function buildHeader() {
   return `<div class="header">
-    <div class="header-left"><span class="header-brand">T+S Review</span><span class="header-sub">9.24</span></div>
+    <div class="header-left"><span class="header-brand">T&amp;S Review</span><span class="header-sub" title="Updated ${fmtUiDate(UI_UPDATED)}">${UI_VERSION}${uiIsStale() ? ' · ⚠ update available' : ''}</span></div>
     <div class="header-tabs">
       ${['load','review','history'].map(v=>`<button class="tab-btn ${state.view===v?'active':''}" onclick="switchView('${v}')">${v==='load'?'Load Run':v==='review'?'Current Run':'History'}</button>`).join('')}
     </div>
@@ -283,6 +312,7 @@ function buildLoadView() {
     <div class="load-icon">📋</div>
     <div class="load-title">Load Weekly Run</div>
     <div class="load-sub">Auto-loads <code>ts_ui_data.json</code> from the same folder, or paste the JSON below.</div>
+    ${versionLine()}
     <button class="btn btn-primary" onclick="autoLoad()" style="margin-bottom:16px;">↻ Refresh from file</button>
     <div id="load-status"></div>
     <textarea id="paste-input" placeholder="Paste ts_ui_data JSON here..." style="width:100%;min-height:120px;padding:10px;border-radius:8px;border:0.5px solid var(--border);font-size:13px;font-family:monospace;resize:vertical;margin-bottom:10px;"></textarea>
@@ -1498,6 +1528,7 @@ function loadData(data) {
 // ── boot ───────────────────────────────────────────────────────────────────
 render();
 setTimeout(async () => { const d=await tryLoadFromFile(); if(d) loadData(d); }, 100);
+checkUiVersion();
 </script>
 </body>
 </html>
