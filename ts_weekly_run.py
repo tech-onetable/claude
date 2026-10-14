@@ -465,10 +465,10 @@ def score_campaign(cid, camp, cross_dinner, high_volume, campaigns=None):
             add_sig('sig12',
                     f"Guest email bounces (75%+): {len(bounced)}/{n} ({round(100*pct)}%) -- any bounce type",
                     f"{round(100*pct)}% ({len(bounced)}/{n} guests)", "75%+", True)
-        elif pct >= 0.50:
+        elif pct > 0.50:
             add_sig('sig12_low',
                     f"Guest email bounces (50-74%): {len(bounced)}/{n} ({round(100*pct)}%) -- any bounce type",
-                    f"{round(100*pct)}% ({len(bounced)}/{n} guests)", "50-74% (needs pairing)", True)
+                    f"{round(100*pct)}% ({len(bounced)}/{n} guests)", ">50-74% (needs pairing)", True)
 
         # ── Signal 24 (NEW 2026-10-14): unrecognized domains on the guests who did NOT bounce ──
         # When half or more of a dinner's guests bounce, the remaining guests are suspect too. If most of
