@@ -273,7 +273,7 @@ function buildApp() {
 // ── version ────────────────────────────────────────────────────────────────
 // Bump UI_VERSION and UI_UPDATED on every change to this file. The page checks GitHub's copy and
 // warns if it is newer. The check fails quietly (no warning) once the repo is private or offline.
-const UI_VERSION = 'v4.2';
+const UI_VERSION = 'v4.3';
 const UI_UPDATED = '2026-10-15';
 const UI_LATEST_URL = 'https://raw.githubusercontent.com/tech-onetable/claude/main/ts_review.html';
 let uiLatest = null; // {version, updated} from GitHub, or null if the check could not run
@@ -403,7 +403,7 @@ function buildReviewView() {
       <button class="btn btn-secondary" onclick="switchView('load')" style="font-size:12px;padding:4px 10px;">+ Load new run</button>
     </div>
     <div class="filter-bar">
-      ${[['all','All'],['cluster','⚠ Cluster'],['suspension','Suspension'],['warning_dnn','Warning DNN'],['warning_dnn','Warning (DNN)'],['warning','Warning'],['opportunity','★ Opportunity']].map(([f,l])=>`<button class="filter-btn ${state.filter===f?'active':''}" onclick="setFilter('${f}')">${l}</button>`).join('')}
+      ${[['all','All'],['cluster','⚠ Cluster'],['suspension','Suspension'],['warning_dnn','Not Nourishing'],['warning','Warning'],['opportunity','★ Opportunity']].map(([f,l])=>`<button class="filter-btn ${state.filter===f?'active':''}" onclick="setFilter('${f}')">${l}</button>`).join('')}
     </div>
     ${buildInsights()}
     ${(state.current.field_alerts||[]).map(a=>{const crit=a.includes('CRITICAL');return `<div style="padding:10px 14px;border-radius:8px;margin-bottom:8px;font-size:13px;font-weight:500;background:${crit?'#FEF2F2':'#FFFBEB'};color:${crit?'#991B1B':'#633806'};border-left:3px solid ${crit?'#991B1B':'#F59E0B'}">${a.replace('⚠ CRITICAL: ','🚨 ').replace('⚠ WARNING: ','⚠️ ')}</div>`;}).join('')}
