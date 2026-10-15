@@ -273,8 +273,8 @@ function buildApp() {
 // ── version ────────────────────────────────────────────────────────────────
 // Bump UI_VERSION and UI_UPDATED on every change to this file. The page checks GitHub's copy and
 // warns if it is newer. The check fails quietly (no warning) once the repo is private or offline.
-const UI_VERSION = 'v4.1';
-const UI_UPDATED = '2026-10-14';
+const UI_VERSION = 'v4.2';
+const UI_UPDATED = '2026-10-15';
 const UI_LATEST_URL = 'https://raw.githubusercontent.com/tech-onetable/claude/main/ts_review.html';
 let uiLatest = null; // {version, updated} from GitHub, or null if the check could not run
 function fmtUiDate(d) { try { return new Date(d + 'T12:00:00').toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'}); } catch(e) { return d; } }
@@ -294,6 +294,17 @@ async function checkUiVersion() {
     const u = (t.match(/const UI_UPDATED = '([^']+)'/) || [])[1];
     if (v) { uiLatest = {version: v, updated: u || ''}; render(); }
   } catch (e) { /* offline or private repo: show local version only */ }
+}
+
+// ── copy buttons ───────────────────────────────────────────────────────────
+// Text goes in a data attribute (HTML-escaped) so names with apostrophes or quotes copy safely.
+function escAttr(t) { return String(t||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function copyBtn(text, label, title) {
+  return `<button data-copy-text="${escAttr(text)}" data-label="${escAttr(label)}" onclick="event.stopPropagation();copyFromBtn(this)" style="font-size:11px;padding:2px 6px;border:0.5px solid var(--border);border-radius:4px;background:transparent;color:var(--text-sec);cursor:pointer" title="${escAttr(title||label)}">${label}</button>`;
+}
+function copyFromBtn(btn) {
+  const t = btn.getAttribute('data-copy-text'), l = btn.getAttribute('data-label');
+  navigator.clipboard.writeText(t).then(()=>{ btn.textContent='✓'; setTimeout(()=>btn.textContent=l,1200); });
 }
 
 // ── header ─────────────────────────────────────────────────────────────────
@@ -448,7 +459,7 @@ function buildReviewView() {
                 <th style="padding:8px 16px;text-align:right;font-weight:500">Links</th>
               </tr></thead>
               <tbody>${highNourWarnings.map((c,i)=>`<tr style="border-top:0.5px solid #FED7AA;background:${i%2===0?'#fff':'#FFFBEB'}">
-                <td style="padding:10px 16px"><a href="${c.sf_url}" target="_blank" style="color:var(--text);text-decoration:underline;font-weight:500">${c.name}</a>${caseOpps(c).length?` <span style="margin-left:6px">${oppBadges(caseOpps(c))}</span>`:''}</td>
+                <td style="padding:10px 16px"><a href="${c.sf_url}" target="_blank" style="color:var(--text);text-decoration:underline;font-weight:500">${c.name}</a> ${copyBtn(c.name, 'Copy name', 'Copy host name')}${caseOpps(c).length?` <span style="margin-left:6px">${oppBadges(caseOpps(c))}</span>`:''}</td>
                 <td style="padding:10px 16px;color:var(--text-sec)">${(c.signals||[]).filter(s=>s.score_contribution>0).map(s=>s.name).join(', ')}</td>
                 <td style="padding:10px 8px;text-align:center;font-weight:500">${c.score}</td>
                 <td style="padding:10px 16px;text-align:right;font-weight:600;color:#92400E">${c.nourishment_received||'—'}</td>
@@ -484,7 +495,7 @@ function buildReviewView() {
                 <th style="padding:8px 16px;text-align:right;font-weight:500">Links</th>
               </tr></thead>
               <tbody>${stdWarnings.map((c,i)=>`<tr style="border-top:0.5px solid var(--border);background:${i%2===0?'#fff':'#FAFAF8'}">
-                <td style="padding:10px 16px"><a href="${c.sf_url}" target="_blank" style="color:var(--text);text-decoration:underline;font-weight:500">${c.name}</a>${caseOpps(c).length?` <span style="margin-left:6px">${oppBadges(caseOpps(c))}</span>`:''}</td>
+                <td style="padding:10px 16px"><a href="${c.sf_url}" target="_blank" style="color:var(--text);text-decoration:underline;font-weight:500">${c.name}</a> ${copyBtn(c.name, 'Copy name', 'Copy host name')}${caseOpps(c).length?` <span style="margin-left:6px">${oppBadges(caseOpps(c))}</span>`:''}</td>
                 <td style="padding:10px 16px;color:var(--text-sec)">${(c.signals||[]).filter(s=>s.score_contribution>0).map(s=>s.name).join(', ')}</td>
                 <td style="padding:10px 8px;text-align:center;font-weight:500">${c.score}</td>
                 <td style="padding:10px 16px;text-align:right;color:var(--text-sec)">${c.nourishment_received||'—'}</td>
@@ -603,6 +614,7 @@ function buildCaseCard(c) {
         <div class="score-circle" style="background:${scoreBg(c.tier)};color:${scoreColor(c.tier)};width:32px;height:32px;font-size:13px">${c.score}</div>
         <div class="case-meta" style="display:flex;align-items:center;gap:10px;flex:1;min-width:0">
           <a class="case-name" href="${c.sf_url}" target="_blank" onclick="event.stopPropagation()" style="font-size:14px;white-space:nowrap">${c.name} ↗</a>
+          ${copyBtn(c.name, 'Copy name', 'Copy host name')}
           ${c.be_url?`<button onclick="event.stopPropagation();window.open('${c.be_url}','_blank')" style="font-size:11px;padding:2px 6px;border:0.5px solid var(--border);border-radius:4px;background:transparent;color:var(--text-sec);cursor:pointer">Profile</button>`:''}
           ${sfCampaignUrl(c)?`<button onclick="event.stopPropagation();window.open('${sfCampaignUrl(c)}','_blank')" style="font-size:11px;padding:2px 6px;border:0.5px solid var(--border);border-radius:4px;background:transparent;color:var(--text-sec);cursor:pointer">Dinner</button>`:''}
           ${c.email?`<button onclick="event.stopPropagation();navigator.clipboard.writeText('${c.email}').then(()=>{this.textContent='✓';setTimeout(()=>this.textContent='Copy email',1200)})" style="font-size:11px;padding:2px 6px;border:0.5px solid var(--border);border-radius:4px;background:transparent;color:var(--text-sec);cursor:pointer">Copy email</button>`:''}
@@ -625,8 +637,9 @@ function buildCaseCard(c) {
       <div class="case-meta">
         <div class="case-name-row">
           ${c.is_cluster ? `<span class="case-name">${c.name}</span>
-          <button onclick="event.stopPropagation();navigator.clipboard.writeText('${(c.cluster_hosts||[]).map(h=>h.name).join(', ')}').then(()=>{this.textContent='✓';setTimeout(()=>this.textContent='Copy names',1200)})" style="font-size:11px;padding:2px 6px;border:0.5px solid var(--border);border-radius:4px;background:transparent;color:var(--text-sec);cursor:pointer" title="Copy host names">Copy names</button>` :
+          ${copyBtn((c.cluster_hosts||[]).map(h=>h.name).join(', '), 'Copy names', 'Copy host names')}` :
           `<a class="case-name" href="${c.sf_url}" target="_blank" onclick="event.stopPropagation()">${c.name} ↗</a>
+          ${copyBtn(c.name, 'Copy name', 'Copy host name')}
           ${c.be_url?`<button onclick="event.stopPropagation();window.open('${c.be_url}','_blank')" style="font-size:11px;padding:2px 6px;border:0.5px solid var(--border);border-radius:4px;background:transparent;color:var(--text-sec);cursor:pointer" title="Open backend profile">Profile</button>`:''}
           ${sfCampaignUrl(c)?`<button onclick="event.stopPropagation();window.open('${sfCampaignUrl(c)}','_blank')" style="font-size:11px;padding:2px 6px;border:0.5px solid var(--border);border-radius:4px;background:transparent;color:var(--text-sec);cursor:pointer" title="Open dinner in Salesforce">Dinner</button>`:''}
           ${c.email?`<button onclick="event.stopPropagation();navigator.clipboard.writeText('${c.email}').then(()=>{this.textContent='✓';setTimeout(()=>this.textContent='Copy email',1200)})" style="font-size:11px;padding:2px 6px;border:0.5px solid var(--border);border-radius:4px;background:transparent;color:var(--text-sec);cursor:pointer" title="Copy host email">Copy email</button>`:''}`}
