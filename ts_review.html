@@ -205,7 +205,7 @@ function saveRuns(r) { try { localStorage.setItem(STORE_KEY, JSON.stringify(r));
 state.runs = loadRuns();
 
 // ── helpers ────────────────────────────────────────────────────────────────
-const TIER_LABELS = { suspension:'Suspension', warning_dnn:'Warning (DNN)', warning:'Warning', deactivation:'Deactivation', dismiss:'Dismissed · No misuse', program_team:'Referred to program team' };
+const TIER_LABELS = { suspension:'Suspension', warning_dnn:'Nourishment Pause', warning:'Warning', deactivation:'Deactivation', dismiss:'Dismissed · No misuse', program_team:'Referred to program team' };
 const TIER_COLORS = { suspension:'var(--wine)', warning_dnn:'var(--amber-dark)', warning_dnn:'var(--amber-dark)', warning:'var(--olive)' };
 const TIER_BGS = { suspension:'var(--wine-light)', warning_dnn:'#FAEEDA', warning_dnn:'#FAEEDA', warning:'var(--olive-light)' };
 
@@ -273,7 +273,7 @@ function buildApp() {
 // ── version ────────────────────────────────────────────────────────────────
 // Bump UI_VERSION and UI_UPDATED on every change to this file. The page checks GitHub's copy and
 // warns if it is newer. The check fails quietly (no warning) once the repo is private or offline.
-const UI_VERSION = 'v4.3';
+const UI_VERSION = 'v4.4';
 const UI_UPDATED = '2026-10-15';
 const UI_LATEST_URL = 'https://raw.githubusercontent.com/tech-onetable/claude/main/ts_review.html';
 let uiLatest = null; // {version, updated} from GitHub, or null if the check could not run
@@ -393,7 +393,7 @@ function buildReviewView() {
   return `
     <div class="summary-bar">
       <div class="summary-card"><div class="summary-num" style="color:var(--wine)">${countSuspension}</div><div class="summary-label">Suspension</div></div>
-      <div class="summary-card"><div class="summary-num" style="color:var(--amber-dark)">${countPause}</div><div class="summary-label">Warning (DNN)</div></div>
+      <div class="summary-card"><div class="summary-num" style="color:var(--amber-dark)">${countPause}</div><div class="summary-label">Nourishment Pause</div></div>
       <div class="summary-card"><div class="summary-num" style="color:var(--olive)">${countWarning}</div><div class="summary-label">Warning</div></div>
       <div class="summary-card"><div class="summary-num" style="color:var(--text-sec)">${countClusters}</div><div class="summary-label">Clusters</div></div>
       ${countOpp>0?`<div class="summary-card"><div class="summary-num" style="color:#3B3F9E">${countOpp}</div><div class="summary-label">★ Opportunity</div></div>`:''}
@@ -403,7 +403,7 @@ function buildReviewView() {
       <button class="btn btn-secondary" onclick="switchView('load')" style="font-size:12px;padding:4px 10px;">+ Load new run</button>
     </div>
     <div class="filter-bar">
-      ${[['all','All'],['cluster','⚠ Cluster'],['suspension','Suspension'],['warning_dnn','Not Nourishing'],['warning','Warning'],['opportunity','★ Opportunity']].map(([f,l])=>`<button class="filter-btn ${state.filter===f?'active':''}" onclick="setFilter('${f}')">${l}</button>`).join('')}
+      ${[['all','All'],['cluster','⚠ Cluster'],['suspension','Suspension'],['warning_dnn','Nourishment Pause'],['warning','Warning'],['opportunity','★ Opportunity']].map(([f,l])=>`<button class="filter-btn ${state.filter===f?'active':''}" onclick="setFilter('${f}')">${l}</button>`).join('')}
     </div>
     ${buildInsights()}
     ${(state.current.field_alerts||[]).map(a=>{const crit=a.includes('CRITICAL');return `<div style="padding:10px 14px;border-radius:8px;margin-bottom:8px;font-size:13px;font-weight:500;background:${crit?'#FEF2F2':'#FFFBEB'};color:${crit?'#991B1B':'#633806'};border-left:3px solid ${crit?'#991B1B':'#F59E0B'}">${a.replace('⚠ CRITICAL: ','🚨 ').replace('⚠ WARNING: ','⚠️ ')}</div>`;}).join('')}
@@ -840,7 +840,7 @@ function buildCaseBody(c, a, actioned, displayTier) {
         <option value="">-- select --</option>
         <optgroup label="Override tier">
           <option value="warning">Warning</option>
-          <option value="warning_dnn">Warning (DNN)</option>
+          <option value="warning_dnn">Nourishment Pause</option>
           <option value="suspension">Suspension</option>
           <option value="deactivation">Deactivation</option>
         </optgroup>
@@ -863,7 +863,7 @@ function buildCaseBody(c, a, actioned, displayTier) {
               const hid = `${c.id}__${h.name.replace(/\s+/g,'_')}`;
               const ha = state.actionState[hid];
               const happroved = !!ha?.tier;
-              // Cluster members get Warning DNN minimum; suspension requires score 18+
+              // Cluster members get Nourishment Pause minimum; suspension requires score 18+
               const hBaseTier = h.score >= 18 ? 'suspension' : h.score >= 9 ? 'warning_dnn' : 'warning';
               const hEffectiveTier = ha?.tier || (c.is_cluster && hBaseTier === 'warning' ? 'warning_dnn' : hBaseTier);
               const htier = hEffectiveTier;
@@ -875,7 +875,7 @@ function buildCaseBody(c, a, actioned, displayTier) {
                 ${state.hostOverrideOpen===hid?`<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:4px">
                   <select id="host-override-tier-${hid}" style="font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:4px">
                     <option value="warning">Warning</option>
-                    <option value="warning_dnn">Warning (DNN)</option>
+                    <option value="warning_dnn">Nourishment Pause</option>
                     <option value="suspension">Suspension</option>
                     <option value="deactivation">Deactivation</option>
                     <option value="dismiss">Dismiss</option>
@@ -968,7 +968,7 @@ function buildActionChecklist(tier, hosts, rd, type, note) {
   if (note) items.push({l:`Add note: "${note.slice(0,80)}${note.length>80?'...':''}"`,r:false});
   if (['warning_dnn','suspension','deactivation'].includes(tier)) {
     items.push({l:'Set Do_Not_Nourish__c = true',r:false});
-    items.push({l:'Move future dinners to Not Nourishing',r:false});
+    items.push({l:'Move future dinners to Not Approved',r:false});
   }
   if (['suspension','deactivation'].includes(tier)) {
     items.push({l:'Set Suspended_Flag__c = true',r:false});
@@ -1162,7 +1162,7 @@ function buildHistoryView() {
 const CHAT_SYSTEM = `You are the OneTable Trust and Safety case advisor. You help staff review individual host cases flagged during the weekly T&S review. You know the full signal definitions, scoring rules, consequence framework, and policy.
 
 Key rules:
-- Warning: 1-8 | Warning (DNN): 9-17 | Suspension: 18+ | Deactivation: post-reinstatement only
+- Warning: 1-8 | Nourishment Pause: 9-17 | Suspension: 18+ | Deactivation: post-reinstatement only
 - First instance rule: even at 40+, first consequence is Suspension not Deactivation
 - Every signal requires pairing except: Shared device FP host+guest (Signal 1), Hard bounces (Signal 12), Reports from users (Signal 21), Deliberate fraud (Signal 22), Deliberate identity change (Signal 23)
 - Sequential PIDs: gap ≤ 2, denominator = ALL guests not just profiled guests

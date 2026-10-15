@@ -80,7 +80,7 @@ SIGNAL_WEIGHTS = {
     'sig10': 4,  # Suspicious phone number patterns (needs pairing, 50%+)
     'sig11': 4,  # Host/guest email similarity (needs pairing)
     'sig12_low': 4,  # Guest email bounces 50-74% (any type, corroborating)
-    'sig12': 8,  # Guest email bounces 75%+ (any type, high-confidence, Warning DNN eligible)
+    'sig12': 8,  # Guest email bounces 75%+ (any type, high-confidence, Nourishment Pause eligible)
     'sig14_low': 3,  # Sequential guest PIDs 55-99% of profiled (corroborating, can score standalone)
     'sig14': 6,  # Sequential guest PIDs 100% of profiled (Warning-eligible standalone)
     'sig14_watch': 0,  # Sequential PIDs below threshold -- surfaces observed % but does not score
@@ -445,7 +445,7 @@ def score_campaign(cid, camp, cross_dinner, high_volume, campaigns=None):
                     f"{round(100*pct)}% ({top_count}/{n} guests)", "50%+ and ≥3 guests sharing (min 3 guests total)", met)
 
     # ── Signal 12: Guest email bounces (any type -- hard or reject combined) ──
-    # 50-74% = weight 4 corroborating; 75%+ = weight 8 high-confidence Warning DNN eligible
+    # 50-74% = weight 4 corroborating; 75%+ = weight 8 high-confidence Nourishment Pause eligible
     # Bounces on throwaway domains always count regardless of Mandrill classification
     def is_bounce(g):
         reason = g.get('Mandrill Bounce Reason', '').lower()
@@ -1346,7 +1346,7 @@ def run(csv_path, lead_path=None, wednesday_mode=False):
     pause_cases = {c: d for c, d in all_scored.items() if 9 <= d['score'] < 18}
     warn_cases = {c: d for c, d in all_scored.items() if 1 <= d['score'] < 9}
 
-    print(f"[T&S] Suspension: {len(sus_cases)} | Warning DNN: {len(pause_cases)} | Warning: {len(warn_cases)}", file=sys.stderr)
+    print(f"[T&S] Suspension: {len(sus_cases)} | Nourishment Pause: {len(pause_cases)} | Warning: {len(warn_cases)}", file=sys.stderr)
 
     # ── Pass 2: Salesforce queries ───────────────────────────────────────────
     # This section is called by the agent after Pass 1.
@@ -1368,7 +1368,7 @@ def run(csv_path, lead_path=None, wednesday_mode=False):
 
     # Also flag hosts sharing a cross-host IP as a softer cluster signal
     # IP-only clusters require corroboration: at least one member must have a non-IP
-    # scored signal (bounce, device FP, sequential PIDs), or both must be Warning DNN+.
+    # scored signal (bounce, device FP, sequential PIDs), or both must be Nourishment Pause+.
     # IP alone is not sufficient to form a cluster case.
     NON_IP_SIGNALS = {'Guest email bounces (75%+)', 'Guest email bounces (50-74%)',
                       'Same device fingerprint across guests', 'Cross-dinner device fingerprint match',
@@ -1482,7 +1482,7 @@ def run(csv_path, lead_path=None, wednesday_mode=False):
         if cl.get('fp'):  # device FP clusters only
             cluster_cids.update(cl['members'])
 
-    # Apply cluster rule: any host in a cluster gets Warning DNN minimum
+    # Apply cluster rule: any host in a cluster gets Nourishment Pause minimum
     # Suspension still requires score 18+ -- cluster membership alone is not sufficient
     # for the more serious consequence tier and email language
     for cid in cluster_cids:
@@ -2191,10 +2191,10 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
                 case['bullets'] = case.get('bullets', []) + [f"**Shared IP:** {n}" for n in ip_notes]
         cases.append(case)
 
-    # Wednesday mode: surface Warning DNN and above only
+    # Wednesday mode: surface Nourishment Pause and above only
     if wednesday_mode:
         cases = [c for c in cases if c.get('tier') in ('warning_dnn', 'suspension', 'deactivation')]
-        print(f"[T&S] Wednesday mode: {len(cases)} cases at Warning DNN or above", file=sys.stderr)
+        print(f"[T&S] Wednesday mode: {len(cases)} cases at Nourishment Pause or above", file=sys.stderr)
 
     # Cross-host flags
     cross_host_flags = []
@@ -2265,7 +2265,7 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
     if sus_cases:
         patterns.append(f"{len(sus_cases)} suspension case{'s' if len(sus_cases)>1 else ''} this week.")
     if dnn_cases:
-        patterns.append(f"{len(dnn_cases)} Warning DNN case{'s' if len(dnn_cases)>1 else ''}.")
+        patterns.append(f"{len(dnn_cases)} Nourishment Pause case{'s' if len(dnn_cases)>1 else ''}.")
     if bounce_cases:
         patterns.append(f"Bounce signal present in {len(bounce_cases)}/{len(cases)} scored cases.")
     if pid_cases:
@@ -2593,7 +2593,7 @@ if __name__ == '__main__':
         print("Usage: python3 ts_weekly_run.py <combined_csv_path> [--no-sf] [--wednesday]", file=sys.stderr)
         print("       Combined CSV contains both Contact and Lead guest rows.", file=sys.stderr)
         print("       Legacy two-file mode: python3 ts_weekly_run.py <contact_csv> <lead_csv> [--no-sf] [--wednesday]", file=sys.stderr)
-        print("       --wednesday: pre-Nourishment gate run -- only scores Ready to Nourish campaigns, surfaces Warning DNN+ only", file=sys.stderr)
+        print("       --wednesday: pre-Nourishment gate run -- only scores Ready to Nourish campaigns, surfaces Nourishment Pause and above only", file=sys.stderr)
         sys.exit(1)
 
     csv_path = sys.argv[1]
@@ -2602,7 +2602,7 @@ if __name__ == '__main__':
     wednesday_mode = '--wednesday' in sys.argv
 
     if wednesday_mode:
-        print("[T&S] Wednesday pre-Nourishment mode -- filtering to Ready to Nourish campaigns, Warning DNN+ only", file=sys.stderr)
+        print("[T&S] Wednesday pre-Nourishment mode -- filtering to Ready to Nourish campaigns, Nourishment Pause and above only", file=sys.stderr)
 
     # Legacy: second positional arg (not a flag) is a separate Lead CSV
     if len(sys.argv) >= 3 and not sys.argv[2].startswith('--'):
