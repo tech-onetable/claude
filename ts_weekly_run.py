@@ -2401,25 +2401,28 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
         '_hosts': {'suspension': _sus, 'dnn': _dnn, 'warning': _warn},  # for the agent; not written to the doc
     }
 
-    # Longitudinal data request (added 2026-10-18, for now): low-scoring Warning-tier hosts, who are NOT being
-    # moved to Nourishment Pause, get a longitudinal pull so the case is better informed before any Warning is
-    # actioned. Thursday runs only (Wednesday mode does not surface Warnings). The host emails are output
-    # comma separated so staff can paste them into the Salesforce longitudinal report filter.
+    # Longitudinal data request (added 2026-10-18, for now): hosts at the Nourishment Pause ("not nourishing")
+    # tier, which are the lowest-scoring cases that actually restrict Nourishment, get a longitudinal pull so
+    # the case is better informed. Both Wednesday and Thursday runs surface this tier. Individual cases only
+    # (clusters get the device-file review instead). The host emails are output comma separated so staff can
+    # paste them into the Salesforce longitudinal report filter.
+    LONGITUDINAL_MAX_SCORE = 17   # whole Nourishment Pause tier (9-17); lower this to narrow to the low end
     _lg_hosts, _seen_lg = [], set()
-    if not wednesday_mode:
-        for c in cases:
-            if c.get('tier') != 'warning' or c.get('is_cluster'):
-                continue
-            em = (c.get('email') or '').strip().lower()
-            if not em or em in _seen_lg:
-                continue
-            _seen_lg.add(em)
-            _lg_hosts.append({'name': c.get('name', ''), 'email': em, 'campaign_id': c.get('campaign_id', ''), 'score': c.get('score')})
+    for c in cases:
+        if c.get('tier') != 'warning_dnn' or c.get('is_cluster'):
+            continue
+        if (c.get('score') or 0) > LONGITUDINAL_MAX_SCORE:
+            continue
+        em = (c.get('email') or '').strip().lower()
+        if not em or em in _seen_lg:
+            continue
+        _seen_lg.add(em)
+        _lg_hosts.append({'name': c.get('name', ''), 'email': em, 'campaign_id': c.get('campaign_id', ''), 'score': c.get('score')})
     longitudinal_request = {
         'count': len(_lg_hosts),
         'emails_csv': ', '.join(h['email'] for h in _lg_hosts),
         'hosts': _lg_hosts,
-        'applies_to': 'Warning-tier individual cases, Thursday runs only',
+        'applies_to': 'Nourishment Pause individual cases, Wednesday and Thursday runs',
     }
 
     ts_ui_data = {
@@ -2776,7 +2779,7 @@ if __name__ == '__main__':
         lg_fname = f'/home/claude/ts_longitudinal_emails_{date_str}.txt'
         with open(lg_fname, 'w') as f:
             f.write(_lg['emails_csv'] + '\n')
-        print(f"[T&S] LONGITUDINAL DATA REQUESTED for {_lg['count']} Warning-tier host(s): {lg_fname}", file=sys.stderr)
+        print(f"[T&S] LONGITUDINAL DATA REQUESTED for {_lg['count']} Nourishment Pause host(s): {lg_fname}", file=sys.stderr)
         print(f"[T&S] Host emails (comma separated): {_lg['emails_csv']}", file=sys.stderr)
 
     # Print the ts_ui_data block for the agent to output
