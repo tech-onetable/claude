@@ -558,7 +558,9 @@ def score_campaign(cid, camp, cross_dinner, high_volume, campaigns=None):
         'plus one', 'plus 1', 'my friend', 'a friend', 'friend friend', 'my dog', 'my cat',
     }
     FAKE_WORDS = {'guest', 'plus', 'friend', 'dog', 'test', 'unknown', 'tbd', 'anonymous', 'fake', 'myself',
-                  'bitch', 'shit', 'fuck', 'pipi', 'poop', 'boyfriend', 'girlfriend'}
+                  'bitch', 'shit', 'fuck', 'pipi', 'poop', 'butt', 'boyfriend', 'girlfriend'}
+    # Joke words that are also real surnames: only count them outside a one-word last name ("Lily Butt" is a real name).
+    SURNAME_WORDS = {'butt'}
     def fake_reason(g):
         first = (g.get('First Name', '') or '').strip().lower()
         last = (g.get('Last Name', '') or '').strip().lower()
@@ -571,18 +573,23 @@ def score_campaign(cid, camp, cross_dinner, high_volume, campaigns=None):
         if len(first) == 1 and len(last) == 1: return 'initials only'
         if re.search(r"[0-9+]", full): return 'digits or "+" in name'
         if (len(first) > 2 and len(set(first)) == 1) or (len(last) > 2 and len(set(last)) == 1): return 'repeated letters'
-        if words & FAKE_WORDS: return 'joke or placeholder word'
+        joke = words & FAKE_WORDS
+        if joke - SURNAME_WORDS: return 'joke or placeholder word'
+        if joke and not (len(last.split()) == 1 and set(re.findall(r"[a-z]+", last)) == joke and not (set(re.findall(r"[a-z]+", first)) & joke)):
+            return 'joke or placeholder word'
         if len(full.split()) >= 5: return 'sentence instead of a name'
         return None
     fake_guests = [(g, fake_reason(g)) for g in guests]
     fake_guests = [(g, r) for g, r in fake_guests if r]
     if n > 0 and fake_guests:
+        fake_pct = len(fake_guests) / n
         examples = '; '.join(
             f"{g.get('First Name','')} {g.get('Last Name','')}".strip() + f" ({r})"
             for g, r in fake_guests[:3])
         add_sig('sig8',
-                f"Clearly fake guest identities: {len(fake_guests)}/{n} guests -- e.g. {examples}. Counts once per dinner.",
-                f"{len(fake_guests)} guest(s)", "1+ clear fake (missing names excluded)", True)
+                f"Clearly fake guest identities: {len(fake_guests)}/{n} guests ({round(100*fake_pct)}%, all guests incl. +1s) -- e.g. {examples}."
+                + (" Counts once per dinner." if fake_pct > 0.5 else " Below the more-than-50% threshold: note only, does not score."),
+                f"{round(100*fake_pct)}% ({len(fake_guests)}/{n} guests)", ">50% of all guests incl. +1s", fake_pct > 0.5)
 
     # ── Signal 25 (NEW 2026-10-16): Guest or host listed as a +1 ──
     # A +1 whose name or email matches another guest at the same dinner (the guest added themselves,
@@ -614,10 +621,12 @@ def score_campaign(cid, camp, cross_dinner, high_volume, campaigns=None):
             if how:
                 matches.append(f"{role} {other.get('First Name','')} {other.get('Last Name','')}".strip() + f" ({how})")
                 break
-    if matches:
+    if matches and n > 0:
+        m_pct = len(matches) / n
         add_sig('sig25',
-                f"Guest or host listed as a +1: {len(matches)} +1(s) match someone at this dinner -- " + '; '.join(matches[:3]) + ". Counts once per dinner.",
-                f"{len(matches)} +1(s)", "1+ match by name or email", True)
+                f"Guest or host listed as a +1: {len(matches)}/{n} guests ({round(100*m_pct)}%, all guests incl. +1s) match someone at this dinner -- " + '; '.join(matches[:3]) + "."
+                + (" Counts once per dinner." if m_pct > 0.5 else " Below the more-than-50% threshold: note only, does not score."),
+                f"{round(100*m_pct)}% ({len(matches)}/{n} guests)", ">50% of all guests incl. +1s", m_pct > 0.5)
 
 
     # ── Signal 16: Privacy email domain + no hard bounce (needs pairing) ──────
