@@ -2401,6 +2401,27 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
         '_hosts': {'suspension': _sus, 'dnn': _dnn, 'warning': _warn},  # for the agent; not written to the doc
     }
 
+    # Longitudinal data request (added 2026-10-18, for now): low-scoring Warning-tier hosts, who are NOT being
+    # moved to Nourishment Pause, get a longitudinal pull so the case is better informed before any Warning is
+    # actioned. Thursday runs only (Wednesday mode does not surface Warnings). The host emails are output
+    # comma separated so staff can paste them into the Salesforce longitudinal report filter.
+    _lg_hosts, _seen_lg = [], set()
+    if not wednesday_mode:
+        for c in cases:
+            if c.get('tier') != 'warning' or c.get('is_cluster'):
+                continue
+            em = (c.get('email') or '').strip().lower()
+            if not em or em in _seen_lg:
+                continue
+            _seen_lg.add(em)
+            _lg_hosts.append({'name': c.get('name', ''), 'email': em, 'campaign_id': c.get('campaign_id', ''), 'score': c.get('score')})
+    longitudinal_request = {
+        'count': len(_lg_hosts),
+        'emails_csv': ', '.join(h['email'] for h in _lg_hosts),
+        'hosts': _lg_hosts,
+        'applies_to': 'Warning-tier individual cases, Thursday runs only',
+    }
+
     ts_ui_data = {
         'run': {
             'week_of': DINNER_FRIDAY.strftime('%Y-%m-%d'),
@@ -2431,6 +2452,7 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
             'urgent': None,
         },
         'accumulator_row': accumulator_row,
+        'longitudinal_request': longitudinal_request,
     }
 
     return ts_ui_data
@@ -2747,6 +2769,15 @@ if __name__ == '__main__':
             w.writeheader()
             w.writerows(dnn_rows)
         print(f"[T&S] DNN CSV ({len(dnn_rows)} hosts): {dnn_fname}", file=sys.stderr)
+
+    # Longitudinal request: comma-separated host emails for the Salesforce longitudinal report filter
+    _lg = ts_ui_data.get('longitudinal_request', {})
+    if _lg.get('count'):
+        lg_fname = f'/home/claude/ts_longitudinal_emails_{date_str}.txt'
+        with open(lg_fname, 'w') as f:
+            f.write(_lg['emails_csv'] + '\n')
+        print(f"[T&S] LONGITUDINAL DATA REQUESTED for {_lg['count']} Warning-tier host(s): {lg_fname}", file=sys.stderr)
+        print(f"[T&S] Host emails (comma separated): {_lg['emails_csv']}", file=sys.stderr)
 
     # Print the ts_ui_data block for the agent to output
     print("\n```ts_ui_data")
