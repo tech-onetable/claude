@@ -111,7 +111,9 @@ SIGNAL_WEIGHTS = {
 STANDALONE = {'sig1', 'sig12', 'sig21', 'sig22', 'sig23', 'sig8', 'sig25'}
 # Signals that make a case High confidence. Clearly fake guest identities (sig8) and Guest or host listed as a +1
 # (sig25) score on their own (2 points, guest misuse) but are NOT high-confidence evidence (fixed 2026-10-18).
-HIGH_CONFIDENCE_STANDALONE = STANDALONE - {'sig8', 'sig25'}
+HIGH_CONFIDENCE_STANDALONE = (STANDALONE - {'sig8', 'sig25'}) | {'sig14'}
+# sig14 (100% sequential guest Profile IDs) counts as High confidence per the 2026 policy, but only when it actually
+# scores, and it only scores when paired with another signal (decided 2026-10-18). sig14_low never does.
 GUEST_INTEGRITY_SIGNALS = {'sig12', 'sig12_low', 'sig14', 'sig14_low', 'sig10', 'sig24', 'sig8', 'sig25'}
 SF_BASE = "https://onetable.lightning.force.com/lightning/r/Contact/{}/view"
 SF_CAMPAIGN_BASE = "https://onetable.lightning.force.com/lightning/r/Campaign/{}/view"
@@ -922,6 +924,12 @@ def compute_confidence(scored_signals):
     return conf, reason
 
 
+def high_confidence_keys(scored_signals):
+    """Keys of the scored signals that make a case High confidence."""
+    return sorted(k for k, v in scored_signals.items()
+                  if v.get('triggered') and v.get('score_contribution', 0) > 0 and v.get('sig_key') in HIGH_CONFIDENCE_STANDALONE)
+
+
 def build_bullets(host_data, scored_signals, score, tier, sf_contact):
     """Build 3-5 bullets from structured data. No copy-paste between hosts."""
     bullets = []
@@ -1164,6 +1172,7 @@ def build_case_json(cid, camp, scored_signals, score, tier, sf_data=None):
         'guest_count': len([g for g in camp.get('guests', []) if g.get('Member Status','').lower() != 'host']),
         'campaign_id': cid,
         'confidence': compute_confidence(scored_signals)[0],
+        'high_confidence_signals': high_confidence_keys(scored_signals),
         'opportunities': get_opportunities(camp),
         'email': sf_data.get('Email', host.get('Campaign Member Email', '')) if sf_data else host.get('Campaign Member Email', ''),
         'contact_id': host.get('Contact ID', '') if host else '',
@@ -2421,7 +2430,12 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
     for c in cases:
         if c.get('tier') != 'warning_dnn' or c.get('is_cluster'):
             continue
-        if (c.get('score') or 0) > LONGITUDINAL_MAX_SCORE or c.get('confidence') != LONGITUDINAL_CONFIDENCE:
+        if (c.get('score') or 0) > LONGITUDINAL_MAX_SCORE:
+            continue
+        # Medium confidence, OR High confidence only because of paired 100% sequential Profile IDs
+        # (Pammie wants those in the longitudinal run too, 2026-10-18).
+        _only_seq = (c.get('confidence') == 'High' and set(c.get('high_confidence_signals') or []) == {'sig14'})
+        if c.get('confidence') != LONGITUDINAL_CONFIDENCE and not _only_seq:
             continue
         em = (c.get('email') or '').strip().lower()
         if not em or em in _seen_lg:
@@ -2432,7 +2446,7 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
         'count': len(_lg_hosts),
         'emails_csv': ', '.join(h['email'] for h in _lg_hosts),
         'hosts': _lg_hosts,
-        'applies_to': 'Medium-confidence Nourishment Pause individual cases (score 9-13), Wednesday and Thursday runs',
+        'applies_to': 'Medium-confidence Nourishment Pause individual cases (score 9-13), plus cases whose only high-confidence signal is paired 100% sequential Profile IDs; Wednesday and Thursday runs',
     }
 
     ts_ui_data = {
