@@ -634,15 +634,29 @@ def score_campaign(cid, camp, cross_dinner, high_volume, campaigns=None):
     PRIVACY_DOMAINS = {'protonmail.com', 'proton.me', 'pm.me', 'tutanota.com',
                        'tuta.io', 'guerrillamail.com', 'sharklasers.com',
                        'guerrillamailblock.com', 'grr.la', 'guerrillamail.info'}
+    # Hidden emails (policy: "Hidden emails for guest AND +1 accounts"): Apple's Hide My Email addresses
+    # (two random words plus a short code at icloud.com, e.g. thymes.tarps.0c@icloud.com) and Sign in with
+    # Apple relay addresses. Using the feature is legitimate, so these count only here: weight 1, no bounce,
+    # needs 50%+ of guests and 2+ guests, and needs another signal to score (decided 2026-10-16).
+    def is_hidden_email(email):
+        e = (email or '').strip().lower()
+        if '@' not in e: return False
+        local, dom = e.split('@', 1)
+        if dom == 'privaterelay.appleid.com': return True
+        if dom != 'icloud.com': return False
+        if not re.search(r'[-._]', local) or len(local) > 28: return False
+        if len(re.findall(r'[a-z]{3,}', local)) < 2: return False
+        if not (1 <= len(re.findall(r'[0-9]', local)) <= 3): return False
+        return bool(re.search(r'(^[0-9]{1,3}[a-z]|[-._][0-9][-._a-z]|[a-z][0-9][a-z]$|[0-9][a-z]$|[a-z][0-9]$|[-._][0-9]{2}$|[a-z]{3,}[0-9]{2}$)', local))
     privacy_guests = [g for g in guests if
-                      any(g.get('Campaign Member Email','').lower().endswith('@' + d)
-                          for d in PRIVACY_DOMAINS)
+                      (any(g.get('Campaign Member Email','').lower().endswith('@' + d) for d in PRIVACY_DOMAINS)
+                       or is_hidden_email(g.get('Campaign Member Email','')))
                       and not g.get('Mandrill Bounce Reason','').strip()]
     if n > 0 and len(privacy_guests) > 0:
         pct = len(privacy_guests) / n
         met = pct >= 0.5 and len(privacy_guests) >= 2
         add_sig('sig16',
-                f"Privacy email domains with no bounce: {len(privacy_guests)}/{n} ({round(100*pct)}%)",
+                f"Privacy or hidden email addresses with no bounce (Proton, Tuta, Apple Hide My Email): {len(privacy_guests)}/{n} ({round(100*pct)}%)",
                 f"{round(100*pct)}% ({len(privacy_guests)}/{n} guests)", "50%+ and ≥2 guests", met)
 
     # ── Signal 20: Multiple future dinners posted immediately (standalone) ─────
