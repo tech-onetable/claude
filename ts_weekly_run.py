@@ -109,6 +109,9 @@ SIGNAL_WEIGHTS = {
 # sig23   = deliberate identity change (staff judgment)
 # Note: sig14 (100% PIDs) is NOT standalone -- requires at least one pairing signal
 STANDALONE = {'sig1', 'sig12', 'sig21', 'sig22', 'sig23', 'sig8', 'sig25'}
+# Signals that make a case High confidence. Clearly fake guest identities (sig8) and Guest or host listed as a +1
+# (sig25) score on their own (2 points, guest misuse) but are NOT high-confidence evidence (fixed 2026-10-18).
+HIGH_CONFIDENCE_STANDALONE = STANDALONE - {'sig8', 'sig25'}
 GUEST_INTEGRITY_SIGNALS = {'sig12', 'sig12_low', 'sig14', 'sig14_low', 'sig10', 'sig24', 'sig8', 'sig25'}
 SF_BASE = "https://onetable.lightning.force.com/lightning/r/Contact/{}/view"
 SF_CAMPAIGN_BASE = "https://onetable.lightning.force.com/lightning/r/Campaign/{}/view"
@@ -888,21 +891,15 @@ def build_collapsed_summary(host_name, score, scored_signals, nourishment, addre
     return ' · '.join(p for p in parts if p)
 
 
-def build_bullets(host_data, scored_signals, score, tier, sf_contact):
-    """Build 3-5 bullets from structured data. No copy-paste between hosts."""
-    bullets = []
+def compute_confidence(scored_signals):
+    """Confidence from the signal hierarchy. High = a high-confidence standalone signal at threshold;
+    Medium = 2+ corroborating signals; Low = one. Returns (label, reason)."""
     triggered = sorted(
         [v for v in scored_signals.values() if v['triggered'] and v['score_contribution'] > 0],
         key=lambda x: -x['score_contribution']
     )
-
-    # Confidence determination -- based on signal hierarchy:
-    # High   = any standalone-eligible signal triggered at threshold
-    # Medium = 2+ corroborating signals, no standalone
-    # Low    = 1 corroborating signal only, no standalone
-    standalone_triggered = [v for v in triggered if v.get('sig_key') in STANDALONE]
-    corroborating_count = len([v for v in triggered if v.get('sig_key') not in STANDALONE])
-
+    standalone_triggered = [v for v in triggered if v.get('sig_key') in HIGH_CONFIDENCE_STANDALONE]
+    corroborating_count = len([v for v in triggered if v.get('sig_key') not in HIGH_CONFIDENCE_STANDALONE])
     if standalone_triggered:
         conf = "High"
         sig_name = standalone_triggered[0]['name'].lower()
@@ -922,6 +919,18 @@ def build_bullets(host_data, scored_signals, score, tier, sf_contact):
     else:
         conf = "Low"
         reason = "Single corroborating signal only. Exhaust alternative explanations before actioning."
+    return conf, reason
+
+
+def build_bullets(host_data, scored_signals, score, tier, sf_contact):
+    """Build 3-5 bullets from structured data. No copy-paste between hosts."""
+    bullets = []
+    triggered = sorted(
+        [v for v in scored_signals.values() if v['triggered'] and v['score_contribution'] > 0],
+        key=lambda x: -x['score_contribution']
+    )
+
+    conf, reason = compute_confidence(scored_signals)
     bullets.append(f"**Confidence: {conf}.** {reason}")
 
     # Top signal bullets (max 2)
@@ -1154,6 +1163,7 @@ def build_case_json(cid, camp, scored_signals, score, tier, sf_data=None):
         'dinner_description': (camp.get('description', '') or ''),
         'guest_count': len([g for g in camp.get('guests', []) if g.get('Member Status','').lower() != 'host']),
         'campaign_id': cid,
+        'confidence': compute_confidence(scored_signals)[0],
         'opportunities': get_opportunities(camp),
         'email': sf_data.get('Email', host.get('Campaign Member Email', '')) if sf_data else host.get('Campaign Member Email', ''),
         'contact_id': host.get('Contact ID', '') if host else '',
@@ -2401,17 +2411,17 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
         '_hosts': {'suspension': _sus, 'dnn': _dnn, 'warning': _warn},  # for the agent; not written to the doc
     }
 
-    # Longitudinal data request (added 2026-10-18, for now): hosts at the Nourishment Pause ("not nourishing")
-    # tier, which are the lowest-scoring cases that actually restrict Nourishment, get a longitudinal pull so
-    # the case is better informed. Both Wednesday and Thursday runs surface this tier. Individual cases only
+    # Longitudinal data request (added 2026-10-18, for now): MEDIUM-confidence hosts at the low end of the
+    # Nourishment Pause ("not nourishing") tier (score 9-13) get a longitudinal pull so the case is better informed. Both Wednesday and Thursday runs surface this tier. Individual cases only
     # (clusters get the device-file review instead). The host emails are output comma separated so staff can
     # paste them into the Salesforce longitudinal report filter.
-    LONGITUDINAL_MAX_SCORE = 17   # whole Nourishment Pause tier (9-17); lower this to narrow to the low end
+    LONGITUDINAL_MAX_SCORE = 13   # low end of the Nourishment Pause tier (9-17); change here to widen or narrow
+    LONGITUDINAL_CONFIDENCE = 'Medium'   # only medium-confidence cases; High confidence is already clear enough
     _lg_hosts, _seen_lg = [], set()
     for c in cases:
         if c.get('tier') != 'warning_dnn' or c.get('is_cluster'):
             continue
-        if (c.get('score') or 0) > LONGITUDINAL_MAX_SCORE:
+        if (c.get('score') or 0) > LONGITUDINAL_MAX_SCORE or c.get('confidence') != LONGITUDINAL_CONFIDENCE:
             continue
         em = (c.get('email') or '').strip().lower()
         if not em or em in _seen_lg:
@@ -2422,7 +2432,7 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
         'count': len(_lg_hosts),
         'emails_csv': ', '.join(h['email'] for h in _lg_hosts),
         'hosts': _lg_hosts,
-        'applies_to': 'Nourishment Pause individual cases, Wednesday and Thursday runs',
+        'applies_to': 'Medium-confidence Nourishment Pause individual cases (score 9-13), Wednesday and Thursday runs',
     }
 
     ts_ui_data = {
