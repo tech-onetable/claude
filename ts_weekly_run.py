@@ -52,6 +52,8 @@ SUSPICIOUS_DOMAINS = {
     'hudzer.com','flakeian.com','cwsgear.com','mail2usa.com',
     # Added 2026-10-14: non-bounced guest accounts made on the NuRoots guest device (Coleman/Schneider/Kimber)
     'psmscientific.com','mailserv.info','dailynutria.com','p-ttc.top','vipaccfb.cc','d4ngerssquy.info',
+    # Added 2026-10-18 from the 10/16 dinners with consecutive Profile IDs and throwaway-mail guests
+    'astermail.org','astermail.io','aastermail.org','altaddress.com','atomicmail.com',
 }
 # Mainstream consumer and institutional email providers. Used only by sig24: when half or more of a
 # dinner's guests bounce, non-bounced guests on domains outside this list (and outside .edu/.gov) are
@@ -77,7 +79,7 @@ SIGNAL_WEIGHTS = {
     'sig7': 2,   # Same IP across guests (needs pairing, 80%+)
     'sig8': 2,   # Clearly fake guest identities -- scores standalone from 2026-10-16 (guest misuse; one violation per dinner)
     'sig25': 2,  # NEW 2026-10-16: Guest or host listed as a +1 (standalone; one violation per dinner)
-    'sig9': 2,   # Suspicious guest email domains: scores from 2026-10-18 at 50%+ of guests and 2+ guests; needs pairing (these services accept mail, so guests often do not bounce)
+    'sig9': 3,   # Suspicious guest email domains: scores from 2026-10-18 at 50%+ of guests and 2+ guests; needs pairing. Weight 3 so 100% sequential PIDs (6) + throwaway domains (3) = 9 = Nourishment Pause (these services accept mail, so guests often do not bounce)
     'sig10': 4,  # Suspicious phone number patterns (needs pairing, 50%+)
     'sig11': 4,  # Host/guest email similarity (needs pairing)
     'sig12_low': 4,  # Guest email bounces 50-74% (any type, corroborating)
