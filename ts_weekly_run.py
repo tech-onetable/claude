@@ -75,7 +75,8 @@ SIGNAL_WEIGHTS = {
     'sig5': 3,   # VPN use (needs pairing, 30%+ of guests from known VPN ranges)
     'sig6': 0,   # Geographic mismatch (watch flag only)
     'sig7': 2,   # Same IP across guests (needs pairing, 80%+)
-    'sig8': 0,   # Clearly fake guest identities -- anomaly note only, does not score
+    'sig8': 2,   # Clearly fake guest identities -- scores standalone from 2026-10-16 (guest misuse; one violation per dinner)
+    'sig25': 2,  # NEW 2026-10-16: Guest or host listed as a +1 (standalone; one violation per dinner)
     'sig9': 0,   # Suspicious guest email domains -- anomaly note only, does not score (only meaningful with bounce)
     'sig10': 4,  # Suspicious phone number patterns (needs pairing, 50%+)
     'sig11': 4,  # Host/guest email similarity (needs pairing)
@@ -105,8 +106,8 @@ SIGNAL_WEIGHTS = {
 # sig22   = deliberate fraud (staff judgment)
 # sig23   = deliberate identity change (staff judgment)
 # Note: sig14 (100% PIDs) is NOT standalone -- requires at least one pairing signal
-STANDALONE = {'sig1', 'sig12', 'sig21', 'sig22', 'sig23'}
-GUEST_INTEGRITY_SIGNALS = {'sig12', 'sig12_low', 'sig14', 'sig14_low', 'sig10', 'sig24'}
+STANDALONE = {'sig1', 'sig12', 'sig21', 'sig22', 'sig23', 'sig8', 'sig25'}
+GUEST_INTEGRITY_SIGNALS = {'sig12', 'sig12_low', 'sig14', 'sig14_low', 'sig10', 'sig24', 'sig8', 'sig25'}
 SF_BASE = "https://onetable.lightning.force.com/lightning/r/Contact/{}/view"
 SF_CAMPAIGN_BASE = "https://onetable.lightning.force.com/lightning/r/Campaign/{}/view"
 TS_RECORD_TYPE_ID = '012PO000001F53dYAC'  # Trust and Safety record type for Salesforce Cases
@@ -546,33 +547,78 @@ def score_campaign(cid, camp, cross_dinner, high_volume, campaigns=None):
                 f"Suspicious guest email domains (anomaly note only -- does not score without confirmed bounce): {len(sus)}/{n} ({round(100*pct)}%)",
                 f"{round(100*pct)}% ({len(sus)}/{n} guests)", "Anomaly note only", False)
 
-    # ── Signal 8: Clearly fake guest identities -- anomaly note only, does not score ──
-    # Only meaningful when combined with bounces. Surfaced as context note.
+    # ── Signal 8: Clearly fake guest identities (scores from 2026-10-16) ──
+    import re  # score_campaign also imports re locally further down, so bind it here too
+    # Guest misuse per policy ("Fake +1s such as: Taylor Swift, Bing Bong"). One violation per dinner,
+    # standalone, weight 2. First and last name are required on the platform, so a missing name is
+    # NOT treated as fake. Patterns come from staff's original "Suspicious +1s" sheet.
     FAKE_NAMES = {
-        'taylor swift', 'bing bong', 'mickey mouse', 'john doe', 'jane doe',
-        'test user', 'test guest', 'asdf', 'qwerty', 'xxx', 'aaa', 'bbb',
-        'fake user', 'fake guest', 'no name', 'anonymous', 'guest guest',
+        'taylor swift', 'bing bong', 'mickey mouse', 'minnie mouse', 'john doe', 'jane doe', 'jack nicholson',
+        'test user', 'test guest', 'fake user', 'fake guest', 'no name', 'anonymous', 'guest guest',
+        'plus one', 'plus 1', 'my friend', 'a friend', 'friend friend', 'my dog', 'my cat',
     }
-    def is_fake_name(g):
-        first = g.get('First Name', '').strip().lower()
-        last = g.get('Last Name', '').strip().lower()
-        full = f"{first} {last}".strip()
-        if full in FAKE_NAMES: return True
-        if not first or not last: return True
-        if first == last: return True
-        if all(c == first[0] for c in first) or all(c == last[0] for c in last): return True
-        return False
-    fake_guests = [g for g in guests if is_fake_name(g)]
-    # Note: single-letter last names are NOT treated as fake
-    if n > 0 and len(fake_guests) >= 2:
-        pct = len(fake_guests) / n
-        examples = ', '.join(
-            f"{g.get('First Name','')} {g.get('Last Name','')}".strip()
-            for g in fake_guests[:3]
-        )
+    FAKE_WORDS = {'guest', 'plus', 'friend', 'dog', 'test', 'unknown', 'tbd', 'anonymous', 'fake', 'myself',
+                  'bitch', 'shit', 'fuck', 'pipi', 'poop', 'boyfriend', 'girlfriend'}
+    def fake_reason(g):
+        first = (g.get('First Name', '') or '').strip().lower()
+        last = (g.get('Last Name', '') or '').strip().lower()
+        if not first or not last:
+            return None  # required fields; missing is a data issue, not a fake identity
+        full = f"{first} {last}"
+        words = set(re.findall(r"[a-z]+", full))
+        if full in FAKE_NAMES: return 'known fake name'
+        if first == last and len(first) > 2: return 'first name = last name'
+        if len(first) == 1 and len(last) == 1: return 'initials only'
+        if re.search(r"[0-9+]", full): return 'digits or "+" in name'
+        if (len(first) > 2 and len(set(first)) == 1) or (len(last) > 2 and len(set(last)) == 1): return 'repeated letters'
+        if words & FAKE_WORDS: return 'joke or placeholder word'
+        if len(full.split()) >= 5: return 'sentence instead of a name'
+        return None
+    fake_guests = [(g, fake_reason(g)) for g in guests]
+    fake_guests = [(g, r) for g, r in fake_guests if r]
+    if n > 0 and fake_guests:
+        examples = '; '.join(
+            f"{g.get('First Name','')} {g.get('Last Name','')}".strip() + f" ({r})"
+            for g, r in fake_guests[:3])
         add_sig('sig8',
-                f"Possible fake guest identities (anomaly note only -- does not score): {len(fake_guests)}/{n} ({round(100*pct)}%) -- e.g. {examples}",
-                f"{round(100*pct)}% ({len(fake_guests)}/{n} guests)", "Anomaly note only", False)
+                f"Clearly fake guest identities: {len(fake_guests)}/{n} guests -- e.g. {examples}. Counts once per dinner.",
+                f"{len(fake_guests)} guest(s)", "1+ clear fake (missing names excluded)", True)
+
+    # ── Signal 25 (NEW 2026-10-16): Guest or host listed as a +1 ──
+    # A +1 whose name or email matches another guest at the same dinner (the guest added themselves,
+    # often with a second email) or matches the host. The weekly report does not say which guest added
+    # which +1, so each +1 is compared with every guest and the host at the dinner. One violation per dinner.
+    import unicodedata
+    def _norm_name(r):
+        t = unicodedata.normalize('NFKD', f"{r.get('First Name','')} {r.get('Last Name','')}".lower())
+        return ' '.join(re.findall(r"[a-z]+", t))
+    def _email(r):
+        return (r.get('Campaign Member Email', '') or '').strip().lower()
+    def _local(e):
+        return re.sub(r"[^a-z]", "", e.split('@')[0]) if '@' in e else ''
+    def _is_plus_one(r):
+        return (r.get('Member Status', '') or '').strip().lower() == 'guest of guest' or \
+               (r.get('Contact ID', '') or '').startswith('00Q')
+    plus_ones = [g for g in guests if _is_plus_one(g)]
+    people = [('guest', g) for g in guests if not _is_plus_one(g)] + ([('host', host)] if host else [])
+    matches = []
+    for p in plus_ones:
+        pn, pe = _norm_name(p), _email(p)
+        pl = _local(pe)
+        for role, other in people:
+            on, oe = _norm_name(other), _email(other)
+            how = None
+            if pn and pn == on and len(pn.split()) >= 2: how = 'same name'
+            elif pe and pe == oe: how = 'same email'
+            elif pl and len(pl) >= 6 and pl == _local(oe): how = 'same email name'
+            if how:
+                matches.append(f"{role} {other.get('First Name','')} {other.get('Last Name','')}".strip() + f" ({how})")
+                break
+    if matches:
+        add_sig('sig25',
+                f"Guest or host listed as a +1: {len(matches)} +1(s) match someone at this dinner -- " + '; '.join(matches[:3]) + ". Counts once per dinner.",
+                f"{len(matches)} +1(s)", "1+ match by name or email", True)
+
 
     # ── Signal 16: Privacy email domain + no hard bounce (needs pairing) ──────
     # Guests using known privacy domains (not already in SUSPICIOUS_DOMAINS) with no bounce
@@ -892,6 +938,7 @@ SIG_NAMES = {
     'sig6': 'Geographic mismatch',
     'sig7': 'Same IP across guests',
     'sig8': 'Clearly fake guest identities',
+    'sig25': 'Guest or host listed as a +1',
     'sig9': 'Suspicious guest email patterns',
     'sig10': 'Suspicious phone number patterns',
     'sig11': 'Host/guest email similarity',
