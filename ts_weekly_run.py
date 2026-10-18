@@ -77,7 +77,7 @@ SIGNAL_WEIGHTS = {
     'sig7': 2,   # Same IP across guests (needs pairing, 80%+)
     'sig8': 2,   # Clearly fake guest identities -- scores standalone from 2026-10-16 (guest misuse; one violation per dinner)
     'sig25': 2,  # NEW 2026-10-16: Guest or host listed as a +1 (standalone; one violation per dinner)
-    'sig9': 0,   # Suspicious guest email domains -- anomaly note only, does not score (only meaningful with bounce)
+    'sig9': 2,   # Suspicious guest email domains: scores from 2026-10-18 at 50%+ of guests and 2+ guests; needs pairing (these services accept mail, so guests often do not bounce)
     'sig10': 4,  # Suspicious phone number patterns (needs pairing, 50%+)
     'sig11': 4,  # Host/guest email similarity (needs pairing)
     'sig12_low': 4,  # Guest email bounces 50-74% (any type, corroborating)
@@ -535,17 +535,20 @@ def score_campaign(cid, camp, cross_dinner, high_volume, campaigns=None):
                 f"Sequential guest Profile IDs: no profiled guests found -- all guests may be leads/plus-ones or Profile IDs not populated.",
                 f"0 profiled guests", "requires 2+ profiled guests", False)
 
-    # ── Signal 9: Suspicious email domains -- anomaly note only, does not score ──
-    # Without a confirmed bounce, domain alone is not sufficient evidence.
-    # Surfaced as context when bounces are also present.
+    # ── Signal 9: Suspicious guest email domains (scores from 2026-10-18, needs pairing) ──
+    # Known throwaway-mail domains (atomicmail.io, membermail.net, mailshield.org, ...) accept mail, so these
+    # guests usually do NOT bounce and the bounce signals miss them. Scores 2 when 50%+ of all guests and
+    # 2+ guests are on the list, and only with another signal (global pairing rule).
     sus = [g for g in guests if
            any(g.get('Campaign Member Email', '').lower().endswith('@' + d)
                for d in SUSPICIOUS_DOMAINS)]
     if n > 0 and len(sus) > 0:
         pct = len(sus) / n
+        met9 = pct >= 0.5 and len(sus) >= 2
         add_sig('sig9',
-                f"Suspicious guest email domains (anomaly note only -- does not score without confirmed bounce): {len(sus)}/{n} ({round(100*pct)}%)",
-                f"{round(100*pct)}% ({len(sus)}/{n} guests)", "Anomaly note only", False)
+                f"Suspicious guest email domains (known throwaway-mail services): {len(sus)}/{n} ({round(100*pct)}%)"
+                + ("" if met9 else ". Below the 50% and 2-guest threshold: note only, does not score."),
+                f"{round(100*pct)}% ({len(sus)}/{n} guests)", "50%+ of guests and 2+ guests; needs another signal", met9)
 
     # ── Signal 8: Clearly fake guest identities (scores from 2026-10-16) ──
     import re  # score_campaign also imports re locally further down, so bind it here too
