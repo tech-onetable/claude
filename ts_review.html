@@ -273,8 +273,8 @@ function buildApp() {
 // ── version ────────────────────────────────────────────────────────────────
 // Bump UI_VERSION and UI_UPDATED on every change to this file. The page checks GitHub's copy and
 // warns if it is newer. The check fails quietly (no warning) once the repo is private or offline.
-const UI_VERSION = 'v4.5';
-const UI_UPDATED = '2026-10-15';
+const UI_VERSION = 'v4.6';
+const UI_UPDATED = '2026-10-20';
 const UI_LATEST_URL = 'https://raw.githubusercontent.com/tech-onetable/claude/main/ts_review.html';
 let uiLatest = null; // {version, updated} from GitHub, or null if the check could not run
 function fmtUiDate(d) { try { return new Date(d + 'T12:00:00').toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'}); } catch(e) { return d; } }
@@ -445,7 +445,7 @@ function buildReviewView() {
           <div style="padding:12px 16px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;background:#FFFBEB" onclick="state.highNourWarningsExpanded=!state.highNourWarningsExpanded;render()">
             <div style="display:flex;align-items:center;gap:10px">
               <span style="font-size:13px;font-weight:600;color:#92400E">⚠ Warnings · High Nourishment</span>
-              <span style="font-size:12px;color:#92400E">${highNourWarnings.length} cases · score 5+ and $2,500+ received · Do Not Nourish + call with the Shabbat Journey team</span>
+              <span style="font-size:12px;color:#92400E">${highNourWarnings.length} cases · score 5+ and $2,500+ received · Do Not Nourish + coaching case (round robin) for the Shabbat Journey team</span>
               ${highNourWarnings.some(c=>caseOpps(c).length>0)?`<span class="opp-badge">★ ${highNourWarnings.filter(c=>caseOpps(c).length>0).length} linked to an opportunity</span>`:''}
             </div>
             <span style="font-size:14px;color:#92400E;transform:${isExpanded?'rotate(180deg)':'rotate(0)'};transition:transform .2s">▾</span>
