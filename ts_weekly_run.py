@@ -20,7 +20,7 @@ Output:
   Also writes ts_ui_data_<date>.json to /home/claude/
 """
 
-import csv, collections, json, sys, re
+import csv, collections, json, os, sys, re
 from datetime import datetime, date
 
 # ── config ────────────────────────────────────────────────────────────────────
@@ -820,9 +820,18 @@ def score_campaign(cid, camp, cross_dinner, high_volume, campaigns=None):
         import re
         reasons = re.findall(r'\b(\d+):', ai_flag)
         reason6_only = reasons == ['6'] or (ai_flag.strip().startswith('6:') and '1:' not in ai_flag and '2:' not in ai_flag and '3:' not in ai_flag and 'Not Nourishing' not in ai_flag)
-        if reason6_only:
-            # Surface as note only -- do not add to raw signals
-            pass  # will be noted in output via ai_flag field on campaign
+        # Audience and eligibility flags never score Signal 17 (2026-10-21): Out of Demo (incl. BORDERLINE)
+        # is about who the dinner is for, not the description itself. If every reason on the flag is Reason 6
+        # or Out of Demo, show it as a program team referral note. Kids or family audience flags join this list
+        # once a flag label for them exists (none in the 10/21 data; kids policy pending). Matching free text
+        # for "kid" or "family" would catch quoted descriptions, so it is deliberately not done.
+        NON_DESCRIPTION_MARKERS = ('out of demo', 'privacy type does not match')
+        parts = [p.strip().lower() for p in re.split(r';', ai_flag) if p.strip()]
+        audience_only = bool(parts) and all(any(m in p for m in NON_DESCRIPTION_MARKERS) for p in parts)
+        if reason6_only or audience_only:
+            add_sig('sig17',
+                    f"Not scored -- program team referral note (audience, eligibility or privacy flag only): {ai_flag[:80]}",
+                    "AI Not Pass flag present", "Description flags only; audience flags never score", False)
         else:
             has_gi = any(raw.get(k, {}).get('threshold_met') for k in GUEST_INTEGRITY_SIGNALS)
             add_sig('sig17',
@@ -2710,6 +2719,83 @@ def add_agent_layer(ts_ui_data, pass1_output):
     return ts_ui_data
 
 
+def _load_approved(path):
+    """Approved hosts for the ban and DNN files: Contact IDs (15 or 18 characters) or emails, one per line
+    or in any CSV column. Returns a set of 15-character Contact IDs and lowercased emails."""
+    import re as _re
+    toks = set()
+    for t in _re.split(r'[\s,;]+', open(path, encoding='utf-8-sig').read()):
+        t = t.strip().strip('"').strip("'")
+        if not t:
+            continue
+        if '@' in t:
+            toks.add(t.lower())
+        elif _re.fullmatch(r'003[A-Za-z0-9]{12}([A-Za-z0-9]{3})?', t):
+            toks.add(t[:15])
+    return toks
+
+
+def write_action_files(ts_ui_data, sf_results=None, approved=None, date_str=None):
+    """Ban, DNN and pending files (2026-10-21). Ban = Suspension and above, DNN = Nourishment Pause and above,
+    both from final tiers (tier_override wins over the script tier) and ONLY for hosts staff approved.
+    approved=None (the first script run, before staff review): nothing is approved yet, so every
+    Nourishment Pause+ host goes to ts_pending_YYYYMMDD.csv and no ban or DNN file is written.
+    After review, rerun with --files-from <json> --approved <file> to write the upload files.
+    Approval decides: an approved host goes in the files (once the longitudinal data is in, staff approve as usual);
+    an unapproved host held for a longitudinal report is labelled that way on the pending list."""
+    import csv as csv_module
+    sf_results = sf_results or {}
+    date_str = date_str or REVIEW_DATE.strftime('%Y%m%d')
+    held = {(h.get('email') or '').strip().lower()
+            for h in (ts_ui_data.get('longitudinal_request') or {}).get('hosts', [])}
+    ban_rows, dnn_rows, pending_rows = [], [], []
+    seen = set()
+    for case in ts_ui_data.get('cases', []):
+        override = case.get('tier_override') or {}
+        tier = override.get('tier') or case.get('tier', '')
+        hosts = case.get('cluster_hosts', []) if case.get('is_cluster') else [case]
+        for h in hosts:
+            if tier not in ('warning_dnn', 'suspension', 'deactivation'):
+                continue
+            email = (h.get('email') or '').strip()
+            cid15 = (h.get('contact_id') or '')[:15]
+            platform_id = h.get('platform_profile_id', '') or sf_results.get(
+                h.get('contact_id', ''), {}).get('Platform_Profile_ID__c', '')
+            key = email.lower() or cid15
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            row = {'Profile ID': platform_id, 'Email': email}
+            is_approved = approved is not None and bool({email.lower(), cid15} & approved)
+            if not is_approved:
+                reason = 'Held for longitudinal report' if email.lower() in held else 'Awaiting staff approval'
+                pending_rows.append({**row, 'Tier': tier, 'Reason': reason})
+                continue
+            if not email or not platform_id:
+                # Never upload a row without both values; surface it instead of dropping it silently.
+                pending_rows.append({**row, 'Tier': tier, 'Reason': 'Approved, but missing Profile ID or email: look up Platform_Profile_ID__c'})
+                continue
+            dnn_rows.append(row)
+            if tier in ('suspension', 'deactivation'):
+                ban_rows.append(row)
+
+    def _write(name, rows, fields):
+        fname = f'/home/claude/{name}_{date_str}.csv'
+        with open(fname, 'w', newline='') as f:
+            w = csv_module.DictWriter(f, fieldnames=fields)
+            w.writeheader()
+            w.writerows(rows)
+        return fname
+
+    if ban_rows:
+        print(f"[T&S] Ban CSV ({len(ban_rows)} hosts): {_write('ts_ban', ban_rows, ['Profile ID', 'Email'])}", file=sys.stderr)
+    if dnn_rows:
+        print(f"[T&S] DNN CSV ({len(dnn_rows)} hosts): {_write('ts_dnn', dnn_rows, ['Profile ID', 'Email'])}", file=sys.stderr)
+    if pending_rows:
+        print(f"[T&S] Pending list ({len(pending_rows)} hosts, never uploaded): {_write('ts_pending', pending_rows, ['Profile ID', 'Email', 'Tier', 'Reason'])}", file=sys.stderr)
+    return ban_rows, dnn_rows, pending_rows
+
+
 if __name__ == '__main__':
     import os
 
@@ -2719,6 +2805,15 @@ if __name__ == '__main__':
         print("       Legacy two-file mode: python3 ts_weekly_run.py <contact_csv> <lead_csv> [--no-sf] [--wednesday]", file=sys.stderr)
         print("       --wednesday: pre-Nourishment gate run -- only scores Ready to Nourish campaigns, surfaces Nourishment Pause and above only", file=sys.stderr)
         sys.exit(1)
+
+    if '--files-from' in sys.argv:
+        # After staff review: rebuild the ban, DNN and pending files from the run's JSON and the approved list.
+        _jp = sys.argv[sys.argv.index('--files-from') + 1]
+        _ap = sys.argv[sys.argv.index('--approved') + 1] if '--approved' in sys.argv else None
+        _d = json.load(open(_jp))
+        _ds = (os.path.basename(_jp).split('_')[-1].split('.')[0]) if _jp.endswith('.json') else None
+        write_action_files(_d, approved=_load_approved(_ap) if _ap else None, date_str=_ds)
+        sys.exit(0)
 
     csv_path = sys.argv[1]
     lead_path = None
@@ -2760,42 +2855,8 @@ if __name__ == '__main__':
         json.dump(ts_ui_data, f, indent=2)
     print(f"[T&S] Final JSON saved to {fname}", file=sys.stderr)
 
-    # Generate ban CSV (Suspension and above -- hosts only)
-    # Format matches bulk_ban upload: Profile ID, Email (Profile ID first; value from Platform_Profile_ID__c)
-    import csv as csv_module
     date_str = REVIEW_DATE.strftime('%Y%m%d')
-    ban_rows = []
-    dnn_rows = []
-    for case in ts_ui_data.get('cases', []):
-        tier = case.get('tier', '')
-        hosts = case.get('cluster_hosts', []) if case.get('is_cluster') else [case]
-        for h in hosts:
-            email = h.get('email', '')
-            platform_id = h.get('platform_profile_id', '') or sf_results.get(
-                h.get('contact_id', ''), {}).get('Platform_Profile_ID__c', '')
-            if not email or not platform_id:
-                continue
-            row = {'Profile ID': platform_id, 'Email': email}
-            if tier in ('suspension', 'deactivation'):
-                ban_rows.append(row)
-            if tier in ('warning_dnn', 'suspension', 'deactivation'):
-                dnn_rows.append(row)
-
-    if ban_rows:
-        ban_fname = f'/home/claude/ts_ban_{date_str}.csv'
-        with open(ban_fname, 'w', newline='') as f:
-            w = csv_module.DictWriter(f, fieldnames=['Profile ID', 'Email'])
-            w.writeheader()
-            w.writerows(ban_rows)
-        print(f"[T&S] Ban CSV ({len(ban_rows)} hosts): {ban_fname}", file=sys.stderr)
-
-    if dnn_rows:
-        dnn_fname = f'/home/claude/ts_dnn_{date_str}.csv'
-        with open(dnn_fname, 'w', newline='') as f:
-            w = csv_module.DictWriter(f, fieldnames=['Profile ID', 'Email'])
-            w.writeheader()
-            w.writerows(dnn_rows)
-        print(f"[T&S] DNN CSV ({len(dnn_rows)} hosts): {dnn_fname}", file=sys.stderr)
+    write_action_files(ts_ui_data, sf_results, approved=None, date_str=date_str)
 
     # Longitudinal request: comma-separated host emails for the Salesforce longitudinal report filter
     _lg = ts_ui_data.get('longitudinal_request', {})
