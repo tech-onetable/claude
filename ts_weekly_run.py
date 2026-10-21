@@ -1195,7 +1195,10 @@ def build_case_json(cid, camp, scored_signals, score, tier, sf_data=None):
         'email': sf_data.get('Email', host.get('Campaign Member Email', '')) if sf_data else host.get('Campaign Member Email', ''),
         'contact_id': host.get('Contact ID', '') if host else '',
         'platform_profile_id': sf_data.get('Platform_Profile_ID__c', '') if sf_data else '',
-        'be_url': f"https://api.onetable.org/cp/profiles/{sf_data.get('Platform_Profile_ID__c', '')}" if sf_data and sf_data.get('Platform_Profile_ID__c') else '',
+        # BE = the dinner's backend events page, keyed on the report's Platform ID (Campaign.PlatformID__c,
+        # the dinner's ID; confirmed by Pammie 2026-10-21). The host's backend profile page is profile_url.
+        'be_url': (lambda _p: f"https://api.onetable.org/cp/events/{_p}" if _p else '')(str((host or {}).get('Platform ID', '') or '').split('.')[0]),
+        'profile_url': f"https://api.onetable.org/cp/profiles/{sf_data.get('Platform_Profile_ID__c', '')}" if sf_data and sf_data.get('Platform_Profile_ID__c') else '',
         'tier': tier,
         'is_cluster': False,
         'score': score,
@@ -1983,7 +1986,8 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
                 'campaign_url': SF_CAMPAIGN_BASE.format(cid),
                 'opportunities': get_opportunities(campaigns.get(cid, {})),
                 'platform_id': platform_id,
-                'be_url': f"https://api.onetable.org/cp/profiles/{platform_id}" if platform_id else '',
+                'be_url': f"https://api.onetable.org/cp/events/{platform_id}" if platform_id else '',  # dinner events page (Platform ID = Campaign.PlatformID__c)
+                'profile_url': f"https://api.onetable.org/cp/profiles/{str(sf.get('Platform_Profile_ID__c', '')).split('.')[0]}" if sf.get('Platform_Profile_ID__c') else '',
                 'score': d['score'],
                 'nourishment_received': n_str,
                 'future_dinners': str(len(sf.get('_future_dinners', []))),
