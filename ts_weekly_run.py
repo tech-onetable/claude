@@ -825,9 +825,17 @@ def score_campaign(cid, camp, cross_dinner, high_volume, campaigns=None):
         # or Out of Demo, show it as a program team referral note. Kids or family audience flags join this list
         # once a flag label for them exists (none in the 10/21 data; kids policy pending). Matching free text
         # for "kid" or "family" would catch quoted descriptions, so it is deliberately not done.
-        NON_DESCRIPTION_MARKERS = ('out of demo', 'privacy type does not match')
+        # Extended 2026-10-21 (Pammie): Birthday Party, Not on a Friday Night, Payment Method = Invoice,
+        # Platform Feedback Request and Inappropriate are not about AI-generated or templated text either.
+        # A reason that names a description problem (copy/paste, filler, not reading as Shabbat, a matched
+        # prior dinner) always scores, even if its quoted text happens to contain one of the words below.
+        NON_DESCRIPTION_MARKERS = ('out of demo', 'privacy type does not match', 'birthday party',
+                                   'not on a friday', 'payment method', 'platform feedback', 'inappropriate')
+        DESCRIPTION_MARKERS = ('copy/paste', 'filler', 'not reading as', 'prior dinner', 'matched', 'matches', 'templat')
         parts = [p.strip().lower() for p in re.split(r';', ai_flag) if p.strip()]
-        audience_only = bool(parts) and all(any(m in p for m in NON_DESCRIPTION_MARKERS) for p in parts)
+        def _non_desc(p):
+            return any(m in p for m in NON_DESCRIPTION_MARKERS) and not any(m in p for m in DESCRIPTION_MARKERS)
+        audience_only = bool(parts) and all(_non_desc(p) for p in parts)
         if reason6_only or audience_only:
             add_sig('sig17',
                     f"Not scored -- program team referral note (audience, eligibility or privacy flag only): {ai_flag[:80]}",
