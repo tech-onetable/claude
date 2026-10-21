@@ -826,11 +826,12 @@ def score_campaign(cid, camp, cross_dinner, high_volume, campaigns=None):
         # once a flag label for them exists (none in the 10/21 data; kids policy pending). Matching free text
         # for "kid" or "family" would catch quoted descriptions, so it is deliberately not done.
         # Extended 2026-10-21 (Pammie): Birthday Party, Not on a Friday Night, Payment Method = Invoice,
-        # Platform Feedback Request and Inappropriate are not about AI-generated or templated text either.
+        # and Platform Feedback Request are not about AI-generated or templated text either. Inappropriate
+        # still scores (Pammie, 2026-10-21): it should keep flagging for the agent.
         # A reason that names a description problem (copy/paste, filler, not reading as Shabbat, a matched
         # prior dinner) always scores, even if its quoted text happens to contain one of the words below.
         NON_DESCRIPTION_MARKERS = ('out of demo', 'privacy type does not match', 'birthday party',
-                                   'not on a friday', 'payment method', 'platform feedback', 'inappropriate')
+                                   'not on a friday', 'payment method', 'platform feedback')
         DESCRIPTION_MARKERS = ('copy/paste', 'filler', 'not reading as', 'prior dinner', 'matched', 'matches', 'templat')
         parts = [p.strip().lower() for p in re.split(r';', ai_flag) if p.strip()]
         def _non_desc(p):
