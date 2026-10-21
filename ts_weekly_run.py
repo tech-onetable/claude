@@ -83,7 +83,7 @@ SIGNAL_WEIGHTS = {
     'sig10': 4,  # Suspicious phone number patterns (needs pairing, 50%+)
     'sig11': 4,  # Host/guest email similarity (needs pairing)
     'sig12_low': 4,  # Guest email bounces 50-74% (any type, corroborating)
-    'sig12': 8,  # Guest email bounces 75%+ (any type, high-confidence, Nourishment Pause eligible)
+    'sig12': 9,  # Guest email bounces 75%+ (any type, high-confidence). 9 from 2026-10-21 (was 8) so it reaches Nourishment Pause standalone
     'sig14_low': 3,  # Sequential guest PIDs 55-99% of profiled (corroborating, can score standalone)
     'sig14': 6,  # Sequential guest PIDs 100% of profiled (Warning-eligible standalone)
     'sig14_watch': 0,  # Sequential PIDs below threshold -- surfaces observed % but does not score
@@ -453,7 +453,7 @@ def score_campaign(cid, camp, cross_dinner, high_volume, campaigns=None):
                     f"{round(100*pct)}% ({top_count}/{n} guests)", "50%+ and ≥3 guests sharing (min 3 guests total)", met)
 
     # ── Signal 12: Guest email bounces (any type -- hard or reject combined) ──
-    # 50-74% = weight 4 corroborating; 75%+ = weight 8 high-confidence Nourishment Pause eligible
+    # 50-74% = weight 4 corroborating; 75%+ = weight 9 high-confidence Nourishment Pause eligible
     # Bounces on throwaway domains always count regardless of Mandrill classification
     def is_bounce(g):
         reason = g.get('Mandrill Bounce Reason', '').lower()
