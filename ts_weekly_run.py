@@ -2477,14 +2477,18 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
     LONGITUDINAL_CONFIDENCE = 'Medium'   # only medium-confidence cases; High confidence is already clear enough
     _lg_hosts, _seen_lg = [], set()
     for c in cases:
-        if c.get('tier') != 'warning_dnn' or c.get('is_cluster'):
+        if c.get('tier') not in ('warning_dnn', 'warning') or c.get('is_cluster'):
             continue
         if (c.get('score') or 0) > LONGITUDINAL_MAX_SCORE:
             continue
-        # Medium confidence, OR High confidence only because of paired 100% sequential Profile IDs
-        # (Pammie wants those in the longitudinal run too, 2026-10-18).
-        _only_seq = (c.get('confidence') == 'High' and set(c.get('high_confidence_signals') or []) == {'sig14'})
-        if c.get('confidence') != LONGITUDINAL_CONFIDENCE and not _only_seq:
+        # Who gets the pull: (a) Medium-confidence Nourishment Pause cases; (b) High confidence only because of paired
+        # 100% sequential Profile IDs (Pammie, 2026-10-18); (c) NEW 2026-10-22 (Pammie): any case resting on exactly ONE
+        # high-confidence signal, at Warning or Nourishment Pause, because one strong signal alone should not decide a case.
+        _hc = set(c.get('high_confidence_signals') or [])
+        _only_seq = (c.get('confidence') == 'High' and _hc == {'sig14'})
+        _single_hc = (c.get('confidence') == 'High' and len(_hc) == 1)
+        _medium_pause = (c.get('tier') == 'warning_dnn' and c.get('confidence') == LONGITUDINAL_CONFIDENCE)
+        if not (_medium_pause or _only_seq or _single_hc):
             continue
         em = (c.get('email') or '').strip().lower()
         if not em or em in _seen_lg:
@@ -2495,7 +2499,7 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
         'count': len(_lg_hosts),
         'emails_csv': ', '.join(h['email'] for h in _lg_hosts),
         'hosts': _lg_hosts,
-        'applies_to': 'Medium-confidence Nourishment Pause individual cases (score 9-13), plus cases whose only high-confidence signal is paired 100% sequential Profile IDs; Wednesday and Thursday runs',
+        'applies_to': 'Individual cases (score 13 or lower) that are Medium-confidence Nourishment Pause, or rest on exactly one high-confidence signal at Warning or Nourishment Pause (including paired 100% sequential Profile IDs); Warning cases surface on Thursday runs only',
     }
 
     ts_ui_data = {
