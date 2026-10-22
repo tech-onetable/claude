@@ -395,16 +395,36 @@ def score_campaign(cid, camp, cross_dinner, high_volume, campaigns=None):
             'triggered': threshold_met,
         }
 
-    # ── Signal 1: Shared FP host+guest (standalone, 25%+, min 3 guests) ──────
+    # ── Signal 1: Shared FP host+guest (standalone, 50%+, min 3 guests) ──────
+    # UPDATED 2026-10-22: the host's devices now include the device that CREATED THE DINNER and the device that created the
+    # host's PROFILE, not only the host's own RSVP device. Guests RSVPing from the device that created the dinner is the
+    # clearest form of "host's device used for guests" (missed for Michael Cuntington and Shira Perry before this change).
     host_fp = host.get('RSVP Device Fingerprint ID', '') if host else ''
     guest_fps = [g.get('RSVP Device Fingerprint ID', '') for g in guests
                  if g.get('RSVP Device Fingerprint ID', '')]
-    if host_fp and n >= 3:  # min 3 guests required for device FP signals
-        shared = [fp for fp in guest_fps if fp == host_fp]
+    _bad = ('', 'nan', 'None')
+    _creation_dev = (camp.get('dinner_created_device_id', '') or (host.get('Dinner Created Device ID', '') if host else '') or '')
+    _profile_dev = host.get('Profile Created Device ID', '') if host else ''
+    host_devices = {}   # fingerprint -> how it is tied to the host
+    if host_fp and host_fp not in _bad:
+        host_devices[host_fp] = "host's RSVP device"
+    for _d, _label in ((_creation_dev, "dinner-creation device"), (_profile_dev, "profile-creation device")):
+        # Devices seen on 8+ dinners are shared infrastructure, so the newly added devices skip them
+        if _d and _d not in _bad and _d not in high_volume and _d not in host_devices:
+            host_devices[_d] = f"host's {_label}"
+    matched_devices = set()   # host devices that guests shared (used below to count the same fact once)
+    sig1_met = False
+    if host_devices and n >= 3:  # min 3 guests required for device FP signals
+        shared = [fp for fp in guest_fps if fp in host_devices]
         pct = len(shared) / n
         met = pct > 0.50
+        if met:
+            matched_devices = {fp for fp in shared}
+            sig1_met = True
+        _which = ', '.join(sorted({host_devices[fp] for fp in shared})) or "host's devices"
+        _fpshow = ', '.join(sorted(matched_devices)) if matched_devices else (host_fp or _creation_dev or _profile_dev)
         add_sig('sig1',
-                f"Shared device fingerprint host and guest: {len(shared)}/{n} ({round(100*pct)}%) [{host_fp}]",
+                f"Shared device fingerprint host and guest: {len(shared)}/{n} ({round(100*pct)}%) [{_fpshow}] ({_which})",
                 f"{round(100*pct)}% ({len(shared)}/{n} guests)", ">50% (min 3 guests)", met)
 
     # ── Signal 2: Cross-dinner FP match (needs pairing, any, skip high-volume) ──
@@ -433,6 +453,10 @@ def score_campaign(cid, camp, cross_dinner, high_volume, campaigns=None):
                     break
             if high_conc_other:
                 cross_hits.append((fp, nd, guests_with_fp))
+    if sig1_met:
+        # Count the host's own device once (Pammie, 2026-10-22): when Shared device fingerprint, host and guest already
+        # scored on a device, the same device is not also scored as a cross-dinner match.
+        cross_hits = [h for h in cross_hits if h[0] not in matched_devices]
     if cross_hits and n >= 3:  # min 3 guests required
         total_weight = SIGNAL_WEIGHTS['sig2'] * len(cross_hits)
         descs = []
@@ -455,8 +479,13 @@ def score_campaign(cid, camp, cross_dinner, high_volume, campaigns=None):
             pct = top_count / n
             # Require at least 2 guests sharing the same FP -- 1 guest is not meaningful
             met = pct > 0.50 and top_count >= 3
+            _note = ""
+            if met and sig1_met and top_fp in matched_devices:
+                # Same fact as Shared device fingerprint, host and guest: score it once (Pammie, 2026-10-22)
+                met = False
+                _note = " (not scored, same evidence as Shared device fingerprint, host and guest)"
             add_sig('sig3',
-                    f"Same device fingerprint across guests: {top_count}/{n} ({round(100*pct)}%) [{top_fp}]",
+                    f"Same device fingerprint across guests: {top_count}/{n} ({round(100*pct)}%) [{top_fp}]{_note}",
                     f"{round(100*pct)}% ({top_count}/{n} guests)", "50%+ and ≥3 guests sharing (min 3 guests total)", met)
 
     # ── Signal 12: Guest email bounces (any type -- hard or reject combined) ──
@@ -2917,6 +2946,7 @@ if __name__ == '__main__':
     # Longitudinal request: comma-separated host emails for the Salesforce longitudinal report filter
     _lg = ts_ui_data.get('longitudinal_request', {})
     if _lg.get('count'):
+        date_str = REVIEW_DATE.strftime('%Y%m%d')   # fixed 2026-10-22: was undefined after the pending-file removal
         lg_fname = f'/home/claude/ts_longitudinal_emails_{date_str}.txt'
         with open(lg_fname, 'w') as f:
             f.write(_lg['emails_csv'] + '\n')
