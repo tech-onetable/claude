@@ -2818,6 +2818,59 @@ def add_agent_layer(ts_ui_data, pass1_output):
     return ts_ui_data
 
 
+def _effective_tier(case):
+    """A case's tier after any staff tier_override ({"to_tier": ...}, older runs used "tier"); unknown tiers are ignored."""
+    o = case.get('tier_override') or {}
+    to = o.get('to_tier') or o.get('tier')
+    return to if to in ('warning', 'warning_dnn', 'suspension', 'deactivation') else case.get('tier', '')
+
+
+def recount_ts_ui_data(d):
+    """Recompute run.summary and accumulator_row counts from the cases AFTER staff tier overrides (2026-10-22), so the
+    accumulator row and the combined Slack are built from final tiers instead of being corrected by hand. Case numbers,
+    dinners moved, guest case ranges and notes are left exactly as they are. Returns (before, after) count dicts."""
+    cases = d.get('cases', [])
+    def _hosts(c):
+        return (len(c.get('cluster_hosts') or []) or 1) if c.get('is_cluster') else 1
+    def _hostlist(tiers):
+        out = []
+        for c in cases:
+            if _effective_tier(c) not in tiers:
+                continue
+            if c.get('is_cluster') and c.get('cluster_hosts'):
+                out += [{'name': h.get('name', ''), 'campaign_id': h.get('campaign_id', '')} for h in c['cluster_hosts']]
+            else:
+                out.append({'name': c.get('name', ''), 'campaign_id': c.get('campaign_id', '')})
+        return out
+    sus, dnn, warn = _hostlist(('suspension', 'deactivation')), _hostlist(('warning_dnn',)), _hostlist(('warning',))
+    # A coaching candidate stays a coaching candidate only while its final tier is still Warning
+    high_n = len([c for c in cases if c.get('high_nourishment') and _effective_tier(c) == 'warning' and not c.get('is_cluster')])
+    run = d.setdefault('run', {})
+    summ = run.setdefault('summary', {})
+    acc = d.setdefault('accumulator_row', {})
+    before = {'suspension': summ.get('suspension'), 'warning_dnn': summ.get('warning_dnn'), 'warning': summ.get('warning'),
+              'high_nourishment': summ.get('high_nourishment'), 'cases': acc.get('cases')}
+    summ.update({
+        'suspension': sum(_hosts(c) for c in cases if _effective_tier(c) in ('suspension', 'deactivation')),
+        'warning_dnn': sum(_hosts(c) for c in cases if _effective_tier(c) == 'warning_dnn'),
+        'warning': sum(_hosts(c) for c in cases if _effective_tier(c) == 'warning'),
+        'high_nourishment': high_n,
+    })
+    acc.update({
+        'cases': len(sus) + len(dnn) + len(warn), 'dnn': len(dnn), 'suspensions': len(sus),
+        'suspension_last_names': sorted({(h['name'].split() or [''])[-1] for h in sus} - {''}),
+        'warnings': len(warn), 'high_nourishment': high_n, 'warnings_excluding_coaching': len(warn) - high_n,
+        '_hosts': {'suspension': sus, 'dnn': dnn, 'warning': warn},
+    })
+    run['high_nourishment_hosts'] = [h for h in run.get('high_nourishment_hosts', [])
+                                     if any(c.get('name') == h.get('name') and c.get('high_nourishment') and _effective_tier(c) == 'warning' for c in cases)]
+    overridden = [c.get('name') for c in cases if _effective_tier(c) != c.get('tier')]
+    run['counts_recounted_for_overrides'] = overridden
+    after = {'suspension': summ['suspension'], 'warning_dnn': summ['warning_dnn'], 'warning': summ['warning'],
+             'high_nourishment': high_n, 'cases': acc['cases']}
+    return before, after
+
+
 def _load_approved(path):
     """Approved hosts for the ban and DNN files: Contact IDs (15 or 18 characters) or emails, one per line
     or in any CSV column. Returns a set of 15-character Contact IDs and lowercased emails."""
@@ -2909,6 +2962,16 @@ if __name__ == '__main__':
         print("       Legacy two-file mode: python3 ts_weekly_run.py <contact_csv> <lead_csv> [--no-sf] [--wednesday]", file=sys.stderr)
         print("       --wednesday: pre-Nourishment gate run -- only scores Ready to Nourish campaigns, surfaces Nourishment Pause and above only", file=sys.stderr)
         sys.exit(1)
+
+    if '--recount' in sys.argv:
+        # After staff decisions: recompute the summary and accumulator row counts from final tiers (tier_override applied).
+        _rp = sys.argv[sys.argv.index('--recount') + 1]
+        _rd = json.load(open(_rp))
+        _b, _a = recount_ts_ui_data(_rd)
+        json.dump(_rd, open(_rp, 'w'), indent=2)
+        print(json.dumps({'file': _rp, 'before': _b, 'after': _a, 'overridden': _rd['run'].get('counts_recounted_for_overrides', []),
+                          'suspension_last_names': _rd['accumulator_row'].get('suspension_last_names', [])}, indent=2))
+        sys.exit(0)
 
     if '--files-from' in sys.argv:
         # After staff review: build the ban and DNN files from the run's JSON and the approved list.
