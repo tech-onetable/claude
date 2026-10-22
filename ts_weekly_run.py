@@ -69,6 +69,11 @@ RECOGNIZED_EMAIL_DOMAINS = {
 }
 SUSPICIOUS_TLDS = {'top','cc','info','xyz','icu','site','online','shop','buzz','click','fun','rest','cyou','sbs','pw','lol'}
 HIGH_VOLUME_THRESHOLD = 8    # FP on 8+ dinners = shared infrastructure, not scored
+# High-Nourishment coaching path (Abbie and Hannah, 2026-10-19; script flag added 2026-10-22): a Warning-tier host with
+# score 5+ AND $2,500+ total Nourishment received goes to the Shabbat Journey team as a coaching case, not a T&S case.
+# The script only MARKS candidates; the agent verifies against Salesforce and creates the coaching case.
+HIGH_NOURISHMENT_THRESHOLD = 2500
+HIGH_NOURISHMENT_MIN_SCORE = 5
 SIGNAL_WEIGHTS = {
     'sig1': 7,   # Shared device FP host+guest (standalone)
     'sig2': 7,   # Cross-dinner device FP match (needs pairing)
@@ -1182,6 +1187,19 @@ def build_case_json(cid, camp, scored_signals, score, tier, sf_data=None):
     for note in anomaly_notes:
         bullets.append(f"**Anomaly:** {note}")
 
+    # High-Nourishment coaching candidate: Warning tier only (a higher T&S tier wins and is handled as a normal case).
+    # Lifetime Nourishment is the Salesforce Contact value when Pass 2 supplied it, otherwise the report column.
+    high_nourishment = bool(tier == 'warning' and score >= HIGH_NOURISHMENT_MIN_SCORE
+                            and nourishment_lifetime is not None
+                            and nourishment_lifetime >= HIGH_NOURISHMENT_THRESHOLD)
+    _n_source = 'Salesforce Contact' if (sf_data and sf_data.get('Total_Nourishment_Received__c') is not None) else 'report column (verify in Salesforce)'
+    high_nourishment_note = (
+        f"Warning score {score} with {nourishment} total Nourishment received ({_n_source}). "
+        f"Candidate for the $2,500+ coaching path (Shabbat Journey call, Do Not Nourish until the call) instead of a standard Warning email."
+    ) if high_nourishment else None
+    if high_nourishment:
+        bullets.insert(0, f"**High-Nourishment coaching candidate:** {high_nourishment_note}")
+
     return {
         'id': f"case-{cid}",
         'name': host_name,
@@ -1204,6 +1222,8 @@ def build_case_json(cid, camp, scored_signals, score, tier, sf_data=None):
         'score': score,
         'sf_url': sf_url,
         'nourishment_received': nourishment,
+        'high_nourishment': high_nourishment,
+        'high_nourishment_note': high_nourishment_note,
         'nourishment_eligible_this_dinner': nourishment_eligible_str,
         'nourishment_requested': nourishment_requested_str,
         'future_dinners': future_dinners_str,
@@ -2405,7 +2425,14 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
         'clusters': len([c for c in cases if c.get('is_cluster')]),
         'cluster_hosts': sum(len(c.get('cluster_hosts', [])) for c in cases if c.get('is_cluster')),
         'opportunity_cases': len([c for c in cases if c.get('opportunities')]) + len([e for e in existing_cases if e.get('opportunities')]),
+        # High-Nourishment coaching candidates (Warning tier, score 5+, $2,500+); the agent verifies and creates the coaching cases
+        'high_nourishment': len([c for c in cases if c.get('high_nourishment')]),
     }
+    high_nourishment_hosts = [
+        {'name': c.get('name'), 'score': c.get('score'), 'nourishment_received': c.get('nourishment_received'),
+         'dinner_name': c.get('dinner_name'), 'sf_url': c.get('sf_url')}
+        for c in cases if c.get('high_nourishment')
+    ]
 
     # Accumulator row (added 2026-10-14): pre-filled from the script's tiers so the agent copies it into the
     # T&S Weekly Run Accumulator instead of building it by hand. Counts are by host. Case numbers, dinners
@@ -2477,6 +2504,7 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
             'run_date': datetime.now().strftime('%Y-%m-%d'),
             'dinners_reviewed': pass1_output['total_dinners'],
             'summary': final_summary,
+            'high_nourishment_hosts': high_nourishment_hosts,
             'field_alerts': pass1_output.get('field_alerts', []),
             'wednesday_mode': wednesday_mode,
 
