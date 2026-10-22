@@ -273,8 +273,8 @@ function buildApp() {
 // ── version ────────────────────────────────────────────────────────────────
 // Bump UI_VERSION and UI_UPDATED on every change to this file. The page checks GitHub's copy and
 // warns if it is newer. The check fails quietly (no warning) once the repo is private or offline.
-const UI_VERSION = 'v4.7';
-const UI_UPDATED = '2026-10-22';
+const UI_VERSION = 'v4.8';
+const UI_UPDATED = '2026-10-23';
 const UI_LATEST_URL = 'https://raw.githubusercontent.com/tech-onetable/claude/main/ts_review.html';
 let uiLatest = null; // {version, updated} from GitHub, or null if the check could not run
 function fmtUiDate(d) { try { return new Date(d + 'T12:00:00').toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'}); } catch(e) { return d; } }
@@ -681,6 +681,19 @@ function buildCaseCard(c) {
   </div>`;
 }
 
+// The host's own words (2026-10-22): Core Value (welcome video) and Platform Bio, context only. A blank bio links the host's
+// backend profile, because Platform Bio fills only after staff sync the profile there.
+function ownWordsBlock(c) {
+  if (c.is_cluster) return '';
+  const cv = (c.core_value||'').trim(), bio = (c.platform_bio||'').trim();
+  if (!cv && !bio && !c.profile_url) return '';
+  const esc = x => String(x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\s*\n+\s*/g,' ');
+  const part = (label, text) => text ? `<div style="margin-bottom:6px"><span style="font-weight:600">${label}:</span> ${esc(text)}</div>` : '';
+  const blank = !bio ? `<div style="color:var(--text-sec)">Platform Bio is blank. It fills only after the profile is synced from the backend.${c.profile_url?` <a class="purple-link" href="${c.profile_url}" target="_blank">Open profile</a>`:''}</div>` : '';
+  return `<div class="section-label">In their own words</div>
+    <div style="font-size:12px;line-height:1.6;border:0.5px solid var(--border);border-radius:6px;padding:8px 12px;margin-bottom:8px;max-height:150px;overflow:auto">${part('Core value', cv)}${part('Bio', bio)}${blank}</div>`;
+}
+
 function buildCaseBody(c, a, actioned, displayTier) {
   const hosts = c.is_cluster&&c.cluster_hosts?.length ? c.cluster_hosts.map(h=>h.name) : [c.name];
   const overrideOpen = state.overrideOpen===c.id;
@@ -688,6 +701,7 @@ function buildCaseBody(c, a, actioned, displayTier) {
 
   return `<div class="case-body">
     ${oppBanner(c)}
+    ${ownWordsBlock(c)}
     ${c.is_cluster&&c.cluster_note?`<div class="cluster-banner" style="font-size:13px;line-height:1.6">${md(c.cluster_note)}</div>`:''}
     ${c.is_cluster&&c.connected_unscored?`<div style="background:#FEF3C7;border-left:3px solid #D97706;border-radius:0 6px 6px 0;padding:10px 14px;margin:8px 0;font-size:13px;line-height:1.6;color:#92400E"><strong>🔍 Unscored hosts tied to this network:</strong> ${md(c.connected_unscored)}</div>`:''}
     ${c.is_cluster&&c.device_table&&c.device_table.length>0?`
