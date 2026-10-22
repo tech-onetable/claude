@@ -2985,6 +2985,31 @@ def load_sf_results(path):
     Unique_Guests_Last_12_Months__c, Had_Benchmark_Checkin__c, Guest_to_Host_formula__c, Times_Attended_as_Guest__c) plus
     _future_dinners (list of {id, name, date, status, prior_status, nourishment_sent, dnn}) and _open_ts_cases (list).
     Keys may be 15 or 18 characters; both forms are made available because the script looks hosts up by the 15-character ID."""
+    SENT = {'sent nourishment', 'sent nourishment, confirmation email sent', 'partial nourishment sent'}
+
+    def _norm_dinner(d):
+        # Accepts the raw CampaignMember row from the future-dinners query ({CampaignId, Campaign: {Name, StartDate, Status,
+        # Do_Not_Nourish__c}}) or the tidy shape; always returns the tidy shape the build step reads.
+        if not isinstance(d, dict):
+            return d
+        if 'CampaignId' in d or isinstance(d.get('Campaign'), dict):
+            c = d.get('Campaign') or {}
+            st = c.get('Status', '') or d.get('status', '')
+            return {'id': d.get('CampaignId') or d.get('id', ''), 'name': c.get('Name', '') or d.get('name', ''),
+                    'date': c.get('StartDate', '') or d.get('date', ''), 'status': st, 'prior_status': st,
+                    'nourishment_sent': str(st).lower() in SENT, 'dnn': bool(c.get('Do_Not_Nourish__c', d.get('dnn', False)))}
+        d = dict(d)
+        d.setdefault('prior_status', d.get('status', ''))
+        d.setdefault('nourishment_sent', str(d.get('status', '')).lower() in SENT)
+        return d
+
+    def _norm_case(c):
+        # Accepts the raw Case row from the open Trust and Safety cases query or the tidy shape.
+        if isinstance(c, dict) and 'CaseNumber' in c:
+            return {'id': c.get('Id', ''), 'case_number': c.get('CaseNumber', ''), 'subject': c.get('Subject', ''),
+                    'status': c.get('Status', ''), 'created_date': (c.get('CreatedDate') or '')[:10]}
+        return c
+
     raw = json.load(open(path))
     if isinstance(raw, dict) and isinstance(raw.get('records'), (dict, list)):
         raw = raw['records']
@@ -2996,8 +3021,8 @@ def load_sf_results(path):
             continue
         r = dict(r)
         r.setdefault('Id', k if len(k) == 18 else r.get('Id', k))
-        r.setdefault('_future_dinners', [])
-        r.setdefault('_open_ts_cases', [])
+        r['_future_dinners'] = [_norm_dinner(d) for d in (r.get('_future_dinners') or [])]
+        r['_open_ts_cases'] = [_norm_case(c) for c in (r.get('_open_ts_cases') or [])]
         out[k[:15]] = r
         if len(k) == 18:
             out[k] = r
