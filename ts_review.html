@@ -273,8 +273,8 @@ function buildApp() {
 // ── version ────────────────────────────────────────────────────────────────
 // Bump UI_VERSION and UI_UPDATED on every change to this file. The page checks GitHub's copy and
 // warns if it is newer. The check fails quietly (no warning) once the repo is private or offline.
-const UI_VERSION = 'v4.6';
-const UI_UPDATED = '2026-10-20';
+const UI_VERSION = 'v4.7';
+const UI_UPDATED = '2026-10-22';
 const UI_LATEST_URL = 'https://raw.githubusercontent.com/tech-onetable/claude/main/ts_review.html';
 let uiLatest = null; // {version, updated} from GitHub, or null if the check could not run
 function fmtUiDate(d) { try { return new Date(d + 'T12:00:00').toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'}); } catch(e) { return d; } }
@@ -620,6 +620,7 @@ function buildCaseCard(c) {
           ${sfCampaignUrl(c)?`<button onclick="event.stopPropagation();window.open('${sfCampaignUrl(c)}','_blank')" style="font-size:11px;padding:2px 6px;border:0.5px solid var(--border);border-radius:4px;background:transparent;color:var(--text-sec);cursor:pointer">Dinner</button>`:''}
           ${c.email?`<button onclick="event.stopPropagation();navigator.clipboard.writeText('${c.email}').then(()=>{this.textContent='✓';setTimeout(()=>this.textContent='Copy email',1200)})" style="font-size:11px;padding:2px 6px;border:0.5px solid var(--border);border-radius:4px;background:transparent;color:var(--text-sec);cursor:pointer">Copy email</button>`:''}
           <span class="badge ${tierClass(displayTier)}" style="font-size:11px">${tierLabel(displayTier, c.score)}</span>
+          ${overrideChip(c)}
           ${oppBadges(caseOpps(c))}
           <span style="font-size:12px;color:var(--text-sec);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${signalSummary}</span>
           ${actioned?'<span class="badge actioned" style="font-size:11px">✓ Reviewed</span>':''}
@@ -645,6 +646,7 @@ function buildCaseCard(c) {
           ${sfCampaignUrl(c)?`<button onclick="event.stopPropagation();window.open('${sfCampaignUrl(c)}','_blank')" style="font-size:11px;padding:2px 6px;border:0.5px solid var(--border);border-radius:4px;background:transparent;color:var(--text-sec);cursor:pointer" title="Open dinner in Salesforce">Dinner</button>`:''}
           ${c.email?`<button onclick="event.stopPropagation();navigator.clipboard.writeText('${c.email}').then(()=>{this.textContent='✓';setTimeout(()=>this.textContent='Copy email',1200)})" style="font-size:11px;padding:2px 6px;border:0.5px solid var(--border);border-radius:4px;background:transparent;color:var(--text-sec);cursor:pointer" title="Copy host email">Copy email</button>`:''}`}
           <span class="badge ${tierClass(displayTier)}">${c.is_cluster?'⚠ Cluster · ':''}${tierLabel(displayTier, c.score)}</span>
+          ${overrideChip(c)}
           ${(()=>{
             // Try bullets first, then narrative summary
             const cb = (c.bullets||[]).find(b=>b.startsWith('**Confidence:'));
@@ -1507,10 +1509,40 @@ function normaliseLoadedCase(c) {
   };
 }
 
+// Staff tier overrides (2026-10-22): the agent records a staff tier change as
+// tier_override {by, date, from_tier, to_tier, reason}. The whole screen (grouping, sorting, counts, badges,
+// approve button) reads c.tier, so an override replaces c.tier here and the script's tier is kept as script_tier.
+const OVERRIDE_TIERS = ['warning','warning_dnn','suspension','deactivation'];
+function applyTierOverride(c) {
+  const o = c.tier_override;
+  if (!o) return c;
+  const to = o.to_tier || o.tier;      // older runs used "tier"
+  if (!to || to === c.tier) return c;
+  if (!OVERRIDE_TIERS.includes(to)) {
+    console.warn('tier_override ignored, unknown tier:', to, c.name);
+    return {...c, tier_override_invalid: String(to)};
+  }
+  return {...c, script_tier: c.tier, tier: to, tier_overridden: true};
+}
+function escAttr(x) { return String(x||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+function overrideChip(c) {
+  if (c.tier_overridden) {
+    const o = c.tier_override || {};
+    const tip = escAttr(`Script tier: ${tierLabel(c.script_tier)}. Staff override${o.by?' by '+o.by:''}${o.date?' on '+o.date:''}${o.reason?': '+o.reason:''}`);
+    const rank = {warning:1, warning_dnn:2, suspension:3, deactivation:4};
+    const arrow = (rank[c.tier]||0) >= (rank[c.script_tier]||0) ? '↑' : '↓';
+    return `<span title="${tip}" style="font-size:11px;font-weight:600;color:var(--amber-dark)">${arrow} staff override from ${tierLabel(c.script_tier)}</span>`;
+  }
+  if (c.tier_override_invalid) {
+    return `<span title="The tier_override on this case names a tier the screen does not know, so it was not applied." style="font-size:11px;font-weight:600;color:var(--wine)">⚠ override not applied: ${escAttr(c.tier_override_invalid)}</span>`;
+  }
+  return '';
+}
+
 function loadData(data) {
   try {
-  // Normalise cases
-  if (data.cases) data.cases = data.cases.map(normaliseLoadedCase);
+  // Normalise cases, then apply staff tier overrides
+  if (data.cases) data.cases = data.cases.map(normaliseLoadedCase).map(applyTierOverride);
   // Surface run-level fields
   if (data.run) {
     data.week_of = data.week_of || data.run.week_of;
