@@ -1382,6 +1382,54 @@ def detect_clusters(scored_cases, campaigns, cross_dinner_fps):
     return clusters
 
 
+def compute_outside_scope_links(all_campaigns, scope_campaigns, all_fps, high_volume, scored_cids):
+    """For each flagged (scored) dinner, the OTHER hosts' dinners that are not in the review but share one of its devices: either they
+    scored 0, or they are outside this run's scope (Wednesday: not Planned with Guest Count Met). Never scored; listed for staff.
+    A device counts only when it is one of the host's own devices, or 2+ of this dinner's guests used it, because a single guest
+    attending two dinners is normal. Devices on 8+ dinners are shared infrastructure and skipped. The same host's other dinners are skipped."""
+    bad = ('', 'nan', 'None')
+    scored = set(scored_cids)
+    links = {}
+    for cid in scored_cids:
+        camp = all_campaigns.get(cid) or {}
+        host = camp.get('host') or {}
+        host_devs = set()
+        for k in ('RSVP Device Fingerprint ID', 'Dinner Created Device ID', 'Profile Created Device ID'):
+            d = host.get(k, '')
+            if d and d not in bad:
+                host_devs.add(d)
+        d = camp.get('dinner_created_device_id', '')
+        if d and d not in bad:
+            host_devs.add(d)
+        guest_counts = collections.Counter(g.get('RSVP Device Fingerprint ID', '') for g in camp.get('guests', [])
+                                           if g.get('RSVP Device Fingerprint ID', '') not in bad)
+        devs = host_devs | {fp for fp, n in guest_counts.items() if n >= 2}
+        host_id = (host.get('Contact ID') or '')[:15]
+        found = {}
+        for fp in sorted(devs):
+            if fp in high_volume or fp not in all_fps:
+                continue
+            for other in all_fps[fp]:
+                if other == cid or other in scored:
+                    continue
+                oc = all_campaigns.get(other) or {}
+                oh = oc.get('host') or {}
+                if host_id and (oh.get('Contact ID') or '')[:15] == host_id:
+                    continue
+                rec = found.setdefault(other, {
+                    'campaign_id': other,
+                    'host_name': ((oh.get('First Name', '') + ' ' + oh.get('Last Name', '')).strip() or 'no host row'),
+                    'dinner_name': oh.get('Campaign Name', '') or oc.get('name', ''),
+                    'status': oh.get('Campaign Status', ''),
+                    'guest_count_met': oh.get('Guest Count Met?', ''),
+                    'in_run_scope': other in scope_campaigns,
+                    'via_device': [],
+                })
+                rec['via_device'].append(fp)
+        if found:
+            links[cid] = list(found.values())[:6]
+    return links
+
 def run(csv_path, lead_path=None, wednesday_mode=False):
     print(f"[T&S] Parsing {csv_path}...", file=sys.stderr)
     if lead_path:
@@ -1392,6 +1440,10 @@ def run(csv_path, lead_path=None, wednesday_mode=False):
     # Campaigns with guest rows but no Host row cannot be scored. Surface them for a manual look
     # instead of dropping them silently (this crashed Wednesday mode on 2026-10-14).
     no_host_cids = sorted(cid for cid, camp in campaigns.items() if not camp.get('host') and camp.get('guests'))
+
+    # Device and IP maps use EVERY dinner in the report (2026-10-23, Pammie): only the scoring is limited to the Wednesday scope,
+    # so a flagged dinner's links to dinners that are not ready yet are not lost.
+    all_campaigns = campaigns
 
     if wednesday_mode:
         # Wednesday mode: score campaigns that are Planned with Guest Count Met? = true,
@@ -1468,7 +1520,7 @@ def run(csv_path, lead_path=None, wednesday_mode=False):
         field_alerts.append(msg)
         print(f"[T&S] {msg}", file=sys.stderr)
 
-    high_volume, cross_dinner, all_cross, all_fps = build_fp_maps(campaigns)
+    high_volume, cross_dinner, all_cross, all_fps = build_fp_maps(all_campaigns)
     print(f"[T&S] High-volume FPs (20+, not scored): {len(high_volume)}", file=sys.stderr)
     print(f"[T&S] Cross-dinner FPs (2-9): {len(cross_dinner)}", file=sys.stderr)
 
@@ -1510,7 +1562,7 @@ def run(csv_path, lead_path=None, wednesday_mode=False):
     for cid, camp in campaigns.items():
         if not camp['host']:
             continue
-        scored_signals = score_campaign(cid, camp, cross_dinner, high_volume, campaigns=campaigns)
+        scored_signals = score_campaign(cid, camp, cross_dinner, high_volume, campaigns=all_campaigns)
         score = compute_total_score(scored_signals)
         tier = tier_from_score(score)
 
@@ -1693,7 +1745,7 @@ def run(csv_path, lead_path=None, wednesday_mode=False):
             all_scored[cid] = {
                 'score': 0,
                 'tier': 'suspension',
-                'scored_signals': score_campaign(cid, camp, cross_dinner, high_volume, campaigns=campaigns),
+                'scored_signals': score_campaign(cid, camp, cross_dinner, high_volume, campaigns=all_campaigns),
                 'suspended': host.get('Suspended Flag', '') in ('1', '1.0'),
                 'dnn': host.get('Do Not Nourish', '') in ('1', '1.0'),
             }
@@ -1792,6 +1844,7 @@ def run(csv_path, lead_path=None, wednesday_mode=False):
         'cross_host_ips': cross_host_ips,
         'cross_host_pid_batches': cross_host_pid_batches,
         'high_volume_fps': {fp: len(all_fps[fp]) for fp in high_volume},
+        'outside_scope_links': compute_outside_scope_links(all_campaigns, campaigns, all_fps, high_volume, list(all_scored.keys())),
         'total_dinners': len(campaigns),
         'field_alerts': field_alerts,
         'summary': {
@@ -2463,6 +2516,22 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
 
     if addr_flags:
         patterns.append(f"{len(addr_flags)} same-address group{'s' if len(addr_flags)>1 else ''} routed to program team.")
+
+    # Dinners outside this run's scope that share a device with a flagged dinner (2026-10-23). Context only, never scored.
+    _osl = pass1_output.get('outside_scope_links', {})
+    if _osl:
+        for _c in cases:
+            _cids = [h.get('campaign_id') for h in (_c.get('cluster_hosts') or [])] if _c.get('is_cluster') else [_c.get('campaign_id')]
+            _links = []
+            for _cid in _cids:
+                for _l in _osl.get(_cid, []):
+                    if all(_l['campaign_id'] != x['campaign_id'] for x in _links):
+                        _links.append(_l)
+            if _links:
+                _c['linked_outside_scope'] = _links[:8]
+                _txt = '; '.join(f"{l['host_name']} ({l['dinner_name'] or l['campaign_id']}, {l['status'] or 'status unknown'}, guest count met: {l['guest_count_met'] or 'unknown'}, {'scored 0' if l.get('in_run_scope') else 'outside this run scope'})" for l in _links[:4])
+                _more = f" and {len(_links) - 4} more" if len(_links) > 4 else ''
+                _c.setdefault('bullets', []).insert(1, f"**Linked dinners not in this review (not scored):** {_txt}{_more}. They share one of this host's devices, or a device used by 2+ of this dinner's guests; check them in Pass 2.")
 
     # Recompute summary from final cases list -- Pass 1 summary is stale after cluster merging
     # Tier totals count HOSTS, not cases: a cluster case counts once per host in it (fixed 2026-10-14,
