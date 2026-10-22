@@ -2777,13 +2777,13 @@ def _load_approved(path):
 
 
 def write_action_files(ts_ui_data, sf_results=None, approved=None, date_str=None):
-    """Ban, DNN and pending files (2026-10-21). Ban = Suspension and above, DNN = Nourishment Pause and above,
+    """Ban and DNN files (2026-10-21; pending file removed 2026-10-22). Ban = Suspension and above, DNN = Nourishment Pause and above,
     both from final tiers (tier_override wins over the script tier) and ONLY for hosts staff approved.
     approved=None (the first script run, before staff review): nothing is approved yet, so every
-    Nourishment Pause+ host goes to ts_pending_YYYYMMDD.csv and no ban or DNN file is written.
+    Nourishment Pause+ host is listed on stderr as not included and no file is written.
     After review, rerun with --files-from <json> --approved <file> to write the upload files.
     Approval decides: an approved host goes in the files (once the longitudinal data is in, staff approve as usual);
-    an unapproved host held for a longitudinal report is labelled that way on the pending list."""
+    an unapproved host held for a longitudinal report is labelled that way in the stderr list."""
     import csv as csv_module
     sf_results = sf_results or {}
     date_str = date_str or REVIEW_DATE.strftime('%Y%m%d')
@@ -2832,8 +2832,9 @@ def write_action_files(ts_ui_data, sf_results=None, approved=None, date_str=None
         print(f"[T&S] Ban CSV ({len(ban_rows)} hosts): {_write('ts_ban', ban_rows, ['Profile ID', 'Email'])}", file=sys.stderr)
     if dnn_rows:
         print(f"[T&S] DNN CSV ({len(dnn_rows)} hosts): {_write('ts_dnn', dnn_rows, ['Profile ID', 'Email'])}", file=sys.stderr)
-    if pending_rows:
-        print(f"[T&S] Pending list ({len(pending_rows)} hosts, never uploaded): {_write('ts_pending', pending_rows, ['Profile ID', 'Email', 'Tier', 'Reason'])}", file=sys.stderr)
+    # No pending file (2026-10-22): hosts left out of the upload files are only listed here, for the agent to mention in chat.
+    for r in pending_rows:
+        print(f"[T&S] Not in the upload files: {r['Email'] or '(no email)'} ({r['Tier']}): {r['Reason']}", file=sys.stderr)
     return ban_rows, dnn_rows, pending_rows
 
 
@@ -2848,7 +2849,7 @@ if __name__ == '__main__':
         sys.exit(1)
 
     if '--files-from' in sys.argv:
-        # After staff review: rebuild the ban, DNN and pending files from the run's JSON and the approved list.
+        # After staff review: build the ban and DNN files from the run's JSON and the approved list.
         _jp = sys.argv[sys.argv.index('--files-from') + 1]
         _ap = sys.argv[sys.argv.index('--approved') + 1] if '--approved' in sys.argv else None
         _d = json.load(open(_jp))
@@ -2896,8 +2897,9 @@ if __name__ == '__main__':
         json.dump(ts_ui_data, f, indent=2)
     print(f"[T&S] Final JSON saved to {fname}", file=sys.stderr)
 
-    date_str = REVIEW_DATE.strftime('%Y%m%d')
-    write_action_files(ts_ui_data, sf_results, approved=None, date_str=date_str)
+    # No ban, DNN or pending file on the first run (2026-10-22): nothing is approved yet. Build them once, after every case
+    # is approved or actioned: python3 ts_weekly_run.py --files-from ts_ui_data_YYYYMMDD.json --approved approved.txt
+    print("[T&S] Ban and DNN files are not written on the first run. After staff approve cases, run --files-from once.", file=sys.stderr)
 
     # Longitudinal request: comma-separated host emails for the Salesforce longitudinal report filter
     _lg = ts_ui_data.get('longitudinal_request', {})
