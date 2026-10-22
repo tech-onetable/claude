@@ -1441,7 +1441,7 @@ def run(csv_path, lead_path=None, wednesday_mode=False):
     # instead of dropping them silently (this crashed Wednesday mode on 2026-10-14).
     no_host_cids = sorted(cid for cid, camp in campaigns.items() if not camp.get('host') and camp.get('guests'))
 
-    # Device and IP maps use EVERY dinner in the report (2026-10-23, Pammie): only the scoring is limited to the Wednesday scope,
+    # Device and IP maps use EVERY dinner in the report (2026-10-22, Pammie): only the scoring is limited to the Wednesday scope,
     # so a flagged dinner's links to dinners that are not ready yet are not lost.
     all_campaigns = campaigns
 
@@ -2517,7 +2517,7 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
     if addr_flags:
         patterns.append(f"{len(addr_flags)} same-address group{'s' if len(addr_flags)>1 else ''} routed to program team.")
 
-    # Dinners outside this run's scope that share a device with a flagged dinner (2026-10-23). Context only, never scored.
+    # Dinners outside this run's scope that share a device with a flagged dinner (2026-10-22). Context only, never scored.
     _osl = pass1_output.get('outside_scope_links', {})
     if _osl:
         for _c in cases:
@@ -2941,7 +2941,7 @@ def recount_ts_ui_data(d):
 
 
 def pass2_queries(pass1_output):
-    """The exact Salesforce queries Pass 2 needs, for the Salesforce MCP connector (2026-10-23). Same queries the legacy built-in connection ran,
+    """The exact Salesforce queries Pass 2 needs, for the Salesforce MCP connector (2026-10-22). Same queries the legacy built-in connection ran,
     but for EVERY flagged host (Warning hosts too: High-Nourishment candidates need the Contact's Nourishment total checked), in batches.
     Returns a list of {name, soql}. Save the results as one JSON file ({contact_id: record}) and pass it back with --sf-results."""
     CONTACT_FIELDS = [
@@ -3150,7 +3150,7 @@ if __name__ == '__main__':
     # Pass 2
     sf_results = {}
     if '--sf-results' in sys.argv:
-        # Pass 2 results supplied as a file (2026-10-23): when the agent ran the Salesforce queries through the MCP connector, it
+        # Pass 2 results supplied as a file (2026-10-22): when the agent ran the Salesforce queries through the MCP connector, it
         # saves them as JSON ({contact_id: record}) and passes the file here instead of hand-writing a build script.
         sf_results = load_sf_results(sys.argv[sys.argv.index('--sf-results') + 1])
         _flagged = {cid: d for cid, d in pass1_output.get('campaigns', {}).items()}
