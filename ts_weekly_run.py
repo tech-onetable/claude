@@ -2940,6 +2940,72 @@ def recount_ts_ui_data(d):
     return before, after
 
 
+def pass2_queries(pass1_output):
+    """The exact Salesforce queries Pass 2 needs, for the Salesforce MCP connector (2026-10-23). Same queries the legacy built-in connection ran,
+    but for EVERY flagged host (Warning hosts too: High-Nourishment candidates need the Contact's Nourishment total checked), in batches.
+    Returns a list of {name, soql}. Save the results as one JSON file ({contact_id: record}) and pass it back with --sf-results."""
+    CONTACT_FIELDS = [
+        'Id', 'FirstName', 'LastName', 'Email',
+        'Total_Nourishment_Received__c', 'Do_Not_Nourish__c', 'DNN_Reason__c', 'Suspended_Flag__c',
+        'Flag__c', 'Flag_Reason__c', 'Total_Misuse_Score__c', 'Number_of_T_S_Cases__c',
+        'Platform_Profile_ID__c', 'Number_of_times_hosted__c',
+        'Unique_Guests_Last_12_Months__c', 'Had_Benchmark_Checkin__c',
+        'Host_Application_Date__c', 'Guest_to_Host_formula__c', 'Times_Attended_as_Guest__c',
+    ]
+    ids15 = sorted({d['host_id_15'] for d in pass1_output.get('campaigns', {}).values() if d.get('host_id_15')})
+    ids18 = [sf_15_to_18(i) if len(i) == 15 else i for i in ids15]
+    future_start = (REVIEW_DATE + timedelta(days=1)).strftime('%Y-%m-%d')
+    out = []
+    for i in range(0, len(ids18), 50):
+        ids_str = "', '".join(ids18[i:i + 50])
+        out.append({'name': f'contacts batch {i // 50 + 1}',
+                    'soql': f"SELECT {', '.join(CONTACT_FIELDS)} FROM Contact WHERE Id IN ('{ids_str}') LIMIT 50"})
+    for i in range(0, len(ids18), 50):
+        ids_str = "', '".join(ids18[i:i + 50])
+        out.append({'name': f'future dinners batch {i // 50 + 1} (save as each Contact\'s _future_dinners: id, name, date, status, prior_status, nourishment_sent, dnn)',
+                    'soql': ("SELECT CampaignId, Campaign.Name, Campaign.StartDate, Campaign.Status, Campaign.Do_Not_Nourish__c, ContactId "
+                             "FROM CampaignMember WHERE Status = 'Host' "
+                             f"AND ContactId IN ('{ids_str}') AND Campaign.StartDate >= {future_start} "
+                             "AND Campaign.Status NOT IN ('Not Approved', 'Aborted', 'Not Nourishing') "
+                             "ORDER BY Campaign.StartDate ASC LIMIT 200")})
+    for i in range(0, len(ids18), 30):
+        ids_str = "', '".join(ids18[i:i + 30])
+        out.append({'name': f'open Trust and Safety cases batch {i // 30 + 1} (save as each Contact\'s _open_ts_cases)',
+                    'soql': ("SELECT Id, CaseNumber, Subject, Status, ContactId, T_S_Type__c, CreatedDate FROM Case "
+                             f"WHERE ContactId IN ('{ids_str}') "
+                             "AND (T_S_Type__c = 'Misuse of Platform' OR Subject LIKE '%Trust and Safety%' OR Subject LIKE '%T&S%') "
+                             "AND Status != 'Closed' LIMIT 100")})
+    return out
+
+
+def load_sf_results(path):
+    """Read a Pass 2 results file: JSON {contact_id: record}. Records use the Salesforce Contact field API names (Id, FirstName, LastName,
+    Email, Total_Nourishment_Received__c, Platform_Profile_ID__c, Number_of_times_hosted__c, Host_Application_Date__c,
+    Number_of_T_S_Cases__c, Do_Not_Nourish__c, DNN_Reason__c, Suspended_Flag__c, Flag__c, Flag_Reason__c, Total_Misuse_Score__c,
+    Unique_Guests_Last_12_Months__c, Had_Benchmark_Checkin__c, Guest_to_Host_formula__c, Times_Attended_as_Guest__c) plus
+    _future_dinners (list of {id, name, date, status, prior_status, nourishment_sent, dnn}) and _open_ts_cases (list).
+    Keys may be 15 or 18 characters; both forms are made available because the script looks hosts up by the 15-character ID."""
+    raw = json.load(open(path))
+    if isinstance(raw, dict) and isinstance(raw.get('records'), (dict, list)):
+        raw = raw['records']
+    if isinstance(raw, list):
+        raw = {(r.get('Id') or ''): r for r in raw if isinstance(r, dict)}
+    out = {}
+    for k, r in raw.items():
+        if not isinstance(r, dict) or not k:
+            continue
+        r = dict(r)
+        r.setdefault('Id', k if len(k) == 18 else r.get('Id', k))
+        r.setdefault('_future_dinners', [])
+        r.setdefault('_open_ts_cases', [])
+        out[k[:15]] = r
+        if len(k) == 18:
+            out[k] = r
+        elif len(r.get('Id', '')) == 18:
+            out[r['Id']] = r
+    return out
+
+
 def _load_approved(path):
     """Approved hosts for the ban and DNN files: Contact IDs (15 or 18 characters) or emails, one per line
     or in any CSV column. Returns a set of 15-character Contact IDs and lowercased emails."""
@@ -3069,9 +3135,31 @@ if __name__ == '__main__':
     # Pass 1
     pass1_output = run(csv_path, lead_path, wednesday_mode=wednesday_mode)
 
+    if '--pass2-queries' in sys.argv:
+        # Print the queries Pass 2 needs and stop. Run the queries through the Salesforce MCP connector, save the results as one
+        # JSON file ({contact_id: record}), then rerun the script with --sf-results <file>.
+        _qs = pass2_queries(pass1_output)
+        _qf = f'/home/claude/pass2_queries_{REVIEW_DATE.strftime("%Y%m%d")}.json'
+        json.dump(_qs, open(_qf, 'w'), indent=2)
+        print(f"[T&S] {len(_qs)} Pass 2 queries written to {_qf}", file=sys.stderr)
+        print("```pass2_queries")
+        print(json.dumps(_qs, indent=2))
+        print("```")
+        sys.exit(0)
+
     # Pass 2
     sf_results = {}
-    if not skip_sf:
+    if '--sf-results' in sys.argv:
+        # Pass 2 results supplied as a file (2026-10-23): when the agent ran the Salesforce queries through the MCP connector, it
+        # saves them as JSON ({contact_id: record}) and passes the file here instead of hand-writing a build script.
+        sf_results = load_sf_results(sys.argv[sys.argv.index('--sf-results') + 1])
+        _flagged = {cid: d for cid, d in pass1_output.get('campaigns', {}).items()}
+        _missing = [d.get('host_name', cid) for cid, d in _flagged.items()
+                    if (d.get('host_id_15') or '')[:15] not in sf_results]
+        print(f"[T&S] Pass 2 results file: {len(set(id(v) for v in sf_results.values()))} host records loaded", file=sys.stderr)
+        if _missing:
+            print(f"[T&S] WARNING: no Pass 2 record for {len(_missing)} flagged host(s): {', '.join(_missing[:12])}", file=sys.stderr)
+    elif not skip_sf:
         sf = connect_salesforce()
         if sf:
             sf_results = run_pass2(pass1_output, sf)
