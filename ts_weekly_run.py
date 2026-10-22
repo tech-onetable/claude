@@ -2451,6 +2451,7 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
     _sus = _tier_hosts(('suspension', 'deactivation'))
     _dnn = _tier_hosts(('warning_dnn',))
     _warn = _tier_hosts(('warning',))
+    _high_n = len([c for c in cases if c.get('high_nourishment') and c.get('tier') == 'warning' and not c.get('is_cluster')])
     accumulator_row = {
         'week_of': DINNER_FRIDAY.strftime('%Y-%m-%d'),
         'run': 'Wednesday' if wednesday_mode else 'Thursday',
@@ -2461,7 +2462,9 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
         'suspensions': len(_sus),
         'suspension_last_names': sorted({(h['name'].split() or [''])[-1] for h in _sus} - {''}),
         'suspension_dinners_not_approved': None,   # agent: from post-action verification
-        'warnings': len(_warn),
+        'warnings': len(_warn),                    # includes High-Nourishment coaching candidates (they are Warning tier)
+        'high_nourishment': _high_n,               # Warning hosts on the $2,500+ coaching path (script candidates; agent verifies)
+        'warnings_excluding_coaching': len(_warn) - _high_n,
         'clusters': final_summary['clusters'],
         'case_numbers': {'suspension': [], 'dnn': [], 'warning': []},  # agent: after cases are created
         'guest_case_ranges': '',                   # agent: e.g. "00004300-00004340"
