@@ -221,7 +221,9 @@ def parse_csv(contact_path, lead_path=None):
         "Email","Lead: Created Date","Mandrill Bounce Time + Date",
         # New device/IP fields (populated from 2026-08-21 onward; legacy RSVP fields empty from that date)
         "Device ID","IP Address Reservation","Platform ID","Profile Created Device ID",
-        "Mailing Zip/Postal Code","Area","Guest Count Met?"
+        "Mailing Zip/Postal Code","Area","Guest Count Met?",
+        # The host's own words (2026-10-22): shown on the card as context only
+        "Platform Bio","Core Value (Welcome Video)"
     }
     ONETABLE_DOMAIN = 'onetable.org'
 
@@ -1259,12 +1261,18 @@ def build_case_json(cid, camp, scored_signals, score, tier, sf_data=None):
         # BE = the dinner's backend events page, keyed on the report's Platform ID (Campaign.PlatformID__c,
         # the dinner's ID; confirmed by Pammie 2026-10-21). The host's backend profile page is profile_url.
         'be_url': (lambda _p: f"https://api.onetable.org/cp/events/{_p}" if _p else '')(str((host or {}).get('Platform ID', '') or '').split('.')[0]),
-        'profile_url': f"https://api.onetable.org/cp/profiles/{sf_data.get('Platform_Profile_ID__c', '')}" if sf_data and sf_data.get('Platform_Profile_ID__c') else '',
+        # Host's backend profile page: Salesforce Platform_Profile_ID__c when Pass 2 supplied it, else the report's Platform Profile ID column
+        'profile_url': (lambda _p: f"https://api.onetable.org/cp/profiles/{_p}" if _p else '')(str((sf_data or {}).get('Platform_Profile_ID__c') or (host or {}).get('Platform Profile ID', '') or '').split('.')[0]),
         'tier': tier,
         'is_cluster': False,
         'score': score,
         'sf_url': sf_url,
         'nourishment_received': nourishment,
+        # The host's own words (2026-10-22): shown on the card as context only, never scored. Platform Bio fills only after staff
+        # sync the profile from the backend, so a blank bio is flagged and the card links the profile.
+        'core_value': ((host or {}).get('Core Value (Welcome Video)', '') or '').strip()[:600],
+        'platform_bio': ((host or {}).get('Platform Bio', '') or '').strip()[:900],
+        'bio_blank': not ((host or {}).get('Platform Bio', '') or '').strip(),
         'high_nourishment': high_nourishment,
         'high_nourishment_note': high_nourishment_note,
         'nourishment_eligible_this_dinner': nourishment_eligible_str,
