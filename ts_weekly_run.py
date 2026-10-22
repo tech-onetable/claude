@@ -2793,10 +2793,14 @@ def write_action_files(ts_ui_data, sf_results=None, approved=None, date_str=None
     seen = set()
     for case in ts_ui_data.get('cases', []):
         override = case.get('tier_override') or {}
-        tier = override.get('tier') or case.get('tier', '')
+        # The instructions record overrides as {"from_tier", "to_tier"}; accept the older "tier" key too (fixed 2026-10-22).
+        tier = override.get('to_tier') or override.get('tier') or case.get('tier', '')
+        # High-Nourishment coaching hosts are Warning tier but get Do Not Nourish, so they belong in the DNN file
+        # (never the ban file) once staff approve them (fixed 2026-10-22).
+        coaching_dnn = bool(case.get('high_nourishment')) and tier == 'warning'
         hosts = case.get('cluster_hosts', []) if case.get('is_cluster') else [case]
         for h in hosts:
-            if tier not in ('warning_dnn', 'suspension', 'deactivation'):
+            if tier not in ('warning_dnn', 'suspension', 'deactivation') and not coaching_dnn:
                 continue
             email = (h.get('email') or '').strip()
             cid15 = (h.get('contact_id') or '')[:15]
