@@ -54,6 +54,8 @@ SUSPICIOUS_DOMAINS = {
     'psmscientific.com','mailserv.info','dailynutria.com','p-ttc.top','vipaccfb.cc','d4ngerssquy.info',
     # Added 2026-10-18 from the 10/16 dinners with consecutive Profile IDs and throwaway-mail guests
     'astermail.org','astermail.io','aastermail.org','altaddress.com','atomicmail.com',
+    # Added 2026-10-22: look-alike domains on Michael Cuntington's fabricated plus-ones (mimic Outlook)
+    'outlook.net','putlook.net',
 }
 # Mainstream consumer and institutional email providers. Used only by sig24: when half or more of a
 # dinner's guests bounce, non-bounced guests on domains outside this list (and outside .edu/.gov) are
