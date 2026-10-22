@@ -77,7 +77,7 @@ HIGH_VOLUME_THRESHOLD = 8    # FP on 8+ dinners = shared infrastructure, not sco
 HIGH_NOURISHMENT_THRESHOLD = 2500
 HIGH_NOURISHMENT_MIN_SCORE = 5
 SIGNAL_WEIGHTS = {
-    'sig1': 7,   # Shared device FP host+guest (standalone)
+    'sig1': 7,   # Shared device FP host+guest. NOT standalone since 2026-10-22: scores only with a bad or fake guest signal
     'sig2': 7,   # Cross-dinner device FP match (needs pairing)
     'sig3': 5,   # Same device FP across guests (needs pairing)
     'sig4': 5,   # Sequential RSVP timing -- not implemented (data not in CSV)
@@ -115,13 +115,19 @@ SIGNAL_WEIGHTS = {
 # sig22   = deliberate fraud (staff judgment)
 # sig23   = deliberate identity change (staff judgment)
 # Note: sig14 (100% PIDs) is NOT standalone -- requires at least one pairing signal
-STANDALONE = {'sig1', 'sig12', 'sig21', 'sig22', 'sig23', 'sig8', 'sig25'}
+# UPDATED 2026-10-22 (Pammie): sig1 (Shared device fingerprint, host and guest) is no longer standalone. A device or IP match shows where to
+# look, not what was found (a real family and a set of fake guests look the same on the device alone). Warning means bad or fake guests.
+STANDALONE = {'sig12', 'sig21', 'sig22', 'sig23', 'sig8', 'sig25'}
 # Signals that make a case High confidence. Clearly fake guest identities (sig8) and Guest or host listed as a +1
 # (sig25) score on their own (2 points, guest misuse) but are NOT high-confidence evidence (fixed 2026-10-18).
 HIGH_CONFIDENCE_STANDALONE = (STANDALONE - {'sig8', 'sig25'}) | {'sig14'}
 # sig14 (100% sequential guest Profile IDs) counts as High confidence per the 2026 policy, but only when it actually
 # scores, and it only scores when paired with another signal (decided 2026-10-18). sig14_low never does.
 GUEST_INTEGRITY_SIGNALS = {'sig12', 'sig12_low', 'sig14', 'sig14_low', 'sig10', 'sig24', 'sig8', 'sig25'}
+# Household-type network signals (2026-10-22, Pammie): these score ONLY when at least one bad or fake guest signal also met its
+# threshold. Alone they score 0 and the host drops out of the review (truly bad actors are found through other means).
+HOUSEHOLD_NETWORK_SIGNALS = {'sig1', 'sig3', 'sig7'}      # host+guest device, same device across guests, same IP across guests
+FAKE_GUEST_SIGNALS = GUEST_INTEGRITY_SIGNALS | {'sig9'}   # bounces, sequential Profile IDs, hidden emails, odd domains, fake identities, guest as +1, throwaway domains
 SF_BASE = "https://onetable.lightning.force.com/lightning/r/Contact/{}/view"
 SF_CAMPAIGN_BASE = "https://onetable.lightning.force.com/lightning/r/Campaign/{}/view"
 TS_RECORD_TYPE_ID = '012PO000001F53dYAC'  # Trust and Safety record type for Salesforce Cases
@@ -425,7 +431,7 @@ def score_campaign(cid, camp, cross_dinner, high_volume, campaigns=None):
         _fpshow = ', '.join(sorted(matched_devices)) if matched_devices else (host_fp or _creation_dev or _profile_dev)
         add_sig('sig1',
                 f"Shared device fingerprint host and guest: {len(shared)}/{n} ({round(100*pct)}%) [{_fpshow}] ({_which})",
-                f"{round(100*pct)}% ({len(shared)}/{n} guests)", ">50% (min 3 guests)", met)
+                f"{round(100*pct)}% ({len(shared)}/{n} guests)", ">50% (min 3 guests; scores only with a bad or fake guest signal)", met)
 
     # ── Signal 2: Cross-dinner FP match (needs pairing, any, skip high-volume) ──
     # Only score if 2+ guests in this dinner share the cross-dinner FP
@@ -896,6 +902,12 @@ def score_campaign(cid, camp, cross_dinner, high_volume, campaigns=None):
             continue
         if key in STANDALONE:
             scored[key] = sig
+        elif key in HOUSEHOLD_NETWORK_SIGNALS:
+            # Device and IP matches need a bad or fake guest signal (Pammie, 2026-10-22)
+            if threshold_met & FAKE_GUEST_SIGNALS:
+                scored[key] = sig
+            else:
+                scored[key] = {**sig, 'score_contribution': 0}
         elif key == 'sig11':
             # Email similarity needs guest integrity or device signal
             if guest_integrity_met or device_met:
