@@ -199,6 +199,34 @@ def _is_dnn_reason_header(k):
     return norm.endswith('dnnreason') or norm.endswith('donotnourishreason')
 
 
+# Contact bounce data for plus-ones (2026-10-22, Pammie). A plus-one entered as a Lead often has a blank bounce field even when the same
+# email address rejects on the person's Contact record (Mandrill writes the event to the Contact). A blank Lead field means no data, not a
+# working inbox. {lowercased email: {'reason': ..., 'date': ...}}, filled from --contact-bounces before the report is read.
+CONTACT_BOUNCES = {}
+
+
+def load_contact_bounces(path):
+    """Read the Contact bounce lookup file: the rows exactly as the connector returns them (Email, Mandrill_Bounce_Reason__c,
+    Mandrill_Bounce_Time_Date__c), as a list, or {records: [...]}, or already keyed by email."""
+    raw = json.load(open(path))
+    if isinstance(raw, dict) and isinstance(raw.get('records'), list):
+        raw = raw['records']
+    rows = raw if isinstance(raw, list) else [dict(v, Email=k) for k, v in raw.items() if isinstance(v, dict)]
+    n = 0
+    for r in rows:
+        if not isinstance(r, dict):
+            continue
+        email = (r.get('Email') or r.get('email') or '').strip().lower()
+        if not email or email in CONTACT_BOUNCES:
+            continue
+        reason = (r.get('Mandrill_Bounce_Reason__c') or r.get('reason') or '').strip() or 'bounced (Contact record)'
+        date = r.get('Mandrill_Bounce_Time_Date__c') or r.get('date') or ''
+        CONTACT_BOUNCES[email] = {'reason': reason, 'date': date}
+        n += 1
+    print(f"[T&S] Contact bounce lookup: {n} bounced Contact email(s) loaded", file=sys.stderr)
+    return n
+
+
 def parse_csv(contact_path, lead_path=None):
     """Parse a single combined CSV (or Contact + Lead CSVs) into campaigns dict.
     
@@ -340,6 +368,28 @@ def parse_csv(contact_path, lead_path=None):
 
         if not campaigns[cid]['description'] and row.get('Campaign Description', '').strip():
             campaigns[cid]['description'] = row.get('Campaign Description', '')
+
+    # Plus-ones that are also Contacts (2026-10-22): count each person once, and never treat a blank Lead bounce field as clean.
+    def _gmail(g):
+        return (g.get('Email') or g.get('Campaign Member Email') or '').strip().lower()
+    for _c in campaigns.values():
+        _gs = _c['guests']
+        _contact_emails = {_gmail(g) for g in _gs if not g.get('is_lead') and _gmail(g)}
+        _kept, _removed = [], 0
+        for g in _gs:
+            if g.get('is_lead') and _gmail(g) in _contact_emails:
+                _removed += 1      # same person as a Contact guest at this dinner: the Contact row counts
+                continue
+            _kept.append(g)
+        _c['guests'] = _kept
+        _c['_duplicate_guests_removed'] = _removed
+        for g in _kept:
+            if g.get('is_lead') and not (g.get('Mandrill Bounce Reason') or '').strip():
+                b = CONTACT_BOUNCES.get(_gmail(g))
+                if b:
+                    g['Mandrill Bounce Reason'] = b['reason']
+                    g['Mandrill Bounce Time/Date'] = b['date']
+                    g['_bounce_from_contact'] = True
 
     filtered = {k: v for k, v in campaigns.items() if not v.get('_skip')}
     return dict(filtered), len(all_rows)
@@ -1382,6 +1432,25 @@ def detect_clusters(scored_cases, campaigns, cross_dinner_fps):
     return clusters
 
 
+def lead_bounce_candidates(campaigns):
+    """Lead guests (plus-ones) with a blank bounce field at dinners where treating them as bounced could move the bounce share across
+    50% or 75%. Their Contact records need a bounce lookup before the dinner is scored. Returns a sorted list of lowercased emails."""
+    out = set()
+    for c in campaigns.values():
+        gs = c.get('guests', [])
+        n = len(gs)
+        if n < 3:
+            continue
+        bounced = [g for g in gs if (g.get('Mandrill Bounce Reason') or '').strip()]
+        unknown = [g for g in gs if g.get('is_lead') and not (g.get('Mandrill Bounce Reason') or '').strip()]
+        if not unknown:
+            continue
+        cur, pot = len(bounced) / n, (len(bounced) + len(unknown)) / n
+        if cur <= 0.5 < pot or cur < 0.75 <= pot:
+            out |= {(g.get('Email') or g.get('Campaign Member Email') or '').strip().lower() for g in unknown}
+    return sorted(e for e in out if e)
+
+
 def compute_outside_scope_links(all_campaigns, scope_campaigns, all_fps, high_volume, scored_cids):
     """For each flagged (scored) dinner, the OTHER hosts' dinners that are not in the review but share one of its devices: either they
     scored 0, or they are outside this run's scope (Wednesday: not Planned with Guest Count Met). Never scored; listed for staff.
@@ -1845,6 +1914,7 @@ def run(csv_path, lead_path=None, wednesday_mode=False):
         'cross_host_pid_batches': cross_host_pid_batches,
         'high_volume_fps': {fp: len(all_fps[fp]) for fp in high_volume},
         'outside_scope_links': compute_outside_scope_links(all_campaigns, campaigns, all_fps, high_volume, list(all_scored.keys())),
+        'lead_bounce_candidates': lead_bounce_candidates(campaigns),
         'total_dinners': len(campaigns),
         'field_alerts': field_alerts,
         'summary': {
@@ -2517,6 +2587,16 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
     if addr_flags:
         patterns.append(f"{len(addr_flags)} same-address group{'s' if len(addr_flags)>1 else ''} routed to program team.")
 
+    # Plus-ones whose bounce came from their Contact record (2026-10-22): say so on the card.
+    for _c in cases:
+        _cids = [h.get('campaign_id') for h in (_c.get('cluster_hosts') or [])] if _c.get('is_cluster') else [_c.get('campaign_id')]
+        _n = sum(1 for _cid in _cids for g in (campaigns.get(_cid) or {}).get('guests', []) if g.get('_bounce_from_contact'))
+        _d = sum((campaigns.get(_cid) or {}).get('_duplicate_guests_removed', 0) for _cid in _cids)
+        _c['bounce_from_contact'] = _n
+        _c['duplicate_guests_removed'] = _d
+        if _n:
+            _c.setdefault('bullets', []).insert(1, f"**Plus-one bounces taken from Contact records:** {_n} plus-one guest(s) had no bounce data on their Lead record, but the Contact record with the same email shows a bounce, so they are counted as bounced.")
+
     # Dinners outside this run's scope that share a device with a flagged dinner (2026-10-22). Context only, never scored.
     _osl = pass1_output.get('outside_scope_links', {})
     if _osl:
@@ -2975,7 +3055,14 @@ def pass2_queries(pass1_output):
                              f"WHERE ContactId IN ('{ids_str}') "
                              "AND (T_S_Type__c = 'Misuse of Platform' OR Subject LIKE '%Trust and Safety%' OR Subject LIKE '%T&S%') "
                              "AND Status != 'Closed' LIMIT 100")})
-    return out
+    # Plus-one bounce lookup (2026-10-22): list these FIRST so the agent runs them before the host queries
+    cands = [e.replace("'", chr(92) + "'") for e in pass1_output.get('lead_bounce_candidates', [])]
+    lookups = []
+    for i in range(0, len(cands), 40):
+        em = "', '".join(cands[i:i + 40])
+        lookups.append({'name': f'plus-one bounce lookup batch {i // 40 + 1} (save the rows exactly as returned into the --contact-bounces file; if any rows come back, rerun this command with --contact-bounces so the host queries cover every host flagged after the correction)',
+                        'soql': f"SELECT Email, Mandrill_Bounce_Reason__c, Mandrill_Bounce_Time_Date__c FROM Contact WHERE Email IN ('{em}') AND Mandrill_Bounce_Time_Date__c != null LIMIT 200"})
+    return lookups + out
 
 
 def load_sf_results(path):
@@ -3158,6 +3245,8 @@ if __name__ == '__main__':
         print(f"[T&S] Single combined CSV mode: {csv_path}", file=sys.stderr)
 
     # Pass 1
+    if '--contact-bounces' in sys.argv:
+        load_contact_bounces(sys.argv[sys.argv.index('--contact-bounces') + 1])
     pass1_output = run(csv_path, lead_path, wednesday_mode=wednesday_mode)
 
     if '--pass2-queries' in sys.argv:
