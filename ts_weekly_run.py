@@ -3243,6 +3243,75 @@ def apply_longitudinal(d, adjustments):
     return rows, []
 
 
+def longitudinal_from_csv(csv_path, d):
+    """Read the longitudinal CSV (all non-Aborted dinners for the flagged hosts, pulled by hand from Salesforce) and work out the parts that
+    are pure counting (2026-10-28, Pammie), so the agent does not do them by hand: the recycled bounced guest list (+3), plus a few plain metrics.
+    Returns (adjustments, metrics, skipped). The adjustments follow the --apply-longitudinal format; the agent reviews them, adds findings and
+    judgment calls, and applies them. Only individual cases already in the review JSON get an entry."""
+    import difflib
+    rows = list(csv.DictReader(open(csv_path, encoding='utf-8-sig')))
+    camp_host, camp_date, camp_desc = {}, {}, {}
+    for r in rows:
+        if r.get('Member Status') == 'Host':
+            camp_host[r['Campaign ID']] = ((r.get('First Name', '') + ' ' + r.get('Last Name', '')).strip(), (r.get('Contact ID') or '')[:15])
+            camp_date[r['Campaign ID']] = r.get('Start Date', '')
+            camp_desc[r['Campaign ID']] = (r.get('Campaign Description') or '').strip()
+    def _email(r):
+        return (r.get('Email') or r.get('Campaign Member Email') or '').strip().lower()
+    per = collections.defaultdict(lambda: {'dinners': set(), 'emails': collections.defaultdict(set), 'bounced': set(), 'lead_rows': 0, 'lead_no_email': 0})
+    for r in rows:
+        if r.get('Member Status') == 'Host':
+            per[camp_host[r['Campaign ID']][0]]['dinners'].add(r['Campaign ID'])
+            continue
+        h = camp_host.get(r.get('Campaign ID'))
+        if not h:
+            continue
+        p = per[h[0]]
+        e = _email(r)
+        is_lead = (r.get('Contact ID') or '').startswith('00Q')
+        if is_lead:
+            p['lead_rows'] += 1
+            if not e:
+                p['lead_no_email'] += 1
+        if not e:
+            continue
+        p['emails'][e].add(r['Campaign ID'])
+        if (r.get('Mandrill Bounce Reason') or '').strip() or e in CONTACT_BOUNCES:
+            p['bounced'].add(e)
+    GI = ('bounce', 'sequential', 'hidden', 'unrecognized', 'suspicious guest', 'fake', 'plus-one')
+    hosts, metrics, skipped = [], {}, []
+    for name, p in per.items():
+        recycled = sorted(e for e, cs in p['emails'].items() if len(cs) >= 2 and e in p['bounced'])
+        ds = sorted(p['dinners'], key=lambda c: (datetime.strptime(camp_date[c], '%m/%d/%Y') if camp_date.get(c) else datetime.min))
+        pairs = [(camp_desc[a], camp_desc[b]) for a, b in zip(ds, ds[1:]) if camp_desc.get(a) and camp_desc.get(b)]
+        near = sum(1 for a, b in pairs if difflib.SequenceMatcher(None, a[:400], b[:400]).ratio() >= 0.9)
+        metrics[name] = {'dinners': len(p['dinners']), 'distinct_guest_emails': len(p['emails']), 'bouncing_guest_emails': len(p['bounced']),
+                         'recycled_bounced_emails': len(recycled), 'plus_one_rows': p['lead_rows'], 'plus_one_rows_without_email': p['lead_no_email'],
+                         'consecutive_description_pairs': len(pairs), 'near_identical_pairs': near}
+        case = next((c for c in d.get('cases', []) if not c.get('is_cluster') and (
+            (c.get('name') or '').lower() == name.lower()
+            or (camp_host[next(iter(p['dinners']))][1] and (c.get('contact_id') or '')[:15] == camp_host[next(iter(p['dinners']))][1]))), None)
+        if not case:
+            skipped.append(name)
+            continue
+        has_gi = any((sg.get('score_contribution') or 0) > 0 and not sg.get('longitudinal') and any(k in (sg.get('name') or '').lower() for k in GI)
+                     for sg in case.get('signals', []))
+        entry = {'host': case.get('name'), 'add_signals': [], 'findings': [], 'counter': [], 'note': ''}
+        if recycled:
+            n = len(recycled)
+            entry['findings'].append(f"{n} guest address{'es' if n != 1 else ''} attended 2 or more of this host's dinners and now bounce (from the longitudinal report).")
+            if has_gi:
+                entry['add_signals'].append({'name': 'Recycled bounced guest list', 'points': 3,
+                                             'detail': f"{n} guest address{'es' if n != 1 else ''} at 2 or more dinners, all now bouncing (from the longitudinal report)"})
+            else:
+                entry['note'] = 'Recycled bounced guest list found, but no other guest integrity signal this week, so it is not scored.'
+        if p['lead_no_email']:
+            metrics[name]['report_issue'] = f"{p['lead_no_email']} of {p['lead_rows']} plus-one rows have no email in this export, so they cannot be matched or counted"
+        if entry['add_signals'] or entry['findings'] or entry['note']:
+            hosts.append(entry)
+    return {'hosts': hosts}, metrics, skipped
+
+
 def _load_approved(path):
     """Approved hosts for the ban and DNN files: Contact IDs (15 or 18 characters) or emails, one per line
     or in any CSV column. Returns a set of 15-character Contact IDs and lowercased emails."""
@@ -3334,6 +3403,26 @@ if __name__ == '__main__':
         print("       Legacy two-file mode: python3 ts_weekly_run.py <contact_csv> <lead_csv> [--no-sf] [--wednesday]", file=sys.stderr)
         print("       --wednesday: pre-Nourishment gate run -- only scores Ready to Nourish campaigns, surfaces Nourishment Pause and above only", file=sys.stderr)
         sys.exit(1)
+
+    if '--longitudinal' in sys.argv:
+        # python3 ts_weekly_run.py --longitudinal longitudinal.csv ts_ui_data_YYYYMMDD.json
+        _i = sys.argv.index('--longitudinal')
+        _lc, _jp = sys.argv[_i + 1], sys.argv[_i + 2]
+        _d = json.load(open(_jp))
+        _adj, _met, _skip = longitudinal_from_csv(_lc, _d)
+        _ds = REVIEW_DATE.strftime('%Y%m%d')
+        json.dump(_adj, open('/home/claude/longitudinal_adjustments_auto.json', 'w'), indent=2)
+        json.dump(_met, open(f'/home/claude/longitudinal_metrics_{_ds}.json', 'w'), indent=2)
+        print("Longitudinal counting done. Review /home/claude/longitudinal_adjustments_auto.json, add your findings and any judgment signals, then run --apply-longitudinal. Do not write the analysis up in chat.")
+        for _h in _adj['hosts']:
+            _pts = sum(sg['points'] for sg in _h['add_signals'])
+            print(f"  {_h['host']}: {'+' + str(_pts) + ' (' + ', '.join(sg['name'] for sg in _h['add_signals']) + ')' if _pts else 'no points added'}" + (f" | {_h['note']}" if _h['note'] else ''))
+        for _n, _m in _met.items():
+            if _m.get('report_issue'):
+                print(f"  Report issue for {_n}: {_m['report_issue']}")
+        if _skip:
+            print(f"  Not in this run's cases, left out: {', '.join(_skip)}")
+        sys.exit(0)
 
     if '--apply-longitudinal' in sys.argv:
         # After the longitudinal report is analysed: python3 ts_weekly_run.py --apply-longitudinal ts_ui_data_YYYYMMDD.json adjustments.json
