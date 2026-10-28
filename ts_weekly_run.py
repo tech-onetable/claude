@@ -3118,6 +3118,104 @@ def load_sf_results(path):
     return out
 
 
+def apply_longitudinal(d, adjustments):
+    """Apply longitudinal findings to the review JSON (2026-10-22, Pammie). The agent writes a SMALL adjustments file and runs this instead of
+    writing the analysis up in chat: scores, tiers, the signal list, the score breakdown and a few card bullets are updated in the JSON and
+    the summary and accumulator counts are recounted. Returns (rows, errors). Nothing is written by the caller if errors is non-empty.
+
+    adjustments = {"hosts": [{"host": "<name, contact id or campaign id>",
+                              "add_signals": [{"name": "...", "points": 3, "detail": "one line"}],   # points may be negative
+                              "findings": ["plain bullet", ...],     # at most 4, 220 characters each; shown on the card
+                              "counter": ["plain bullet"],           # optional, at most 2: what points the other way
+                              "note": "one line, optional",
+                              "replace": false}]}               # true to redo a host that was already applied
+    """
+    hosts = adjustments.get('hosts') if isinstance(adjustments, dict) else adjustments
+    if not isinstance(hosts, list) or not hosts:
+        return [], ['adjustments must be {"hosts": [...]} with at least one host']
+    cases = d.get('cases', [])
+    rows, errors = [], []
+    plans = []
+    for h in hosts:
+        key = str(h.get('host', '')).strip()
+        if not key:
+            errors.append('a host entry has no "host"'); continue
+        kl = key.lower()
+        found = [c for c in cases if not c.get('is_cluster') and (
+            (c.get('name') or '').lower() == kl or (c.get('contact_id') or '')[:15].lower() == kl[:15] and len(kl) >= 15
+            or (c.get('campaign_id') or '').lower() == kl)]
+        if len(found) != 1:
+            names = ', '.join(sorted(c.get('name', '') for c in cases if not c.get('is_cluster')))[:240]
+            errors.append(f'"{key}" matches {len(found)} cases (individual cases only). Cases in this file: {names}'); continue
+        c = found[0]
+        sigs = h.get('add_signals') or []
+        for sg in sigs:
+            pts = sg.get('points')
+            if not isinstance(pts, int) or pts == 0 or abs(pts) > 10:
+                errors.append(f'{key}: signal "{sg.get("name")}" needs integer points between -10 and 10, not 0'); 
+            if not str(sg.get('name', '')).strip() or not str(sg.get('detail', '')).strip():
+                errors.append(f'{key}: every signal needs a name and a one-line detail')
+            if len(str(sg.get('detail', ''))) > 200:
+                errors.append(f'{key}: detail for "{sg.get("name")}" is over 200 characters; shorten it')
+        fnd, ctr = h.get('findings') or [], h.get('counter') or []
+        if len(fnd) > 4 or any(len(str(x)) > 220 for x in fnd):
+            errors.append(f'{key}: at most 4 findings of 220 characters each (the detail belongs in the case description, not the card)')
+        if len(ctr) > 2 or any(len(str(x)) > 220 for x in ctr):
+            errors.append(f'{key}: at most 2 counter points of 220 characters each')
+        if c.get('longitudinal') and not h.get('replace'):
+            errors.append(f'{key}: longitudinal findings were already applied; set "replace": true to redo them')
+        plans.append((c, h))
+    if errors:
+        return [], errors
+
+    for c, h in plans:
+        if c.get('longitudinal'):                       # redo: go back to the weekly state first
+            c['signals'] = [x for x in c.get('signals', []) if not x.get('longitudinal')]
+            c['score'], c['tier'] = c['longitudinal']['score_before'], c['longitudinal']['tier_before']
+            c['bullets'] = [b for b in c.get('bullets', []) if not b.startswith('**Longitudinal')]
+        before_score, before_tier = c.get('score', 0), c.get('tier')
+        added = []
+        for sg in h.get('add_signals') or []:
+            pts = sg['points']
+            c.setdefault('signals', []).append({'name': sg['name'], 'triggered': True, 'weight': pts, 'observed': sg['detail'], 'desc': '',
+                                                'threshold': 'Longitudinal', 'threshold_met': True, 'score_contribution': pts, 'longitudinal': True})
+            added.append(f"{sg['name']} ({'+' if pts > 0 else ''}{pts})")
+        new_score = max(0, before_score + sum(sg['points'] for sg in (h.get('add_signals') or [])))
+        new_tier = tier_from_score(new_score)
+        below = new_tier is None
+        if below:
+            new_tier = before_tier                        # staff decide whether a case that fell to 0 should be dropped
+        has_override = bool(c.get('tier_override'))
+        c['score'] = new_score
+        if not has_override:
+            c['tier'] = new_tier
+        bd = c.get('score_breakdown') or ''
+        base = bd.rsplit(' = ', 1)[0] if ' = ' in bd else bd
+        if added:
+            c['score_breakdown'] = (base + ' + ' if base else '') + ' + '.join(added) + f' = {new_score}'
+        cs = c.get('collapsed_summary') or ''
+        if cs.startswith(f'Score {before_score}'):
+            c['collapsed_summary'] = f'Score {new_score}' + cs[len(f'Score {before_score}'):]
+        c['longitudinal'] = {'applied': True, 'score_before': before_score, 'tier_before': before_tier, 'score_after': new_score,
+                             'tier_after': c['tier'], 'signals': added, 'findings': list(h.get('findings') or []),
+                             'counter': list(h.get('counter') or []), 'note': h.get('note', ''), 'below_warning': below}
+        head = (f"**Longitudinal data applied:** score {before_score} to {new_score}"
+                + (f" ({', '.join(added)})" if added else " (no points added)")
+                + (f"; {'staff override kept' if has_override else ''}" if has_override else '')
+                + (f". {h['note']}" if h.get('note') else '.')
+                + (" The score is now below Warning; staff decide whether to drop the case." if below else ''))
+        extra = [f"**Longitudinal:** {x}" for x in (h.get('findings') or [])] + [f"**Longitudinal, points the other way:** {x}" for x in (h.get('counter') or [])]
+        c['bullets'] = [c['bullets'][0]] + [head] + extra + c['bullets'][1:] if c.get('bullets') else [head] + extra
+        rows.append({'host': c.get('name'), 'score': f'{before_score} to {new_score}', 'tier': ('unchanged' if c['tier'] == before_tier else f'{before_tier} to {c["tier"]}'),
+                     'signals': added})
+    for hh in d.get('longitudinal_request', {}).get('hosts', []):
+        if any((c.get('name') or '') == hh.get('name') for c, _ in plans):
+            hh['applied'] = True
+    d.setdefault('run', {})['longitudinal_applied'] = sorted({c.get('name') for c in cases if c.get('longitudinal')})
+    recount_ts_ui_data(d)
+    return rows, []
+
+
 def _load_approved(path):
     """Approved hosts for the ban and DNN files: Contact IDs (15 or 18 characters) or emails, one per line
     or in any CSV column. Returns a set of 15-character Contact IDs and lowercased emails."""
@@ -3209,6 +3307,23 @@ if __name__ == '__main__':
         print("       Legacy two-file mode: python3 ts_weekly_run.py <contact_csv> <lead_csv> [--no-sf] [--wednesday]", file=sys.stderr)
         print("       --wednesday: pre-Nourishment gate run -- only scores Ready to Nourish campaigns, surfaces Nourishment Pause and above only", file=sys.stderr)
         sys.exit(1)
+
+    if '--apply-longitudinal' in sys.argv:
+        # After the longitudinal report is analysed: python3 ts_weekly_run.py --apply-longitudinal ts_ui_data_YYYYMMDD.json adjustments.json
+        _i = sys.argv.index('--apply-longitudinal')
+        _jp, _ap = sys.argv[_i + 1], sys.argv[_i + 2]
+        _d = json.load(open(_jp))
+        _rows, _errs = apply_longitudinal(_d, json.load(open(_ap)))
+        if _errs:
+            print("[T&S] Nothing was changed. Fix these and rerun:", file=sys.stderr)
+            for _e in _errs:
+                print(f"  - {_e}", file=sys.stderr)
+            sys.exit(2)
+        json.dump(_d, open(_jp, 'w'), indent=2)
+        print(f"Longitudinal findings applied to {_jp}. Present this file again; do not write the analysis up in chat.")
+        for _r in _rows:
+            print(f"  {_r['host']}: score {_r['score']}, tier {_r['tier']}" + (f" ({'; '.join(_r['signals'])})" if _r['signals'] else ''))
+        sys.exit(0)
 
     if '--recount' in sys.argv:
         # After staff decisions: recompute the summary and accumulator row counts from final tiers (tier_override applied).
