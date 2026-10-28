@@ -1451,7 +1451,7 @@ def lead_bounce_candidates(campaigns):
     return sorted(e for e in out if e)
 
 
-def compute_outside_scope_links(all_campaigns, scope_campaigns, all_fps, high_volume, scored_cids):
+def compute_outside_scope_links(all_campaigns, scope_campaigns, all_fps, high_volume, scored_cids, cross_dinner=None):
     """For each flagged (scored) dinner, the OTHER hosts' dinners that are not in the review but share one of its devices: either they
     scored 0, or they are outside this run's scope (Wednesday: not Planned with Guest Count Met). Never scored; listed for staff.
     A device counts only when it is one of the host's own devices, or 2+ of this dinner's guests used it, because a single guest
@@ -1459,6 +1459,27 @@ def compute_outside_scope_links(all_campaigns, scope_campaigns, all_fps, high_vo
     bad = ('', 'nan', 'None')
     scored = set(scored_cids)
     links = {}
+    _oneoff_cache = {}
+
+    def _one_off(other):
+        # The linked dinner's OWN score (2026-10-28, Pammie): a connected host with their own bad guest evidence must not stay invisible
+        # just because the dinner is outside this run's scope. Context for staff, never an automatic case.
+        if other in _oneoff_cache:
+            return _oneoff_cache[other]
+        res = {'one_off_score': None, 'one_off_tier': None, 'one_off_signals': []}
+        oc = all_campaigns.get(other) or {}
+        if cross_dinner is not None and len(oc.get('guests', [])) >= 3:
+            try:
+                sc = score_campaign(other, oc, cross_dinner, high_volume, campaigns=all_campaigns)
+                total = sum(v.get('score_contribution', 0) for v in sc.values())
+                res = {'one_off_score': total, 'one_off_tier': tier_from_score(total),
+                       'one_off_signals': [v['name'] for v in sorted(sc.values(), key=lambda x: -x.get('score_contribution', 0))
+                                           if v.get('score_contribution', 0) > 0][:3]}
+            except Exception:
+                pass
+        _oneoff_cache[other] = res
+        return res
+
     for cid in scored_cids:
         camp = all_campaigns.get(cid) or {}
         host = camp.get('host') or {}
@@ -1496,6 +1517,8 @@ def compute_outside_scope_links(all_campaigns, scope_campaigns, all_fps, high_vo
                 })
                 rec['via_device'].append(fp)
         if found:
+            for rec in found.values():
+                rec.update(_one_off(rec['campaign_id']))
             links[cid] = list(found.values())[:6]
     return links
 
@@ -1913,7 +1936,7 @@ def run(csv_path, lead_path=None, wednesday_mode=False):
         'cross_host_ips': cross_host_ips,
         'cross_host_pid_batches': cross_host_pid_batches,
         'high_volume_fps': {fp: len(all_fps[fp]) for fp in high_volume},
-        'outside_scope_links': compute_outside_scope_links(all_campaigns, campaigns, all_fps, high_volume, list(all_scored.keys())),
+        'outside_scope_links': compute_outside_scope_links(all_campaigns, campaigns, all_fps, high_volume, list(all_scored.keys()), cross_dinner),
         'lead_bounce_candidates': lead_bounce_candidates(campaigns),
         'total_dinners': len(campaigns),
         'field_alerts': field_alerts,
@@ -2609,9 +2632,9 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
                         _links.append(_l)
             if _links:
                 _c['linked_outside_scope'] = _links[:8]
-                _txt = '; '.join(f"{l['host_name']} ({l['dinner_name'] or l['campaign_id']}, {l['status'] or 'status unknown'}, guest count met: {l['guest_count_met'] or 'unknown'}, {'scored 0' if l.get('in_run_scope') else 'outside this run scope'})" for l in _links[:4])
+                _txt = '; '.join(f"{l['host_name']} ({l['dinner_name'] or l['campaign_id']}, {l['status'] or 'status unknown'}, guest count met: {l['guest_count_met'] or 'unknown'}, {('in this run, scored 0' if l.get('in_run_scope') else 'outside this run scope')}{(', scores ' + str(l['one_off_score']) + ' on its own evidence: ' + {'warning': 'Warning', 'warning_dnn': 'Nourishment Pause', 'suspension': 'Suspension'}.get(l.get('one_off_tier'), '') ) if (l.get('one_off_score') or 0) > 0 else ''})" for l in _links[:4])
                 _more = f" and {len(_links) - 4} more" if len(_links) > 4 else ''
-                _c.setdefault('bullets', []).insert(1, f"**Linked dinners not in this review (not scored):** {_txt}{_more}. They share one of this host's devices, or a device used by 2+ of this dinner's guests; check them in Pass 2.")
+                _c.setdefault('bullets', []).insert(1, f"**Linked dinners not in this review (not scored):** {_txt}{_more}. They share one of this host's devices, or a device used by 2+ of this dinner's guests; check them in Pass 2. A linked host with their own score is a lead for staff, not an automatic case.")
 
     # Recompute summary from final cases list -- Pass 1 summary is stale after cluster merging
     # Tier totals count HOSTS, not cases: a cluster case counts once per host in it (fixed 2026-10-14,
@@ -2712,6 +2735,9 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
             'dinners_reviewed': pass1_output['total_dinners'],
             'summary': final_summary,
             'high_nourishment_hosts': high_nourishment_hosts,
+            'linked_hosts_with_own_evidence': [{'name': l['host_name'], 'score': l['one_off_score'], 'tier': l.get('one_off_tier'),
+                                                'dinner': l.get('dinner_name'), 'status': l.get('status'), 'linked_to': c.get('name')}
+                                               for c in cases for l in (c.get('linked_outside_scope') or []) if (l.get('one_off_score') or 0) > 0],
             'field_alerts': pass1_output.get('field_alerts', []),
             'wednesday_mode': wednesday_mode,
 
@@ -3020,7 +3046,7 @@ def recount_ts_ui_data(d):
     return before, after
 
 
-def pass2_queries(pass1_output):
+def pass2_queries(pass1_output, skip_lookups=False):
     """The exact Salesforce queries Pass 2 needs, for the Salesforce MCP connector (2026-10-22). Same queries the legacy built-in connection ran,
     but for EVERY flagged host (Warning hosts too: High-Nourishment candidates need the Contact's Nourishment total checked), in batches.
     Returns a list of {name, soql}. Save the results as one JSON file ({contact_id: record}) and pass it back with --sf-results."""
@@ -3056,7 +3082,8 @@ def pass2_queries(pass1_output):
                              "AND (T_S_Type__c = 'Misuse of Platform' OR Subject LIKE '%Trust and Safety%' OR Subject LIKE '%T&S%') "
                              "AND Status != 'Closed' LIMIT 100")})
     # Plus-one bounce lookup (2026-10-22): list these FIRST so the agent runs them before the host queries
-    cands = [e.replace("'", chr(92) + "'") for e in pass1_output.get('lead_bounce_candidates', [])]
+    # Once --contact-bounces is supplied the lookup is done: do not relist emails that were already checked (2026-10-28)
+    cands = [] if skip_lookups else [e.replace("'", chr(92) + "'") for e in pass1_output.get('lead_bounce_candidates', [])]
     lookups = []
     for i in range(0, len(cands), 40):
         em = "', '".join(cands[i:i + 40])
@@ -3367,7 +3394,7 @@ if __name__ == '__main__':
     if '--pass2-queries' in sys.argv:
         # Print the queries Pass 2 needs and stop. Run the queries through the Salesforce MCP connector, save the results as one
         # JSON file ({contact_id: record}), then rerun the script with --sf-results <file>.
-        _qs = pass2_queries(pass1_output)
+        _qs = pass2_queries(pass1_output, skip_lookups='--contact-bounces' in sys.argv)
         _qf = f'/home/claude/pass2_queries_{REVIEW_DATE.strftime("%Y%m%d")}.json'
         json.dump(_qs, open(_qf, 'w'), indent=2)
         print(f"[T&S] {len(_qs)} Pass 2 queries written to {_qf}", file=sys.stderr)
