@@ -2564,9 +2564,14 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
     # PAUSED 2026-10-28 (Pammie): the weekly cross-host address review (flag cards, Google Sheet, #cross-host-address-eval post) is switched off
     # because nobody covers it for now. A same-address match is instead flagged on the case card of a host who is in the review for other
     # reasons (see cross_host_address below). A host who appears only in an address group is no longer surfaced at all.
-    if cross_host_flags:
-        print(f"[T&S] Cross-host address groups paused: {len(cross_host_flags)} group(s) not surfaced as flag cards; flagged on case cards only", file=sys.stderr)
-    cross_host_flags = []
+    # TO RE-ACTIVATE: run the script with --cross-host (see ADDENDUM: CROSS-HOST ADDRESS REVIEW in ts_agent_instructions.md). The flag cards, the
+    # Wednesday hold and the review screen panel all still work; only this switch keeps them off.
+    if '--cross-host' in sys.argv:
+        print(f"[T&S] Cross-host address review ON (--cross-host): {len(cross_host_flags)} group(s) surfaced as flag cards", file=sys.stderr)
+    else:
+        if cross_host_flags:
+            print(f"[T&S] Cross-host address groups paused: {len(cross_host_flags)} group(s) not surfaced as flag cards; flagged on case cards only. Use --cross-host to switch the review back on", file=sys.stderr)
+        cross_host_flags = []
 
     # IP-only groups are NOT added to cross_host_flags.
     # Shared IP without device corroboration is not actionable for the program team.
