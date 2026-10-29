@@ -2742,10 +2742,10 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
         '_hosts': {'suspension': _sus, 'dnn': _dnn, 'warning': _warn},  # for the agent; not written to the doc
     }
 
-    # Longitudinal data request (added 2026-10-18, for now): MEDIUM-confidence hosts at the low end of the
-    # Nourishment Pause ("not nourishing") tier (score 9-13) get a longitudinal pull so the case is better informed. Both Wednesday and Thursday runs surface this tier. Individual cases only
+    # Deep dive data request (added 2026-10-18, for now): MEDIUM-confidence hosts at the low end of the
+    # Nourishment Pause ("not nourishing") tier (score 9-13) get a deep dive pull so the case is better informed. Both Wednesday and Thursday runs surface this tier. Individual cases only
     # (clusters get the device-file review instead). The host emails are output comma separated so staff can
-    # paste them into the Salesforce longitudinal report filter.
+    # paste them into the Salesforce deep dive report filter.
     LONGITUDINAL_MAX_SCORE = 13   # low end of the Nourishment Pause tier (9-17); change here to widen or narrow
     LONGITUDINAL_CONFIDENCE = 'Medium'   # only medium-confidence cases; High confidence is already clear enough
     _lg_hosts, _seen_lg = [], set()
@@ -3050,7 +3050,7 @@ def _out(name):
 
 
 def _has_staff_work(d):
-    """True if a review JSON already carries staff work: tier overrides, dismissals or applied longitudinal findings."""
+    """True if a review JSON already carries staff work: tier overrides, dismissals or applied deep dive findings."""
     return any(c.get('tier_override') or c.get('dismissed') or c.get('longitudinal') for c in d.get('cases', []))
 
 
@@ -3233,7 +3233,7 @@ def load_sf_results(path):
 
 
 def apply_longitudinal(d, adjustments):
-    """Apply longitudinal findings to the review JSON (2026-10-22, Pammie). The agent writes a SMALL adjustments file and runs this instead of
+    """Apply deep dive findings to the review JSON (2026-10-22, Pammie). The agent writes a SMALL adjustments file and runs this instead of
     writing the analysis up in chat: scores, tiers, the signal list, the score breakdown and a few card bullets are updated in the JSON and
     the summary and accumulator counts are recounted. Returns (rows, errors). Nothing is written by the caller if errors is non-empty.
 
@@ -3277,7 +3277,7 @@ def apply_longitudinal(d, adjustments):
         if len(ctr) > 2 or any(len(str(x)) > 220 for x in ctr):
             errors.append(f'{key}: at most 2 counter points of 220 characters each')
         if c.get('longitudinal') and not h.get('replace'):
-            errors.append(f'{key}: longitudinal findings were already applied; set "replace": true to redo them')
+            errors.append(f'{key}: deep dive findings were already applied; set "replace": true to redo them')
         plans.append((c, h))
     if errors:
         return [], errors
@@ -3286,13 +3286,13 @@ def apply_longitudinal(d, adjustments):
         if c.get('longitudinal'):                       # redo: go back to the weekly state first
             c['signals'] = [x for x in c.get('signals', []) if not x.get('longitudinal')]
             c['score'], c['tier'] = c['longitudinal']['score_before'], c['longitudinal']['tier_before']
-            c['bullets'] = [b for b in c.get('bullets', []) if not b.startswith('**Longitudinal')]
+            c['bullets'] = [b for b in c.get('bullets', []) if not b.startswith(('**Longitudinal','**Deep dive'))]
         before_score, before_tier = c.get('score', 0), c.get('tier')
         added = []
         for sg in h.get('add_signals') or []:
             pts = sg['points']
             c.setdefault('signals', []).append({'name': sg['name'], 'triggered': True, 'weight': pts, 'observed': sg['detail'], 'desc': '',
-                                                'threshold': 'Longitudinal', 'threshold_met': True, 'score_contribution': pts, 'longitudinal': True})
+                                                'threshold': 'Deep dive', 'threshold_met': True, 'score_contribution': pts, 'longitudinal': True})
             added.append(f"{sg['name']} ({'+' if pts > 0 else ''}{pts})")
         new_score = max(0, before_score + sum(sg['points'] for sg in (h.get('add_signals') or [])))
         new_tier = tier_from_score(new_score)
@@ -3313,12 +3313,12 @@ def apply_longitudinal(d, adjustments):
         c['longitudinal'] = {'applied': True, 'score_before': before_score, 'tier_before': before_tier, 'score_after': new_score,
                              'tier_after': c['tier'], 'signals': added, 'findings': list(h.get('findings') or []),
                              'counter': list(h.get('counter') or []), 'note': h.get('note', ''), 'below_warning': below}
-        head = (f"**Longitudinal data applied:** score {before_score} to {new_score}"
+        head = (f"**Deep dive data applied:** score {before_score} to {new_score}"
                 + (f" ({', '.join(added)})" if added else " (no points added)")
                 + (f"; {'staff override kept' if has_override else ''}" if has_override else '')
                 + (f". {h['note']}" if h.get('note') else '.')
                 + (" The score is now below Warning; staff decide whether to drop the case." if below else ''))
-        extra = [f"**Longitudinal:** {x}" for x in (h.get('findings') or [])] + [f"**Longitudinal, points the other way:** {x}" for x in (h.get('counter') or [])]
+        extra = [f"**Deep dive:** {x}" for x in (h.get('findings') or [])] + [f"**Deep dive, points the other way:** {x}" for x in (h.get('counter') or [])]
         c['bullets'] = [c['bullets'][0]] + [head] + extra + c['bullets'][1:] if c.get('bullets') else [head] + extra
         rows.append({'host': c.get('name'), 'score': f'{before_score} to {new_score}', 'tier': ('unchanged' if c['tier'] == before_tier else f'{before_tier} to {c["tier"]}'),
                      'signals': added})
@@ -3331,7 +3331,7 @@ def apply_longitudinal(d, adjustments):
 
 
 def longitudinal_from_csv(csv_path, d):
-    """Read the longitudinal CSV (all non-Aborted dinners for the flagged hosts, pulled by hand from Salesforce) and work out the parts that
+    """Read the deep dive CSV (all non-Aborted dinners for the flagged hosts, pulled by hand from Salesforce) and work out the parts that
     are pure counting (2026-10-28, Pammie), so the agent does not do them by hand: the recycled bounced guest list (+3), plus a few plain metrics.
     Returns (adjustments, metrics, skipped). The adjustments follow the --apply-longitudinal format; the agent reviews them, adds findings and
     judgment calls, and applies them. Only individual cases already in the review JSON get an entry."""
@@ -3386,10 +3386,10 @@ def longitudinal_from_csv(csv_path, d):
         entry = {'host': case.get('name'), 'add_signals': [], 'findings': [], 'counter': [], 'note': ''}
         if recycled:
             n = len(recycled)
-            entry['findings'].append(f"{n} guest address{'es' if n != 1 else ''} attended 2 or more of this host's dinners and now bounce (from the longitudinal report).")
+            entry['findings'].append(f"{n} guest address{'es' if n != 1 else ''} attended 2 or more of this host's dinners and now bounce (from the deep dive report).")
             if has_gi:
                 entry['add_signals'].append({'name': 'Recycled bounced guest list', 'points': 3,
-                                             'detail': f"{n} guest address{'es' if n != 1 else ''} at 2 or more dinners, all now bouncing (from the longitudinal report)"})
+                                             'detail': f"{n} guest address{'es' if n != 1 else ''} at 2 or more dinners, all now bouncing (from the deep dive report)"})
             else:
                 entry['note'] = 'Recycled bounced guest list found, but no other guest integrity signal this week, so it is not scored.'
         if p['lead_no_email']:
@@ -3421,8 +3421,8 @@ def write_action_files(ts_ui_data, sf_results=None, approved=None, date_str=None
     approved=None (the first script run, before staff review): nothing is approved yet, so every
     Nourishment Pause+ host is listed on stderr as not included and no file is written.
     After review, rerun with --files-from <json> --approved <file> to write the upload files.
-    Approval decides: an approved host goes in the files (once the longitudinal data is in, staff approve as usual);
-    an unapproved host held for a longitudinal report is labelled that way in the stderr list."""
+    Approval decides: an approved host goes in the files (once the deep dive data is in, staff approve as usual);
+    an unapproved host held for a deep dive report is labelled that way in the stderr list."""
     import csv as csv_module
     sf_results = sf_results or {}
     date_str = date_str or REVIEW_DATE.strftime('%Y%m%d')
@@ -3454,7 +3454,7 @@ def write_action_files(ts_ui_data, sf_results=None, approved=None, date_str=None
             row = {'Profile ID': platform_id, 'Email': email}
             is_approved = approved is not None and bool({email.lower(), cid15} & approved)
             if not is_approved:
-                reason = 'Held for longitudinal report' if email.lower() in held else 'Awaiting staff approval'
+                reason = 'Held for deep dive report' if email.lower() in held else 'Awaiting staff approval'
                 pending_rows.append({**row, 'Tier': tier, 'Reason': reason})
                 continue
             if not email or not platform_id:
@@ -3506,7 +3506,7 @@ if __name__ == '__main__':
         _ds = REVIEW_DATE.strftime('%Y%m%d')
         json.dump(_adj, open('/home/claude/longitudinal_adjustments_auto.json', 'w'), indent=2)
         json.dump(_met, open(f'/home/claude/longitudinal_metrics_{_ds}.json', 'w'), indent=2)
-        print("Longitudinal counting done. Review /home/claude/longitudinal_adjustments_auto.json, add your findings and any judgment signals, then run --apply-longitudinal. Do not write the analysis up in chat.")
+        print("Deep dive counting done. Review /home/claude/longitudinal_adjustments_auto.json, add your findings and any judgment signals, then run --apply-longitudinal. Do not write the analysis up in chat.")
         for _h in _adj['hosts']:
             _pts = sum(sg['points'] for sg in _h['add_signals'])
             print(f"  {_h['host']}: {'+' + str(_pts) + ' (' + ', '.join(sg['name'] for sg in _h['add_signals']) + ')' if _pts else 'no points added'}" + (f" | {_h['note']}" if _h['note'] else ''))
@@ -3518,7 +3518,7 @@ if __name__ == '__main__':
         sys.exit(0)
 
     if '--apply-longitudinal' in sys.argv:
-        # After the longitudinal report is analysed: python3 ts_weekly_run.py --apply-longitudinal ts_ui_data_YYYYMMDD.json adjustments.json
+        # After the deep dive report is analysed: python3 ts_weekly_run.py --apply-longitudinal ts_ui_data_YYYYMMDD.json adjustments.json
         _i = sys.argv.index('--apply-longitudinal')
         _jp, _ap = sys.argv[_i + 1], sys.argv[_i + 2]
         _d = json.load(open(_jp))
@@ -3529,7 +3529,7 @@ if __name__ == '__main__':
                 print(f"  - {_e}", file=sys.stderr)
             sys.exit(2)
         json.dump(_d, open(_jp, 'w'), indent=2)
-        print(f"Longitudinal findings applied to {_jp}. Present this file again; do not write the analysis up in chat.")
+        print(f"Deep dive findings applied to {_jp}. Present this file again; do not write the analysis up in chat.")
         for _r in _rows:
             print(f"  {_r['host']}: score {_r['score']}, tier {_r['tier']}" + (f" ({'; '.join(_r['signals'])})" if _r['signals'] else ''))
         sys.exit(0)
@@ -3619,7 +3619,7 @@ if __name__ == '__main__':
         except Exception:
             _existing = {}
         if _has_staff_work(_existing):
-            print(f"[T&S] REFUSING to overwrite {fname}: it holds staff overrides, dismissals or longitudinal findings. "
+            print(f"[T&S] REFUSING to overwrite {fname}: it holds staff overrides, dismissals or deep dive findings. "
                   f"Run diagnostics with --out-dir /home/claude/scratch, or add --force to rebuild it on purpose.", file=sys.stderr)
             sys.exit(2)
     with open(fname, 'w') as f:
@@ -3630,14 +3630,14 @@ if __name__ == '__main__':
     # is approved or actioned: python3 ts_weekly_run.py --files-from ts_ui_data_YYYYMMDD.json --approved approved.txt
     print("[T&S] Ban and DNN files are not written on the first run. After staff approve cases, run --files-from once.", file=sys.stderr)
 
-    # Longitudinal request: comma-separated host emails for the Salesforce longitudinal report filter
+    # Deep dive request: comma-separated host emails for the Salesforce deep dive report filter
     _lg = ts_ui_data.get('longitudinal_request', {})
     if _lg.get('count'):
         date_str = REVIEW_DATE.strftime('%Y%m%d')   # fixed 2026-10-22: was undefined after the pending-file removal
         lg_fname = f'/home/claude/ts_longitudinal_emails_{date_str}.txt'
         with open(lg_fname, 'w') as f:
             f.write(_lg['emails_csv'] + '\n')
-        print(f"[T&S] LONGITUDINAL DATA REQUESTED for {_lg['count']} Nourishment Pause host(s): {lg_fname}", file=sys.stderr)
+        print(f"[T&S] DEEP DIVE DATA REQUESTED for {_lg['count']} Nourishment Pause host(s): {lg_fname}", file=sys.stderr)
         print(f"[T&S] Host emails (comma separated): {_lg['emails_csv']}", file=sys.stderr)
 
     # Print the ts_ui_data block for the agent to output
