@@ -90,7 +90,7 @@ SIGNAL_WEIGHTS = {
     'sig10': 4,  # Suspicious phone number patterns (needs pairing, 50%+)
     'sig11': 4,  # Host/guest email similarity (needs pairing)
     'sig12_low': 4,  # Guest email bounces 50-74% (any type, corroborating)
-    'sig12': 9,  # Guest email bounces 75%+ (any type, high-confidence). 9 from 2026-10-21 (was 8) so it reaches Nourishment Pause standalone
+    'sig12': 9,  # Guest email bounces, 90%+ (any type, high-confidence): 9, reaches Nourishment Pause standalone. 75-89% weighs 8 (2026-10-29, Pammie): stays in Warning on its own
     'sig14_low': 3,  # Sequential guest PIDs 55-99% of profiled (corroborating, can score standalone)
     'sig14': 6,  # Sequential guest PIDs 100% of profiled (Warning-eligible standalone)
     'sig14_watch': 0,  # Sequential PIDs below threshold -- surfaces observed % but does not score
@@ -117,6 +117,7 @@ SIGNAL_WEIGHTS = {
 # Note: sig14 (100% PIDs) is NOT standalone -- requires at least one pairing signal
 # UPDATED 2026-10-22 (Pammie): sig1 (Shared device fingerprint, host and guest) is no longer standalone. A device or IP match shows where to
 # look, not what was found (a real family and a set of fake guests look the same on the device alone). Warning means bad or fake guests.
+MIN_GUESTS_FOR_BOUNCE = 3  # bounce signals need a dinner with at least 3 guests (2026-10-29, Pammie): a 1 or 2 guest dinner is not scored on bounces
 STANDALONE = {'sig12', 'sig21', 'sig22', 'sig23', 'sig8', 'sig25'}
 # Signals that make a case High confidence. Clearly fake guest identities (sig8) and Guest or host listed as a +1
 # (sig25) score on their own (2 points, guest misuse) but are NOT high-confidence evidence (fixed 2026-10-18).
@@ -563,11 +564,13 @@ def score_campaign(cid, camp, cross_dinner, high_volume, campaigns=None):
     bounced = [g for g in guests if is_bounce(g)]
     if n > 0:
         pct = len(bounced) / n
-        if pct >= 0.75:
+        if n >= MIN_GUESTS_FOR_BOUNCE and pct >= 0.75:
+            _w12 = 9 if pct >= 0.90 else 8            # 90%+ weighs 9, 75-89% weighs 8 (2026-10-29, Pammie)
             add_sig('sig12',
-                    f"Guest email bounces (75%+): {len(bounced)}/{n} ({round(100*pct)}%) -- any bounce type",
-                    f"{round(100*pct)}% ({len(bounced)}/{n} guests)", "75%+", True)
-        elif pct > 0.50:
+                    f"Guest email bounces ({'90%+' if pct >= 0.90 else '75-89%'}): {len(bounced)}/{n} ({round(100*pct)}%) -- any bounce type",
+                    f"{round(100*pct)}% ({len(bounced)}/{n} guests)", "75%+", True, contribution=_w12)
+            raw['sig12']['weight'] = _w12
+        elif n >= MIN_GUESTS_FOR_BOUNCE and pct > 0.50:
             add_sig('sig12_low',
                     f"Guest email bounces (50-74%): {len(bounced)}/{n} ({round(100*pct)}%) -- any bounce type",
                     f"{round(100*pct)}% ({len(bounced)}/{n} guests)", ">50-74% (needs pairing)", True)
@@ -576,7 +579,7 @@ def score_campaign(cid, camp, cross_dinner, high_volume, campaigns=None):
         # When half or more of a dinner's guests bounce, the remaining guests are suspect too. If most of
         # them use domains outside mainstream providers (temp-mail style domains such as mailserv.info,
         # p-ttc.top), score a corroborating signal. Gated on bounces, so it never scores on domain alone.
-        if pct >= 0.50:
+        if pct >= 0.50 and n >= MIN_GUESTS_FOR_BOUNCE:
             def _dom(g):
                 e = (g.get('Campaign Member Email', '') or '').strip().lower()
                 return e.split('@', 1)[1] if '@' in e else ''
@@ -1661,6 +1664,9 @@ def run(csv_path, lead_path=None, wednesday_mode=False):
         if score == 0:
             _gated = [v['name'] for k, v in scored_signals.items()
                       if k in FAKE_GUEST_SIGNALS and v.get('threshold_met') and not v.get('score_contribution')]
+            _small = 0 < len(camp.get('guests', [])) < MIN_GUESTS_FOR_BOUNCE and any((g.get('Mandrill Bounce Reason') or '').strip() for g in camp.get('guests', []))
+            if _small:
+                _gated = _gated + ['Guest email bounces on a dinner with fewer than 3 guests (not scored)']
             if _gated:
                 _h = camp['host']
                 below_threshold_list.append({'host': ((_h.get('First Name', '') + ' ' + _h.get('Last Name', '')).strip()),
