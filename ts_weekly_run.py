@@ -2561,6 +2561,13 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
             'similarity_pct': None,
         })
 
+    # PAUSED 2026-10-28 (Pammie): the weekly cross-host address review (flag cards, Google Sheet, #cross-host-address-eval post) is switched off
+    # because nobody covers it for now. A same-address match is instead flagged on the case card of a host who is in the review for other
+    # reasons (see cross_host_address below). A host who appears only in an address group is no longer surfaced at all.
+    if cross_host_flags:
+        print(f"[T&S] Cross-host address groups paused: {len(cross_host_flags)} group(s) not surfaced as flag cards; flagged on case cards only", file=sys.stderr)
+    cross_host_flags = []
+
     # IP-only groups are NOT added to cross_host_flags.
     # Shared IP without device corroboration is not actionable for the program team.
     # IP-adjacent hosts with their own scored signals surface as individual cases with a soft connection note.
@@ -2609,6 +2616,25 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
 
     if addr_flags:
         patterns.append(f"{len(addr_flags)} same-address group{'s' if len(addr_flags)>1 else ''} routed to program team.")
+
+    # Cross-host address flag (2026-10-28, Pammie): a host who is in the review for other reasons and shares a dinner address with another
+    # host this week is flagged explicitly on their card. Never scores on its own and never creates a case.
+    _same = pass1_output.get('same_address', {})
+    for _c in cases:
+        _hosts = ([(h.get('contact_id', ''), h.get('name', '')) for h in (_c.get('cluster_hosts') or [])] if _c.get('is_cluster')
+                  else [(_c.get('contact_id', ''), _c.get('name', ''))])
+        _mine = {(cid or '')[:15] for cid, _ in _hosts if cid}
+        _others = []
+        for _addr, _grp in _same.items():
+            if not any((g.get('contact_id') or '')[:15] in _mine for g in _grp):
+                continue
+            for g in _grp:
+                if (g.get('contact_id') or '')[:15] not in _mine and all(g.get('name') != o['name'] for o in _others):
+                    _others.append({'name': g.get('name', ''), 'dinner': g.get('dinner_name', ''), 'address': g.get('address', '')})
+        _c['cross_host_address'] = _others
+        if _others:
+            _names = ', '.join(o['name'] for o in _others[:4]) + (f" and {len(_others) - 4} more" if len(_others) > 4 else '')
+            _c.setdefault('bullets', []).insert(1, f"**Cross-host address:** this host's dinner address matches {_names} this week. Households and roommates are common, so this never scores alone; check it only if the other evidence points that way.")
 
     # Plus-ones whose bounce came from their Contact record (2026-10-22): say so on the card.
     for _c in cases:
