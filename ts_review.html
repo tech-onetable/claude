@@ -273,8 +273,8 @@ function buildApp() {
 // ── version ────────────────────────────────────────────────────────────────
 // Bump UI_VERSION and UI_UPDATED on every change to this file. The page checks GitHub's copy and
 // warns if it is newer. The check fails quietly (no warning) once the repo is private or offline.
-const UI_VERSION = 'v4.10';
-const UI_UPDATED = '2026-10-28';
+const UI_VERSION = 'v4.11';
+const UI_UPDATED = '2026-10-29';
 const UI_LATEST_URL = 'https://raw.githubusercontent.com/tech-onetable/claude/main/ts_review.html';
 let uiLatest = null; // {version, updated} from GitHub, or null if the check could not run
 function fmtUiDate(d) { try { return new Date(d + 'T12:00:00').toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'}); } catch(e) { return d; } }
@@ -622,6 +622,7 @@ function buildCaseCard(c) {
           <span class="badge ${tierClass(displayTier)}" style="font-size:11px">${tierLabel(displayTier, c.score)}</span>
           ${overrideChip(c)}
           ${crossHostChip(c)}
+          ${dismissedChip(c)}
           ${oppBadges(caseOpps(c))}
           <span style="font-size:12px;color:var(--text-sec);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${signalSummary}</span>
           ${actioned?'<span class="badge actioned" style="font-size:11px">✓ Reviewed</span>':''}
@@ -649,6 +650,7 @@ function buildCaseCard(c) {
           <span class="badge ${tierClass(displayTier)}">${c.is_cluster?'⚠ Cluster · ':''}${tierLabel(displayTier, c.score)}</span>
           ${overrideChip(c)}
           ${crossHostChip(c)}
+          ${dismissedChip(c)}
           ${(()=>{
             // Try bullets first, then narrative summary
             const cb = (c.bullets||[]).find(b=>b.startsWith('**Confidence:'));
@@ -1557,6 +1559,14 @@ function overrideChip(c) {
 
 // Cross-host address flag (2026-10-28): the weekly cross-host review is paused, so a same-address match shows only as a flag on a host who is
 // in the review for other reasons. The script puts the other hosts in c.cross_host_address.
+// Staff dismissal (2026-10-29): the agent records a dismissed host as c.dismissed = {by, date, reason}; no misuse found, no case, no files.
+function dismissedChip(c) {
+  if (!c.dismissed) return '';
+  const o = c.dismissed || {};
+  const tip = escAttr(`Dismissed${o.by?' by '+o.by:''}${o.date?' on '+o.date:''}${o.reason?': '+o.reason:''}`);
+  return `<span title="${tip}" style="font-size:11px;font-weight:600;color:var(--text-sec)">✕ dismissed, no misuse found</span>`;
+}
+
 function crossHostChip(c) {
   const o = c.cross_host_address || [];
   if (!o.length) return '';
