@@ -1328,14 +1328,14 @@ def build_case_json(cid, camp, scored_signals, score, tier, sf_data=None):
         'nourishment_eligible_this_dinner': nourishment_eligible_str,
         'nourishment_requested': nourishment_requested_str,
         'future_dinners': future_dinners_str,
-        'future_dinners_list': [{'id': d['id'], 'name': d['name'], 'date': d['date'], 'prior_status': d['status'], 'nourishment_sent': d.get('nourishment_sent', False)} for d in future_list] if tier in ('warning_dnn', 'suspension', 'deactivation') else [],
+        'future_dinners_list': [{'id': d['id'], 'name': d['name'], 'date': d['date'], 'prior_status': d['status'], 'nourishment_sent': d.get('nourishment_sent', False)} for d in future_list],
         'suspended': suspended,
         'dnn': dnn,
         'collapsed_summary': collapsed,
         'bullets': bullets[:5],
         'signals': build_signals_array(scored_signals),
         'score_breakdown': breakdown,
-        'host_context': None if tier == 'warning' else {
+        'host_context': None if (tier == 'warning' and not sf_data) else {
             'tenure': tenure_str,
             'dinners_hosted': str(int(dinners_hosted)) if dinners_hosted is not None else 'pending',
             'nourishment_received': nourishment,
@@ -1651,12 +1651,21 @@ def run(csv_path, lead_path=None, wednesday_mode=False):
     cross_host_pid_batches = []
     print(f"[T&S] Cross-host PID check: deferred to Pass 2 (agent-executed on confirmed clusters)", file=sys.stderr)
     all_scored = {}  # cid -> {score, scored_signals, host_data}
+    below_threshold_list = []   # hosts at score 0 whose guest integrity signals fired but were gated (2026-10-29)
     for cid, camp in campaigns.items():
         if not camp['host']:
             continue
         scored_signals = score_campaign(cid, camp, cross_dinner, high_volume, campaigns=all_campaigns)
         score = compute_total_score(scored_signals)
         tier = tier_from_score(score)
+        if score == 0:
+            _gated = [v['name'] for k, v in scored_signals.items()
+                      if k in FAKE_GUEST_SIGNALS and v.get('threshold_met') and not v.get('score_contribution')]
+            if _gated:
+                _h = camp['host']
+                below_threshold_list.append({'host': ((_h.get('First Name', '') + ' ' + _h.get('Last Name', '')).strip()),
+                                             'dinner': camp.get('name', ''), 'guests': len(camp.get('guests', [])),
+                                             'signals': _gated, 'campaign_id': cid})
 
         # Also auto-include suspended/DNN
         host = camp['host']
@@ -1938,6 +1947,7 @@ def run(csv_path, lead_path=None, wednesday_mode=False):
         'high_volume_fps': {fp: len(all_fps[fp]) for fp in high_volume},
         'outside_scope_links': compute_outside_scope_links(all_campaigns, campaigns, all_fps, high_volume, list(all_scored.keys()), cross_dinner),
         'lead_bounce_candidates': lead_bounce_candidates(campaigns),
+        'below_threshold': below_threshold_list,
         'total_dinners': len(campaigns),
         'field_alerts': field_alerts,
         'summary': {
@@ -1948,7 +1958,7 @@ def run(csv_path, lead_path=None, wednesday_mode=False):
         }
     }
 
-    fname = f'/home/claude/ts_pass1_{REVIEW_DATE.strftime("%Y%m%d")}.json'
+    fname = _out(f'ts_pass1_{REVIEW_DATE.strftime("%Y%m%d")}.json')
     with open(fname, 'w') as f:
         json.dump(output, f, indent=2)
     print(f"[T&S] Pass 1 results saved to {fname}", file=sys.stderr)
@@ -2782,7 +2792,7 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
             'proposed_signal_updates': [],
             'open_questions': [],
             'known_bad_devices': known_bad,
-            'below_threshold': [],
+            'below_threshold': pass1_output.get('below_threshold', [])[:40],
             'top_signals_this_week': [{'name': n, 'count': c} for n, c in top_signals],
         },
         'slack_summary': {
@@ -3024,11 +3034,45 @@ def add_agent_layer(ts_ui_data, pass1_output):
     return ts_ui_data
 
 
+OUT_DIR = '/home/claude'
+
+
+def _out(name):
+    """Output path (2026-10-29): --out-dir DIR sends everything a run writes to DIR, so a diagnostic run cannot overwrite the review JSON."""
+    os.makedirs(OUT_DIR, exist_ok=True)
+    return os.path.join(OUT_DIR, name)
+
+
+def _has_staff_work(d):
+    """True if a review JSON already carries staff work: tier overrides, dismissals or applied longitudinal findings."""
+    return any(c.get('tier_override') or c.get('dismissed') or c.get('longitudinal') for c in d.get('cases', []))
+
+
 def _effective_tier(case):
     """A case's tier after any staff tier_override ({"to_tier": ...}, older runs used "tier"); unknown tiers are ignored."""
+    if case.get('dismissed'):
+        return 'dismiss'                      # staff dismissed the host: no misuse found, no case, no files (2026-10-29)
     o = case.get('tier_override') or {}
     to = o.get('to_tier') or o.get('tier')
     return to if to in ('warning', 'warning_dnn', 'suspension', 'deactivation') else case.get('tier', '')
+
+
+def _money(v):
+    """'$3,460' -> 3460.0; anything unreadable -> 0.0."""
+    try:
+        return float(re.sub(r'[^0-9.]', '', str(v or '')) or 0)
+    except ValueError:
+        return 0.0
+
+
+def _is_coaching(c):
+    """A coaching-path case: final tier Warning with score and lifetime Nourishment at or above the thresholds. Counts staff downgrades from
+    Nourishment Pause too (2026-10-29), not only hosts the script flagged as Warning."""
+    if c.get('is_cluster') or c.get('dismissed') or _effective_tier(c) != 'warning':
+        return False
+    if c.get('high_nourishment'):
+        return True
+    return (c.get('score') or 0) >= HIGH_NOURISHMENT_MIN_SCORE and _money(c.get('nourishment_received')) >= HIGH_NOURISHMENT_THRESHOLD
 
 
 def recount_ts_ui_data(d):
@@ -3050,7 +3094,7 @@ def recount_ts_ui_data(d):
         return out
     sus, dnn, warn = _hostlist(('suspension', 'deactivation')), _hostlist(('warning_dnn',)), _hostlist(('warning',))
     # A coaching candidate stays a coaching candidate only while its final tier is still Warning
-    high_n = len([c for c in cases if c.get('high_nourishment') and _effective_tier(c) == 'warning' and not c.get('is_cluster')])
+    high_n = len([c for c in cases if _is_coaching(c)])
     run = d.setdefault('run', {})
     summ = run.setdefault('summary', {})
     acc = d.setdefault('accumulator_row', {})
@@ -3068,8 +3112,14 @@ def recount_ts_ui_data(d):
         'warnings': len(warn), 'high_nourishment': high_n, 'warnings_excluding_coaching': len(warn) - high_n,
         '_hosts': {'suspension': sus, 'dnn': dnn, 'warning': warn},
     })
-    run['high_nourishment_hosts'] = [h for h in run.get('high_nourishment_hosts', [])
-                                     if any(c.get('name') == h.get('name') and c.get('high_nourishment') and _effective_tier(c) == 'warning' for c in cases)]
+    dismissed = [c.get('name') for c in cases if c.get('dismissed')]
+    summ['dismissed'] = len(dismissed)
+    run['dismissed'] = dismissed
+    _have = {h.get('name'): h for h in run.get('high_nourishment_hosts', [])}
+    run['high_nourishment_hosts'] = [_have.get(c.get('name')) or {'name': c.get('name'), 'score': c.get('score'),
+                                                                   'nourishment_received': c.get('nourishment_received'),
+                                                                   'contact_id': c.get('contact_id'), 'staff_downgrade': True}
+                                     for c in cases if _is_coaching(c)]
     overridden = [c.get('name') for c in cases if _effective_tier(c) != c.get('tier')]
     run['counts_recounted_for_overrides'] = overridden
     after = {'suspension': summ['suspension'], 'warning_dnn': summ['warning_dnn'], 'warning': summ['warning'],
@@ -3375,12 +3425,14 @@ def write_action_files(ts_ui_data, sf_results=None, approved=None, date_str=None
     ban_rows, dnn_rows, pending_rows = [], [], []
     seen = set()
     for case in ts_ui_data.get('cases', []):
+        if case.get('dismissed'):
+            continue                          # dismissed by staff: nothing goes in any file
         override = case.get('tier_override') or {}
         # The instructions record overrides as {"from_tier", "to_tier"}; accept the older "tier" key too (fixed 2026-10-22).
         tier = override.get('to_tier') or override.get('tier') or case.get('tier', '')
         # High-Nourishment coaching hosts are Warning tier but get Do Not Nourish, so they belong in the DNN file
         # (never the ban file) once staff approve them (fixed 2026-10-22).
-        coaching_dnn = bool(case.get('high_nourishment')) and tier == 'warning'
+        coaching_dnn = _is_coaching(case)
         hosts = case.get('cluster_hosts', []) if case.get('is_cluster') else [case]
         for h in hosts:
             if tier not in ('warning_dnn', 'suspension', 'deactivation') and not coaching_dnn:
@@ -3408,7 +3460,7 @@ def write_action_files(ts_ui_data, sf_results=None, approved=None, date_str=None
                 ban_rows.append(row)
 
     def _write(name, rows, fields):
-        fname = f'/home/claude/{name}_{date_str}.csv'
+        fname = _out(f'{name}_{date_str}.csv')
         with open(fname, 'w', newline='') as f:
             w = csv_module.DictWriter(f, fieldnames=fields)
             w.writeheader()
@@ -3427,6 +3479,10 @@ def write_action_files(ts_ui_data, sf_results=None, approved=None, date_str=None
 
 if __name__ == '__main__':
     import os
+
+    if '--out-dir' in sys.argv:           # diagnostics: everything this run writes goes to DIR (2026-10-29)
+        OUT_DIR = sys.argv[sys.argv.index('--out-dir') + 1]
+        print(f"[T&S] Output directory: {OUT_DIR}", file=sys.stderr)
 
     if len(sys.argv) < 2:
         print("Usage: python3 ts_weekly_run.py <combined_csv_path> [--no-sf] [--wednesday]", file=sys.stderr)
@@ -3515,7 +3571,7 @@ if __name__ == '__main__':
         # Print the queries Pass 2 needs and stop. Run the queries through the Salesforce MCP connector, save the results as one
         # JSON file ({contact_id: record}), then rerun the script with --sf-results <file>.
         _qs = pass2_queries(pass1_output, skip_lookups='--contact-bounces' in sys.argv)
-        _qf = f'/home/claude/pass2_queries_{REVIEW_DATE.strftime("%Y%m%d")}.json'
+        _qf = _out(f'pass2_queries_{REVIEW_DATE.strftime("%Y%m%d")}.json')
         json.dump(_qs, open(_qf, 'w'), indent=2)
         print(f"[T&S] {len(_qs)} Pass 2 queries written to {_qf}", file=sys.stderr)
         print("```pass2_queries")
@@ -3550,7 +3606,16 @@ if __name__ == '__main__':
     ts_ui_data = add_agent_layer(ts_ui_data, pass1_output)
 
     # Save and print
-    fname = f'/home/claude/ts_ui_data_{REVIEW_DATE.strftime("%Y%m%d")}.json'
+    fname = _out(f'ts_ui_data_{REVIEW_DATE.strftime("%Y%m%d")}.json')
+    if os.path.exists(fname) and '--force' not in sys.argv:
+        try:
+            _existing = json.load(open(fname))
+        except Exception:
+            _existing = {}
+        if _has_staff_work(_existing):
+            print(f"[T&S] REFUSING to overwrite {fname}: it holds staff overrides, dismissals or longitudinal findings. "
+                  f"Run diagnostics with --out-dir /home/claude/scratch, or add --force to rebuild it on purpose.", file=sys.stderr)
+            sys.exit(2)
     with open(fname, 'w') as f:
         json.dump(ts_ui_data, f, indent=2)
     print(f"[T&S] Final JSON saved to {fname}", file=sys.stderr)
