@@ -273,8 +273,8 @@ function buildApp() {
 // ── version ────────────────────────────────────────────────────────────────
 // Bump UI_VERSION and UI_UPDATED on every change to this file. The page checks GitHub's copy and
 // warns if it is newer. The check fails quietly (no warning) once the repo is private or offline.
-const UI_VERSION = 'v4.9';
-const UI_UPDATED = '2026-10-22';
+const UI_VERSION = 'v4.10';
+const UI_UPDATED = '2026-10-28';
 const UI_LATEST_URL = 'https://raw.githubusercontent.com/tech-onetable/claude/main/ts_review.html';
 let uiLatest = null; // {version, updated} from GitHub, or null if the check could not run
 function fmtUiDate(d) { try { return new Date(d + 'T12:00:00').toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'}); } catch(e) { return d; } }
@@ -621,6 +621,7 @@ function buildCaseCard(c) {
           ${c.email?`<button onclick="event.stopPropagation();navigator.clipboard.writeText('${c.email}').then(()=>{this.textContent='✓';setTimeout(()=>this.textContent='Copy email',1200)})" style="font-size:11px;padding:2px 6px;border:0.5px solid var(--border);border-radius:4px;background:transparent;color:var(--text-sec);cursor:pointer">Copy email</button>`:''}
           <span class="badge ${tierClass(displayTier)}" style="font-size:11px">${tierLabel(displayTier, c.score)}</span>
           ${overrideChip(c)}
+          ${crossHostChip(c)}
           ${oppBadges(caseOpps(c))}
           <span style="font-size:12px;color:var(--text-sec);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${signalSummary}</span>
           ${actioned?'<span class="badge actioned" style="font-size:11px">✓ Reviewed</span>':''}
@@ -647,6 +648,7 @@ function buildCaseCard(c) {
           ${c.email?`<button onclick="event.stopPropagation();navigator.clipboard.writeText('${c.email}').then(()=>{this.textContent='✓';setTimeout(()=>this.textContent='Copy email',1200)})" style="font-size:11px;padding:2px 6px;border:0.5px solid var(--border);border-radius:4px;background:transparent;color:var(--text-sec);cursor:pointer" title="Copy host email">Copy email</button>`:''}`}
           <span class="badge ${tierClass(displayTier)}">${c.is_cluster?'⚠ Cluster · ':''}${tierLabel(displayTier, c.score)}</span>
           ${overrideChip(c)}
+          ${crossHostChip(c)}
           ${(()=>{
             // Try bullets first, then narrative summary
             const cb = (c.bullets||[]).find(b=>b.startsWith('**Confidence:'));
@@ -1551,6 +1553,15 @@ function overrideChip(c) {
     return `<span title="The tier_override on this case names a tier the screen does not know, so it was not applied." style="font-size:11px;font-weight:600;color:var(--wine)">⚠ override not applied: ${escAttr(c.tier_override_invalid)}</span>`;
   }
   return '';
+}
+
+// Cross-host address flag (2026-10-28): the weekly cross-host review is paused, so a same-address match shows only as a flag on a host who is
+// in the review for other reasons. The script puts the other hosts in c.cross_host_address.
+function crossHostChip(c) {
+  const o = c.cross_host_address || [];
+  if (!o.length) return '';
+  const tip = escAttr('Dinner address matches: ' + o.map(x => x.name).join(', ') + '. Households and roommates are common; this never scores alone.');
+  return `<span title="${tip}" style="font-size:11px;font-weight:600;color:var(--amber-dark)">⚑ cross-host address (${o.length})</span>`;
 }
 
 function loadData(data) {
