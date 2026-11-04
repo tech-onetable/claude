@@ -396,6 +396,25 @@ def parse_csv(contact_path, lead_path=None):
     return dict(filtered), len(all_rows)
 
 
+def _parse_report_date(v):
+    """Report dates come as M/D/YYYY; Salesforce dates as YYYY-MM-DD. Returns a datetime or None."""
+    v = str(v or '').strip()
+    for f, n in (('%Y-%m-%d', 10), ('%m/%d/%Y', None)):
+        try:
+            return datetime.strptime(v[:n] if n else v, f)
+        except ValueError:
+            pass
+    return None
+
+
+def _report_app_date(host):
+    """The host's application date from the report. The column is named 'Host Application Date' in some reports and
+    'Host Application Date OLD' in others (2026-11-04). The report value can differ from Salesforce and is blank for some hosts:
+    use it to shortlist, and confirm in Salesforce."""
+    h = host or {}
+    return _parse_report_date(h.get('Host Application Date') or h.get('Host Application Date OLD'))
+
+
 def build_fp_maps(campaigns):
     """Build cross-dinner FP map using full IDs.
     Includes dinner creation device IDs (Dinner_Created_Device_ID__c) so that
@@ -1221,7 +1240,7 @@ def build_case_json(cid, camp, scored_signals, score, tier, sf_data=None):
     prior_cases = sf_data.get('Number_of_T_S_Cases__c') if sf_data else None
     dinners_hosted = sf_data.get('Number_of_times_hosted__c') if sf_data else None
     benchmark = bool(sf_data.get('Had_Benchmark_Checkin__c')) if sf_data else None
-    app_date = sf_data.get('Host_Application_Date__c') if sf_data else host.get('Host Application Date', '')
+    app_date = sf_data.get('Host_Application_Date__c') if sf_data else (_report_app_date(host).strftime('%Y-%m-%d') if _report_app_date(host) else '')
 
     # Future dinners from Pass 2
     future_list = sf_data.get('_future_dinners', []) if sf_data else []
@@ -1525,6 +1544,67 @@ def compute_outside_scope_links(all_campaigns, scope_campaigns, all_fps, high_vo
             links[cid] = list(found.values())[:6]
     return links
 
+def compute_lookup_hosts(all_campaigns, scope_campaigns, high_volume, flagged15, gated_entries):
+    """Hosts who get a read-only Pass 2 lookup: no score, no case, no referral and no longitudinal request (2026-11-04, Pammie).
+    A high-confidence signal that did not score for lack of a pair still triggers a look at the host. Groups:
+      new_hosts          application date within 90 days of the run date (from the report; confirm in Salesforce)
+      blank_date_hosts   no application date in the report (confirm in Salesforce)
+      device_hosts       3+ guests share one non-high-volume device at a dinner, or the host's own device matches a guest's
+      chain_hosts        3+ hosts whose Platform Profile IDs are within 2 of each other (across every host in the report)
+      gated_pid_hosts    Sequential guest Profile IDs met its threshold but did not score
+    Hosts already flagged (score above 0) are excluded: they get the full Pass 2."""
+    groups = {k: {} for k in ('new_hosts', 'blank_date_hosts', 'device_hosts', 'chain_hosts', 'gated_pid_hosts')}
+
+    def nm(h):
+        return ((h.get('First Name', '') or '') + ' ' + (h.get('Last Name', '') or '')).strip()
+
+    for cid, camp in scope_campaigns.items():
+        h = camp.get('host')
+        h15 = ((h or {}).get('Contact ID') or '')[:15]
+        if not h or not h15 or h15 in flagged15:
+            continue
+        d = _report_app_date(h)
+        if d is None:
+            groups['blank_date_hosts'][h15] = nm(h)
+        elif (REVIEW_DATE - d).days <= 90:
+            groups['new_hosts'][h15] = nm(h)
+        counts = collections.Counter(fp for fp in ((g.get('RSVP Device Fingerprint ID') or '').strip() for g in camp.get('guests', []))
+                                     if fp and fp not in high_volume)
+        host_fps = {fp for fp in ((h.get(k) or '').strip() for k in ('RSVP Device Fingerprint ID', 'Dinner Created Device ID', 'Profile Created Device ID'))
+                    if fp and fp not in high_volume}
+        if any(n >= 3 for n in counts.values()) or (host_fps & set(counts)):
+            groups['device_hosts'][h15] = nm(h)
+    pids = {}
+    for camp in all_campaigns.values():
+        h = camp.get('host') or {}
+        h15 = (h.get('Contact ID') or '')[:15]
+        p = str(h.get('Platform Profile ID') or '').strip()
+        if h15 and p.isdigit() and h15 not in flagged15:
+            pids[int(p)] = (h15, nm(h))
+    ks = sorted(pids)
+    run_ = [ks[0]] if ks else []
+    for a in ks[1:] + [None]:
+        if a is not None and a - run_[-1] <= 2:
+            run_.append(a)
+            continue
+        if len(run_) >= 3:
+            for x in run_:
+                groups['chain_hosts'][pids[x][0]] = pids[x][1]
+        run_ = [a] if a is not None else []
+    for e in gated_entries:
+        if any('Sequential guest Profile IDs' in sg for sg in e.get('signals', [])) and e.get('host_id_15') and e['host_id_15'] not in flagged15:
+            groups['gated_pid_hosts'][e['host_id_15']] = e.get('host', '')
+    reasons = collections.defaultdict(list)
+    names = {}
+    for g, members in groups.items():
+        for i, n in members.items():
+            reasons[i].append(g)
+            names[i] = n
+    return {'groups': {g: sorted(m.values()) for g, m in groups.items()},
+            'counts': {g: len(m) for g, m in groups.items()},
+            'union_ids': sorted(reasons), 'reasons': dict(reasons), 'names': names}
+
+
 def run(csv_path, lead_path=None, wednesday_mode=False):
     print(f"[T&S] Parsing {csv_path}...", file=sys.stderr)
     if lead_path:
@@ -1572,17 +1652,18 @@ def run(csv_path, lead_path=None, wednesday_mode=False):
     total_guests = len(all_guest_rows)
     alerts = []
     if total_guests > 0:
+        # Read after the Device ID / IP Address Reservation fallback (2026-11-04): recent reports leave the RSVP columns empty on purpose
         CRITICAL_FIELDS = {
-            'RSVP Device Fingerprint ID': 'Device fingerprint signals (Signals 1-3) will not score',
-            'RSVP IP': 'IP-based signals (Signal 6) will not score',
-            'Platform Profile ID': 'Sequential PID signal (Signal 13-14) will not score',
+            'RSVP Device Fingerprint ID': 'The device signals (Shared device fingerprint, host and guest; Same device fingerprint across guests; Cross-dinner device fingerprint match) will not score',
+            'RSVP IP': 'Same IP across guests will not score',
+            'Platform Profile ID': 'Sequential guest Profile IDs will not score',
         }
         alerts = []
         for field, impact in CRITICAL_FIELDS.items():
             populated = sum(1 for g in all_guest_rows if g.get(field, '').strip() not in ('', 'nan', 'None'))
             pct = populated / total_guests
             if pct < 0.05:  # Less than 5% populated = critical alert
-                alerts.append(f"⚠ CRITICAL: '{field}' is {pct:.0%} populated ({populated}/{total_guests} guests). {impact}.")
+                alerts.append(f"⚠ CRITICAL: '{field}' (after the Device ID and IP Address Reservation fallback) is {pct:.0%} populated ({populated}/{total_guests} guests). {impact}.")
             elif pct < 0.20:  # Less than 20% = warning
                 alerts.append(f"⚠ WARNING: '{field}' is only {pct:.0%} populated ({populated}/{total_guests} guests). Signals may be underscoring.")
 
@@ -1669,7 +1750,7 @@ def run(csv_path, lead_path=None, wednesday_mode=False):
                 _gated = _gated + ['Guest email bounces on a dinner with fewer than 3 guests (not scored)']
             if _gated:
                 _h = camp['host']
-                below_threshold_list.append({'host': ((_h.get('First Name', '') + ' ' + _h.get('Last Name', '')).strip()),
+                below_threshold_list.append({'host_id_15': (_h.get('Contact ID') or '')[:15], 'host': ((_h.get('First Name', '') + ' ' + _h.get('Last Name', '')).strip()),
                                              'dinner': camp.get('name', ''), 'guests': len(camp.get('guests', [])),
                                              'signals': _gated, 'campaign_id': cid})
 
@@ -1954,6 +2035,9 @@ def run(csv_path, lead_path=None, wednesday_mode=False):
         'outside_scope_links': compute_outside_scope_links(all_campaigns, campaigns, all_fps, high_volume, list(all_scored.keys()), cross_dinner),
         'lead_bounce_candidates': lead_bounce_candidates(campaigns),
         'below_threshold': below_threshold_list,
+        'lookup_hosts': compute_lookup_hosts(all_campaigns, campaigns, high_volume,
+                                             {((campaigns[c]['host'] or {}).get('Contact ID') or '')[:15] for c in all_scored},
+                                             below_threshold_list),
         'total_dinners': len(campaigns),
         'field_alerts': field_alerts,
         'summary': {
@@ -2786,6 +2870,7 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
                                                 'dinner': l.get('dinner_name'), 'status': l.get('status'), 'linked_to': c.get('name')}
                                                for c in cases for l in (c.get('linked_outside_scope') or []) if (l.get('one_off_score') or 0) > 0],
             'field_alerts': pass1_output.get('field_alerts', []),
+            'lookup_hosts': {'counts': (pass1_output.get('lookup_hosts') or {}).get('counts', {}), 'hosts': (pass1_output.get('lookup_hosts') or {}).get('groups', {})},
             'wednesday_mode': wednesday_mode,
 
         },
@@ -3176,6 +3261,20 @@ def pass2_queries(pass1_output, skip_lookups=False):
         em = "', '".join(cands[i:i + 40])
         lookups.append({'name': f'plus-one bounce lookup batch {i // 40 + 1} (save the rows exactly as returned into the --contact-bounces file; if any rows come back, rerun this command with --contact-bounces so the host queries cover every host flagged after the correction)',
                         'soql': f"SELECT Email, Mandrill_Bounce_Reason__c, Mandrill_Bounce_Time_Date__c FROM Contact WHERE Email IN ('{em}') AND Mandrill_Bounce_Time_Date__c != null LIMIT 200"})
+    # Lookup-only hosts (2026-11-04): Contact and open Trust and Safety cases only (future dinners matter only for case hosts).
+    lk_ids = [sf_15_to_18(i) if len(i) == 15 else i for i in (pass1_output.get('lookup_hosts') or {}).get('union_ids', [])]
+    tag = 'LOOKUP-ONLY, read only (save these rows in a separate lookup file, NOT in the --sf-results file)'
+    for i in range(0, len(lk_ids), 50):
+        ids_str = "', '".join(lk_ids[i:i + 50])
+        out.append({'name': f'{tag}: contacts batch {i // 50 + 1}',
+                    'soql': f"SELECT {', '.join(CONTACT_FIELDS)} FROM Contact WHERE Id IN ('{ids_str}') LIMIT 50"})
+    for i in range(0, len(lk_ids), 30):
+        ids_str = "', '".join(lk_ids[i:i + 30])
+        out.append({'name': f'{tag}: open Trust and Safety cases batch {i // 30 + 1}',
+                    'soql': ("SELECT Id, CaseNumber, Subject, Status, ContactId, T_S_Type__c, CreatedDate FROM Case "
+                             f"WHERE ContactId IN ('{ids_str}') "
+                             "AND (T_S_Type__c = 'Misuse of Platform' OR Subject LIKE '%Trust and Safety%' OR Subject LIKE '%T&S%') "
+                             "AND Status != 'Closed' LIMIT 100")})
     return lookups + out
 
 
@@ -3580,6 +3679,9 @@ if __name__ == '__main__':
         _qf = _out(f'pass2_queries_{REVIEW_DATE.strftime("%Y%m%d")}.json')
         json.dump(_qs, open(_qf, 'w'), indent=2)
         print(f"[T&S] {len(_qs)} Pass 2 queries written to {_qf}", file=sys.stderr)
+        _lk = (pass1_output.get('lookup_hosts') or {})
+        print(f"[T&S] Lookup-only hosts (read only: no score, case, referral or longitudinal request): {len(_lk.get('union_ids', []))} "
+              f"({', '.join(f'{k.replace(chr(95), chr(32))} {v}' for k, v in (_lk.get('counts') or {}).items())})", file=sys.stderr)
         print("```pass2_queries")
         print(json.dumps(_qs, indent=2))
         print("```")
