@@ -77,9 +77,9 @@ HIGH_VOLUME_THRESHOLD = 8    # FP on 8+ dinners = shared infrastructure, not sco
 HIGH_NOURISHMENT_THRESHOLD = 2500
 HIGH_NOURISHMENT_MIN_SCORE = 5
 SIGNAL_WEIGHTS = {
-    'sig1': 7,   # Shared device FP host+guest. NOT standalone since 2026-10-22: scores only with a bad or fake guest signal
+    'sig1': 7,   # Shared device FP host+guest, top band (90%+); 75-89% weighs 6, 51-74% weighs 5 (2026-11-04). NOT standalone since 2026-10-22: scores only with a bad or fake guest signal
     'sig2': 7,   # Cross-dinner device FP match (needs pairing)
-    'sig3': 5,   # Same device FP across guests (needs pairing)
+    'sig3': 5,   # Same device FP across guests, top band (90%+); 75-89% weighs 4, 51-74% weighs 3 (2026-11-04). Needs pairing
     'sig4': 5,   # Sequential RSVP timing -- not implemented (data not in CSV)
     'sig5': 3,   # VPN use (needs pairing, 30%+ of guests from known VPN ranges)
     'sig6': 0,   # Geographic mismatch (watch flag only)
@@ -559,9 +559,12 @@ def score_campaign(cid, camp, cross_dinner, high_volume, campaigns=None):
             sig1_met = True
         _which = ', '.join(sorted({host_devices[fp] for fp in shared})) or "host's devices"
         _fpshow = ', '.join(sorted(matched_devices)) if matched_devices else (host_fp or _creation_dev or _profile_dev)
+        _w1 = 7 if pct >= 0.90 else (6 if pct >= 0.75 else 5)      # bands (2026-11-04, Pammie): 51-74% weighs 5, 75-89% weighs 6, 90%+ weighs 7
         add_sig('sig1',
                 f"Shared device fingerprint host and guest: {len(shared)}/{n} ({round(100*pct)}%) [{_fpshow}] ({_which})",
-                f"{round(100*pct)}% ({len(shared)}/{n} guests)", ">50% (min 3 guests; scores only with a bad or fake guest signal)", met)
+                f"{round(100*pct)}% ({len(shared)}/{n} guests)", "More than 50% (min 3 guests; bands 51-74% 5, 75-89% 6, 90%+ 7; scores only with a bad or fake guest signal)", met,
+                contribution=(_w1 if met else 0))
+        raw['sig1']['weight'] = _w1
 
     # ── Signal 2: Cross-dinner FP match (needs pairing, any, skip high-volume) ──
     # Only score if 2+ guests in this dinner share the cross-dinner FP
@@ -620,9 +623,12 @@ def score_campaign(cid, camp, cross_dinner, high_volume, campaigns=None):
                 # Same fact as Shared device fingerprint, host and guest: score it once (Pammie, 2026-10-22)
                 met = False
                 _note = " (not scored, same evidence as Shared device fingerprint, host and guest)"
+            _w3 = 5 if pct >= 0.90 else (4 if pct >= 0.75 else 3)      # bands (2026-11-04, Pammie): 51-74% weighs 3, 75-89% weighs 4, 90%+ weighs 5
             add_sig('sig3',
                     f"Same device fingerprint across guests: {top_count}/{n} ({round(100*pct)}%) [{top_fp}]{_note}",
-                    f"{round(100*pct)}% ({top_count}/{n} guests)", "50%+ and ≥3 guests sharing (min 3 guests total)", met)
+                    f"{round(100*pct)}% ({top_count}/{n} guests)", "More than 50% and 3+ guests sharing (min 3 guests total; bands 51-74% 3, 75-89% 4, 90%+ 5)", met,
+                    contribution=(_w3 if met else 0))
+            raw['sig3']['weight'] = _w3
 
     # ── Signal 12: Guest email bounces (any type -- hard or reject combined) ──
     # 50-74% = weight 4 corroborating; 75%+ = weight 9 high-confidence Nourishment Pause eligible
