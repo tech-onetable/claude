@@ -1552,8 +1552,9 @@ def compute_lookup_hosts(all_campaigns, scope_campaigns, high_volume, flagged15,
       device_hosts       3+ guests share one non-high-volume device at a dinner, or the host's own device matches a guest's
       chain_hosts        3+ hosts whose Platform Profile IDs are within 2 of each other (across every host in the report)
       gated_pid_hosts    Sequential guest Profile IDs met its threshold but did not score
+      gated_bounce_hosts guest email bounces at 50 to 74% met their threshold but did not score (a pair is needed below 75%)
     Hosts already flagged (score above 0) are excluded: they get the full Pass 2."""
-    groups = {k: {} for k in ('new_hosts', 'blank_date_hosts', 'device_hosts', 'chain_hosts', 'gated_pid_hosts')}
+    groups = {k: {} for k in ('new_hosts', 'blank_date_hosts', 'device_hosts', 'chain_hosts', 'gated_pid_hosts', 'gated_bounce_hosts')}
 
     def nm(h):
         return ((h.get('First Name', '') or '') + ' ' + (h.get('Last Name', '') or '')).strip()
@@ -1592,8 +1593,12 @@ def compute_lookup_hosts(all_campaigns, scope_campaigns, high_volume, flagged15,
                 groups['chain_hosts'][pids[x][0]] = pids[x][1]
         run_ = [a] if a is not None else []
     for e in gated_entries:
-        if any('Sequential guest Profile IDs' in sg for sg in e.get('signals', [])) and e.get('host_id_15') and e['host_id_15'] not in flagged15:
+        if not e.get('host_id_15') or e['host_id_15'] in flagged15:
+            continue
+        if any('Sequential guest Profile IDs' in sg for sg in e.get('signals', [])):
             groups['gated_pid_hosts'][e['host_id_15']] = e.get('host', '')
+        if any('Guest email bounces (50-74%)' in sg for sg in e.get('signals', [])):
+            groups['gated_bounce_hosts'][e['host_id_15']] = e.get('host', '')
     reasons = collections.defaultdict(list)
     names = {}
     for g, members in groups.items():
