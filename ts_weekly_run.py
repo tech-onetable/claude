@@ -415,6 +415,34 @@ def _report_app_date(host):
     return _parse_report_date(h.get('Host Application Date') or h.get('Host Application Date OLD'))
 
 
+def _grant_app_date(apps):
+    """The host's application date from their grant applications (Grant_Applicant__c, linked through Primary_Applicant__c) when the Contact's
+    Host_Application_Date__c is blank (2026-11-04, Pammie). The created date matched Host_Application_Date__c for every host that has both.
+    Uses the earliest Approved or Host application if there is one, otherwise the earliest of any. Returns a datetime or None."""
+    rows = []
+    for a in apps or []:
+        d = _parse_report_date(str(a.get('created') or a.get('CreatedDate') or '')[:10])
+        if d:
+            rows.append((d, str(a.get('status') or a.get('Application_Status__c') or '')))
+    if not rows:
+        return None
+    pool = [r for r in rows if r[1] in ('Approved', 'Host')] or rows
+    return min(pool, key=lambda r: r[0])[0]
+
+
+def _effective_app_date(sf_data, host):
+    """YYYY-MM-DD string: the Salesforce Contact date, else the earliest grant application date, else the report date, else ''."""
+    sf = sf_data or {}
+    v = str(sf.get('Host_Application_Date__c') or '')[:10]
+    if v:
+        return v
+    g = _grant_app_date(sf.get('_grant_apps'))
+    if g:
+        return g.strftime('%Y-%m-%d')
+    r = _report_app_date(host)
+    return r.strftime('%Y-%m-%d') if r else ''
+
+
 def build_fp_maps(campaigns):
     """Build cross-dinner FP map using full IDs.
     Includes dinner creation device IDs (Dinner_Created_Device_ID__c) so that
@@ -1240,7 +1268,7 @@ def build_case_json(cid, camp, scored_signals, score, tier, sf_data=None):
     prior_cases = sf_data.get('Number_of_T_S_Cases__c') if sf_data else None
     dinners_hosted = sf_data.get('Number_of_times_hosted__c') if sf_data else None
     benchmark = bool(sf_data.get('Had_Benchmark_Checkin__c')) if sf_data else None
-    app_date = sf_data.get('Host_Application_Date__c') if sf_data else (_report_app_date(host).strftime('%Y-%m-%d') if _report_app_date(host) else '')
+    app_date = _effective_app_date(sf_data, host)
 
     # Future dinners from Pass 2
     future_list = sf_data.get('_future_dinners', []) if sf_data else []
@@ -2221,7 +2249,7 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
                 nourishment_verified = False
 
             # Build host_context for this cluster member
-            app_date = sf.get('Host_Application_Date__c', d.get('host_app', ''))
+            app_date = str(sf.get('Host_Application_Date__c') or '')[:10] or ((_grant_app_date(sf.get('_grant_apps')) or datetime.min).strftime('%Y-%m-%d') if _grant_app_date(sf.get('_grant_apps')) else d.get('host_app', ''))
             if app_date:
                 try:
                     app_dt = datetime.strptime(str(app_date)[:10], '%Y-%m-%d')
@@ -3258,6 +3286,11 @@ def pass2_queries(pass1_output, skip_lookups=False):
                              f"WHERE ContactId IN ('{ids_str}') "
                              "AND (T_S_Type__c = 'Misuse of Platform' OR Subject LIKE '%Trust and Safety%' OR Subject LIKE '%T&S%') "
                              "AND Status != 'Closed' LIMIT 100")})
+    for i in range(0, len(ids18), 40):
+        ids_str = "', '".join(ids18[i:i + 40])
+        out.append({'name': f"grant applications batch {i // 40 + 1} (save as each Contact's _grant_apps; used when the Contact's Host_Application_Date__c is blank)",
+                    'soql': ("SELECT Primary_Applicant__c, CreatedDate, Application_Date__c, Date_Host_Approved__c, Application_Status__c FROM Grant_Applicant__c "
+                             f"WHERE Primary_Applicant__c IN ('{ids_str}') ORDER BY Primary_Applicant__c, CreatedDate LIMIT 200")})
     # Plus-one bounce lookup (2026-10-22): list these FIRST so the agent runs them before the host queries
     # Once --contact-bounces is supplied the lookup is done: do not relist emails that were already checked (2026-10-28)
     cands = [] if skip_lookups else [e.replace("'", chr(92) + "'") for e in pass1_output.get('lead_bounce_candidates', [])]
@@ -3280,6 +3313,11 @@ def pass2_queries(pass1_output, skip_lookups=False):
                              f"WHERE ContactId IN ('{ids_str}') "
                              "AND (T_S_Type__c = 'Misuse of Platform' OR Subject LIKE '%Trust and Safety%' OR Subject LIKE '%T&S%') "
                              "AND Status != 'Closed' LIMIT 100")})
+    for i in range(0, len(lk_ids), 40):
+        ids_str = "', '".join(lk_ids[i:i + 40])
+        out.append({'name': f'{tag}: grant applications batch {i // 40 + 1} (the application date when the Contact\'s is blank)',
+                    'soql': ("SELECT Primary_Applicant__c, CreatedDate, Application_Date__c, Date_Host_Approved__c, Application_Status__c FROM Grant_Applicant__c "
+                             f"WHERE Primary_Applicant__c IN ('{ids_str}') ORDER BY Primary_Applicant__c, CreatedDate LIMIT 200")})
     return lookups + out
 
 
@@ -3328,6 +3366,9 @@ def load_sf_results(path):
         r.setdefault('Id', k if len(k) == 18 else r.get('Id', k))
         r['_future_dinners'] = [_norm_dinner(d) for d in (r.get('_future_dinners') or [])]
         r['_open_ts_cases'] = [_norm_case(c) for c in (r.get('_open_ts_cases') or [])]
+        r['_grant_apps'] = [{'created': str(g.get('created') or g.get('CreatedDate') or '')[:10], 'status': g.get('status') or g.get('Application_Status__c') or '',
+                             'approved': str(g.get('approved') or g.get('Date_Host_Approved__c') or '')[:10]}
+                            for g in (r.get('_grant_apps') or []) if isinstance(g, dict)]
         out[k[:15]] = r
         if len(k) == 18:
             out[k] = r
