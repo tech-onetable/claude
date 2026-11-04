@@ -3633,7 +3633,7 @@ if __name__ == '__main__':
                 print(f"  - {_e}", file=sys.stderr)
             sys.exit(2)
         json.dump(_d, open(_jp, 'w'), indent=2)
-        print(f"Deep dive findings applied to {_jp}. Present this file again; do not write the analysis up in chat.")
+        print(f"Deep dive findings applied to {_jp}. Do not present the file again unless Pammie asks, and do not write the analysis up in chat.")
         for _r in _rows:
             print(f"  {_r['host']}: score {_r['score']}, tier {_r['tier']}" + (f" ({'; '.join(_r['signals'])})" if _r['signals'] else ''))
         sys.exit(0)
