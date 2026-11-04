@@ -124,7 +124,7 @@ STANDALONE = {'sig12', 'sig21', 'sig22', 'sig23', 'sig8', 'sig25'}
 HIGH_CONFIDENCE_STANDALONE = (STANDALONE - {'sig8', 'sig25'}) | {'sig14'}
 # sig14 (100% sequential guest Profile IDs) counts as High confidence per the 2026 policy, but only when it actually
 # scores, and it only scores when paired with another signal (decided 2026-10-18). sig14_low never does.
-GUEST_INTEGRITY_SIGNALS = {'sig12', 'sig12_low', 'sig14', 'sig14_low', 'sig10', 'sig24', 'sig8', 'sig25'}
+GUEST_INTEGRITY_SIGNALS = {'sig12', 'sig12_low', 'sig14', 'sig14_low', 'sig10', 'sig24', 'sig8', 'sig25', 'sig15'}   # sig15 added 2026-11-04 (Pammie)
 # Household-type network signals (2026-10-22, Pammie): these score ONLY when at least one bad or fake guest signal also met its
 # threshold. Alone they score 0 and the host drops out of the review (truly bad actors are found through other means).
 HOUSEHOLD_NETWORK_SIGNALS = {'sig1', 'sig3', 'sig7'}      # host+guest device, same device across guests, same IP across guests
@@ -225,6 +225,36 @@ def load_contact_bounces(path):
         CONTACT_BOUNCES[email] = {'reason': reason, 'date': date}
         n += 1
     print(f"[T&S] Contact bounce lookup: {n} bounced Contact email(s) loaded", file=sys.stderr)
+    return n
+
+
+# Lookup history (2026-11-04, Pammie): for hosts with a gated high-confidence signal, one Salesforce query returns the guest addresses that bounce
+# and appear at 2 or more of the host's dinners in the last year. {host contact id (15): {'addresses': n, 'min': dinners, 'max': dinners}}.
+LOOKUP_HISTORY = {}
+
+
+def load_lookup_history(path):
+    """Read the lookup history rows exactly as the connector returns them: Host__c (or Campaign.Host__c), Campaign_Member_Email__c, dinners."""
+    raw = json.load(open(path))
+    if isinstance(raw, dict) and isinstance(raw.get('records'), list):
+        raw = raw['records']
+    n = 0
+    for r in raw if isinstance(raw, list) else []:
+        if not isinstance(r, dict):
+            continue
+        host = str(r.get('Host__c') or r.get('Campaign.Host__c') or '')[:15]
+        email = (r.get('Campaign_Member_Email__c') or '').strip().lower()
+        try:
+            d = int(r.get('dinners') or r.get('expr0') or 0)
+        except (TypeError, ValueError):
+            d = 0
+        if not host or not email or d < 2:
+            continue
+        h = LOOKUP_HISTORY.setdefault(host, {'addresses': 0, 'min': d, 'max': d})
+        h['addresses'] += 1
+        h['min'], h['max'] = min(h['min'], d), max(h['max'], d)
+        n += 1
+    print(f"[T&S] Lookup history: {n} recycled bounced guest address(es) for {len(LOOKUP_HISTORY)} host(s)", file=sys.stderr)
     return n
 
 
@@ -991,6 +1021,14 @@ def score_campaign(cid, camp, cross_dinner, high_volume, campaigns=None):
                     f"AI-generated or templated description: {ai_flag[:80]}",
                     "AI Not Pass flag present", "Needs guest integrity signal", has_gi)
 
+    # ── Signal 15, from the lookup history (2026-11-04, Pammie) ─────────────────
+    _hh = LOOKUP_HISTORY.get(((host or {}).get('Contact ID') or '')[:15])
+    if _hh:
+        _na = _hh['addresses']
+        add_sig('sig15',
+                f"Recycled bounced guest list: {_na} guest address{'es' if _na != 1 else ''} at 2 or more of this host's dinners in the last year, all with a recorded bounce (lookup history query)",
+                f"{_na} address{'es' if _na != 1 else ''}, {(str(_hh['min']) + ' to ' + str(_hh['max'])) if _hh['min'] != _hh['max'] else str(_hh['max'])} dinners each", "Same exact email at 2+ dinners and bouncing", True)
+
     # ── Apply pairing rules ──────────────────────────────────────────────────
     # Step 1: which signals met their threshold?
     threshold_met = {k for k, v in raw.items() if v['threshold_met']}
@@ -1633,7 +1671,9 @@ def compute_lookup_hosts(all_campaigns, scope_campaigns, high_volume, flagged15,
         for i, n in members.items():
             reasons[i].append(g)
             names[i] = n
-    return {'groups': {g: sorted(m.values()) for g, m in groups.items()},
+    history_ids = sorted(set(groups['device_hosts']) | set(groups['gated_pid_hosts']) | set(groups['gated_bounce_hosts']))
+    return {'history_ids': history_ids,
+            'groups': {g: sorted(m.values()) for g, m in groups.items()},
             'counts': {g: len(m) for g, m in groups.items()},
             'union_ids': sorted(reasons), 'reasons': dict(reasons), 'names': names}
 
@@ -2774,6 +2814,14 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
             _names = ', '.join(o['name'] for o in _others[:4]) + (f" and {len(_others) - 4} more" if len(_others) > 4 else '')
             _c.setdefault('bullets', []).insert(1, f"**Cross-host address:** this host's dinner address matches {_names} this week. Households and roommates are common, so this never scores alone; check it only if the other evidence points that way.")
 
+    # Found in the lookup (2026-11-04, Pammie): a host whose gated high-confidence signal scored because the lookup history found a recycled bounced guest list.
+    for _c in cases:
+        _hh = LOOKUP_HISTORY.get((_c.get('contact_id') or '')[:15])
+        if _hh and any(sg.get('name') == 'Recycled bounced guest list' and (sg.get('score_contribution') or 0) > 0 for sg in _c.get('signals', [])):
+            _na = _hh['addresses']
+            _c['found_in_lookup'] = dict(_hh)
+            _c.setdefault('bullets', []).insert(1, f"**Found in the lookup:** {_na} guest address{'es' if _na != 1 else ''} bounced and appeared at {(str(_hh['min']) + ' to ' + str(_hh['max'])) if _hh['min'] != _hh['max'] else str(_hh['max'])} of this host's dinners in the last year. That pairs with the signal that did not score alone, so both now score.")
+
     # Plus-ones whose bounce came from their Contact record (2026-10-22): say so on the card.
     for _c in cases:
         _cids = [h.get('campaign_id') for h in (_c.get('cluster_hosts') or [])] if _c.get('is_cluster') else [_c.get('campaign_id')]
@@ -3318,6 +3366,16 @@ def pass2_queries(pass1_output, skip_lookups=False):
         out.append({'name': f'{tag}: grant applications batch {i // 40 + 1} (the application date when the Contact\'s is blank)',
                     'soql': ("SELECT Primary_Applicant__c, CreatedDate, Application_Date__c, Date_Host_Approved__c, Application_Status__c FROM Grant_Applicant__c "
                              f"WHERE Primary_Applicant__c IN ('{ids_str}') ORDER BY Primary_Applicant__c, CreatedDate LIMIT 200")})
+    hist_ids = [sf_15_to_18(i) if len(i) == 15 else i for i in (pass1_output.get('lookup_hosts') or {}).get('history_ids', [])]
+    since = (REVIEW_DATE - timedelta(days=365)).strftime('%Y-%m-%d')
+    for i in range(0, len(hist_ids), 40):
+        ids_str = "', '".join(hist_ids[i:i + 40])
+        out.append({'name': (f'{tag}: history batch {i // 40 + 1} (recycled bounced guest addresses for hosts with a gated high-confidence signal; '
+                             'save the rows exactly as returned and pass the file with --lookup-history)'),
+                    'soql': ("SELECT Campaign.Host__c, Campaign_Member_Email__c, COUNT_DISTINCT(CampaignId) dinners FROM CampaignMember "
+                             f"WHERE Campaign.Host__c IN ('{ids_str}') AND Status != 'Host' AND Campaign_Member_Email__c != null "
+                             f"AND Contact.Mandrill_Bounce_Time_Date__c != null AND Campaign.StartDate >= {since} "
+                             "GROUP BY Campaign.Host__c, Campaign_Member_Email__c HAVING COUNT_DISTINCT(CampaignId) >= 2")})
     return lookups + out
 
 
@@ -3529,7 +3587,10 @@ def longitudinal_from_csv(csv_path, d):
         has_gi = any((sg.get('score_contribution') or 0) > 0 and not sg.get('longitudinal') and any(k in (sg.get('name') or '').lower() for k in GI)
                      for sg in case.get('signals', []))
         entry = {'host': case.get('name'), 'add_signals': [], 'findings': [], 'counter': [], 'note': ''}
-        if recycled:
+        _already = any(sg.get('name') == 'Recycled bounced guest list' and (sg.get('score_contribution') or 0) > 0 for sg in case.get('signals', []))
+        if recycled and _already:
+            entry['note'] = 'Recycled bounced guest list was already scored from the lookup history, so it is not added again.'
+        elif recycled:
             n = len(recycled)
             entry['findings'].append(f"{n} guest address{'es' if n != 1 else ''} attended 2 or more of this host's dinners and now bounce (from the deep dive report).")
             if has_gi:
@@ -3631,6 +3692,8 @@ def write_action_files(ts_ui_data, sf_results=None, approved=None, date_str=None
 if __name__ == '__main__':
     import os
 
+    if '--lookup-history' in sys.argv:    # recycled bounced guest history for gated high-confidence hosts (2026-11-04)
+        load_lookup_history(sys.argv[sys.argv.index('--lookup-history') + 1])
     if '--out-dir' in sys.argv:           # diagnostics: everything this run writes goes to DIR (2026-10-29)
         OUT_DIR = sys.argv[sys.argv.index('--out-dir') + 1]
         print(f"[T&S] Output directory: {OUT_DIR}", file=sys.stderr)
