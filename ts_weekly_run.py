@@ -445,6 +445,15 @@ def _report_app_date(host):
     return _parse_report_date(h.get('Host Application Date') or h.get('Host Application Date OLD'))
 
 
+TS_CLOSED = ('Closed - Resolved', 'Closed - Unresolved')
+
+
+def _truly_open(c):
+    """A Trust and Safety case is open when its Trust and Safety status is not closed. The standard Case Status stays at New on closed
+    Warning cases (found 2026-11-05), so it cannot decide this."""
+    return (c.get('ts_status') or '') not in TS_CLOSED
+
+
 def _grant_app_date(apps):
     """The host's application date from their grant applications (Grant_Applicant__c, linked through Primary_Applicant__c) when the Contact's
     Host_Application_Date__c is blank (2026-11-04, Pammie). The created date matched Host_Application_Date__c for every host that has both.
@@ -1443,7 +1452,8 @@ def build_case_json(cid, camp, scored_signals, score, tier, sf_data=None):
         },
         'cluster_note': None,
         'cluster_hosts': [],
-        'open_ts_cases': sf_data.get('_open_ts_cases', []) if sf_data else [],
+        'open_ts_cases': [c for c in (sf_data.get('_open_ts_cases', []) if sf_data else []) if _truly_open(c)],
+        'prior_ts_cases_list': [c for c in (sf_data.get('_open_ts_cases', []) if sf_data else []) if not _truly_open(c)],
     }
 
 
@@ -2616,7 +2626,7 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
         camp = campaigns[cid]
 
         # If host has open T&S cases, surface in existing_cases rather than scored queue
-        open_cases = sf.get('_open_ts_cases', [])
+        open_cases = [c for c in sf.get('_open_ts_cases', []) if _truly_open(c)]
         if open_cases:
             host = (camp.get('host') or {})
             contact_id = host.get('Contact ID', '') if host else ''
@@ -3235,6 +3245,25 @@ def _effective_tier(case):
     return to if to in ('warning', 'warning_dnn', 'suspension', 'deactivation') else case.get('tier', '')
 
 
+def _member_tier(case, m):
+    """Final tier of one cluster member. A member can carry its own tier_override or dismissed, so staff can split a cluster
+    (2026-11-05, Pammie); otherwise the member takes the cluster's final tier."""
+    if m.get('dismissed'):
+        return 'dismiss'
+    o = m.get('tier_override') or {}
+    to = o.get('to_tier') or o.get('tier')
+    return to if to in ('warning', 'warning_dnn', 'suspension', 'deactivation') else _effective_tier(case)
+
+
+def _member_is_coaching(case, m):
+    """A cluster member on the coaching path: final tier Warning and either a staff coaching_exception or the usual score and Nourishment bars."""
+    if _member_tier(case, m) != 'warning':
+        return False
+    if m.get('coaching_exception') or m.get('high_nourishment'):
+        return True
+    return (m.get('score') or 0) >= HIGH_NOURISHMENT_MIN_SCORE and _money(m.get('nourishment_received')) >= HIGH_NOURISHMENT_THRESHOLD
+
+
 def _money(v):
     """'$3,460' -> 3460.0; anything unreadable -> 0.0."""
     try:
@@ -3248,7 +3277,7 @@ def _is_coaching(c):
     Nourishment Pause too (2026-10-29), not only hosts the script flagged as Warning."""
     if c.get('is_cluster') or c.get('dismissed') or _effective_tier(c) != 'warning':
         return False
-    if c.get('high_nourishment'):
+    if c.get('high_nourishment') or c.get('coaching_exception'):      # coaching_exception: staff exception to the score or Nourishment bar (2026-11-05)
         return True
     return (c.get('score') or 0) >= HIGH_NOURISHMENT_MIN_SCORE and _money(c.get('nourishment_received')) >= HIGH_NOURISHMENT_THRESHOLD
 
@@ -3258,30 +3287,26 @@ def recount_ts_ui_data(d):
     accumulator row and the combined Slack are built from final tiers instead of being corrected by hand. Case numbers,
     dinners moved, guest case ranges and notes are left exactly as they are. Returns (before, after) count dicts."""
     cases = d.get('cases', [])
-    def _hosts(c):
-        return (len(c.get('cluster_hosts') or []) or 1) if c.get('is_cluster') else 1
     def _hostlist(tiers):
         out = []
         for c in cases:
-            if _effective_tier(c) not in tiers:
-                continue
             if c.get('is_cluster') and c.get('cluster_hosts'):
-                out += [{'name': h.get('name', ''), 'campaign_id': h.get('campaign_id', '')} for h in c['cluster_hosts']]
-            else:
+                out += [{'name': h.get('name', ''), 'campaign_id': h.get('campaign_id', '')} for h in c['cluster_hosts']
+                        if _member_tier(c, h) in tiers]
+            elif _effective_tier(c) in tiers:
                 out.append({'name': c.get('name', ''), 'campaign_id': c.get('campaign_id', '')})
         return out
     sus, dnn, warn = _hostlist(('suspension', 'deactivation')), _hostlist(('warning_dnn',)), _hostlist(('warning',))
     # A coaching candidate stays a coaching candidate only while its final tier is still Warning
-    high_n = len([c for c in cases if _is_coaching(c)])
+    high_n = (len([c for c in cases if _is_coaching(c)])
+              + sum(1 for c in cases if c.get('is_cluster') for h in (c.get('cluster_hosts') or []) if _member_is_coaching(c, h)))
     run = d.setdefault('run', {})
     summ = run.setdefault('summary', {})
     acc = d.setdefault('accumulator_row', {})
     before = {'suspension': summ.get('suspension'), 'warning_dnn': summ.get('warning_dnn'), 'warning': summ.get('warning'),
               'high_nourishment': summ.get('high_nourishment'), 'cases': acc.get('cases')}
     summ.update({
-        'suspension': sum(_hosts(c) for c in cases if _effective_tier(c) in ('suspension', 'deactivation')),
-        'warning_dnn': sum(_hosts(c) for c in cases if _effective_tier(c) == 'warning_dnn'),
-        'warning': sum(_hosts(c) for c in cases if _effective_tier(c) == 'warning'),
+        'suspension': len(sus), 'warning_dnn': len(dnn), 'warning': len(warn),
         'high_nourishment': high_n,
     })
     acc.update({
@@ -3290,14 +3315,17 @@ def recount_ts_ui_data(d):
         'warnings': len(warn), 'high_nourishment': high_n, 'warnings_excluding_coaching': len(warn) - high_n,
         '_hosts': {'suspension': sus, 'dnn': dnn, 'warning': warn},
     })
-    dismissed = [c.get('name') for c in cases if c.get('dismissed')]
+    dismissed = [c.get('name') for c in cases if c.get('dismissed')] + [h.get('name') for c in cases if c.get('is_cluster') for h in (c.get('cluster_hosts') or []) if h.get('dismissed')]
     summ['dismissed'] = len(dismissed)
     run['dismissed'] = dismissed
     _have = {h.get('name'): h for h in run.get('high_nourishment_hosts', [])}
     run['high_nourishment_hosts'] = [_have.get(c.get('name')) or {'name': c.get('name'), 'score': c.get('score'),
                                                                    'nourishment_received': c.get('nourishment_received'),
                                                                    'contact_id': c.get('contact_id'), 'staff_downgrade': True}
-                                     for c in cases if _is_coaching(c)]
+                                     for c in cases if _is_coaching(c)] + [
+        {'name': h.get('name'), 'score': h.get('score'), 'nourishment_received': h.get('nourishment_received'), 'contact_id': h.get('contact_id'),
+         'staff_downgrade': True, 'cluster_member': True}
+        for c in cases if c.get('is_cluster') for h in (c.get('cluster_hosts') or []) if _member_is_coaching(c, h)]
     overridden = [c.get('name') for c in cases if _effective_tier(c) != c.get('tier')]
     run['counts_recounted_for_overrides'] = overridden
     after = {'suspension': summ['suspension'], 'warning_dnn': summ['warning_dnn'], 'warning': summ['warning'],
@@ -3336,7 +3364,7 @@ def pass2_queries(pass1_output, skip_lookups=False):
     for i in range(0, len(ids18), 30):
         ids_str = "', '".join(ids18[i:i + 30])
         out.append({'name': f'open Trust and Safety cases batch {i // 30 + 1} (save as each Contact\'s _open_ts_cases)',
-                    'soql': ("SELECT Id, CaseNumber, Subject, Status, ContactId, T_S_Type__c, CreatedDate FROM Case "
+                    'soql': ("SELECT Id, CaseNumber, Subject, Status, Trust_and_Safety_Status__c, ContactId, T_S_Type__c, CreatedDate FROM Case "
                              f"WHERE ContactId IN ('{ids_str}') "
                              "AND (T_S_Type__c = 'Misuse of Platform' OR Subject LIKE '%Trust and Safety%' OR Subject LIKE '%T&S%') "
                              "AND Status != 'Closed' LIMIT 100")})
@@ -3363,7 +3391,7 @@ def pass2_queries(pass1_output, skip_lookups=False):
     for i in range(0, len(lk_ids), 30):
         ids_str = "', '".join(lk_ids[i:i + 30])
         out.append({'name': f'{tag}: open Trust and Safety cases batch {i // 30 + 1}',
-                    'soql': ("SELECT Id, CaseNumber, Subject, Status, ContactId, T_S_Type__c, CreatedDate FROM Case "
+                    'soql': ("SELECT Id, CaseNumber, Subject, Status, Trust_and_Safety_Status__c, ContactId, T_S_Type__c, CreatedDate FROM Case "
                              f"WHERE ContactId IN ('{ids_str}') "
                              "AND (T_S_Type__c = 'Misuse of Platform' OR Subject LIKE '%Trust and Safety%' OR Subject LIKE '%T&S%') "
                              "AND Status != 'Closed' LIMIT 100")})
@@ -3414,7 +3442,7 @@ def load_sf_results(path):
         # Accepts the raw Case row from the open Trust and Safety cases query or the tidy shape.
         if isinstance(c, dict) and 'CaseNumber' in c:
             return {'id': c.get('Id', ''), 'case_number': c.get('CaseNumber', ''), 'subject': c.get('Subject', ''),
-                    'status': c.get('Status', ''), 'created_date': (c.get('CreatedDate') or '')[:10]}
+                    'status': c.get('Status', ''), 'ts_status': c.get('Trust_and_Safety_Status__c') or '', 'created_date': (c.get('CreatedDate') or '')[:10]}
         return c
 
     raw = json.load(open(path))
@@ -3494,12 +3522,26 @@ def apply_longitudinal(d, adjustments):
     for c, h in plans:
         if c.get('longitudinal'):                       # redo: go back to the weekly state first
             c['signals'] = [x for x in c.get('signals', []) if not x.get('longitudinal')]
+            for x in c['signals']:                      # undo any earlier removal (2026-11-05)
+                if 'contribution_before_deep_dive' in x:
+                    x['score_contribution'] = x.pop('contribution_before_deep_dive')
+                    x.pop('deep_dive_removed', None)
             c['score'], c['tier'] = c['longitudinal']['score_before'], c['longitudinal']['tier_before']
             c['bullets'] = [b for b in c.get('bullets', []) if not b.startswith(('**Longitudinal','**Deep dive'))]
         before_score, before_tier = c.get('score', 0), c.get('tier')
         added = []
+        merged = False
         for sg in h.get('add_signals') or []:
             pts = sg['points']
+            _hit = next((x for x in c.get('signals', []) if pts < 0 and (x.get('name') or '').lower() == sg['name'].lower()
+                         and (x.get('score_contribution') or 0) >= -pts), None)
+            if _hit is not None:                        # a removal: reduce the signal that was scored instead of adding a negative line
+                _hit.setdefault('contribution_before_deep_dive', _hit['score_contribution'])
+                _hit['score_contribution'] += pts
+                _hit['deep_dive_removed'] = sg['detail']
+                added.append(f"{sg['name']} ({pts})")
+                merged = True
+                continue
             c.setdefault('signals', []).append({'name': sg['name'], 'triggered': True, 'weight': pts, 'observed': sg['detail'], 'desc': '',
                                                 'threshold': 'Deep dive', 'threshold_met': True, 'score_contribution': pts, 'longitudinal': True})
             added.append(f"{sg['name']} ({'+' if pts > 0 else ''}{pts})")
@@ -3514,7 +3556,10 @@ def apply_longitudinal(d, adjustments):
             c['tier'] = new_tier
         bd = c.get('score_breakdown') or ''
         base = bd.rsplit(' = ', 1)[0] if ' = ' in bd else bd
-        if added:
+        if merged:
+            c['score_breakdown'] = ' + '.join(f"{x['name']} ({'+' if x['score_contribution'] > 0 else ''}{x['score_contribution']})"
+                                              for x in c.get('signals', []) if x.get('score_contribution')) + f' = {new_score}'
+        elif added:
             c['score_breakdown'] = (base + ' + ' if base else '') + ' + '.join(added) + f' = {new_score}'
         cs = c.get('collapsed_summary') or ''
         if cs.startswith(f'Score {before_score}'):
@@ -3546,12 +3591,13 @@ def longitudinal_from_csv(csv_path, d):
     judgment calls, and applies them. Only individual cases already in the review JSON get an entry."""
     import difflib
     rows = list(csv.DictReader(open(csv_path, encoding='utf-8-sig')))
-    camp_host, camp_date, camp_desc = {}, {}, {}
+    camp_host, camp_date, camp_desc, camp_flag = {}, {}, {}, {}
     for r in rows:
         if r.get('Member Status') == 'Host':
             camp_host[r['Campaign ID']] = ((r.get('First Name', '') + ' ' + r.get('Last Name', '')).strip(), (r.get('Contact ID') or '')[:15])
             camp_date[r['Campaign ID']] = r.get('Start Date', '')
             camp_desc[r['Campaign ID']] = (r.get('Campaign Description') or '').strip()
+            camp_flag[r['Campaign ID']] = (r.get('AI Not Pass Summary') or '').strip()
     def _email(r):
         return (r.get('Email') or r.get('Campaign Member Email') or '').strip().lower()
     per = collections.defaultdict(lambda: {'dinners': set(), 'emails': collections.defaultdict(set), 'bounced': set(), 'lead_rows': 0, 'lead_no_email': 0})
@@ -3583,7 +3629,9 @@ def longitudinal_from_csv(csv_path, d):
         near = sum(1 for a, b in pairs if difflib.SequenceMatcher(None, a[:400], b[:400]).ratio() >= 0.9)
         metrics[name] = {'dinners': len(p['dinners']), 'distinct_guest_emails': len(p['emails']), 'bouncing_guest_emails': len(p['bounced']),
                          'recycled_bounced_emails': len(recycled), 'plus_one_rows': p['lead_rows'], 'plus_one_rows_without_email': p['lead_no_email'],
-                         'consecutive_description_pairs': len(pairs), 'near_identical_pairs': near}
+                         'consecutive_description_pairs': len(pairs), 'near_identical_pairs': near,
+                         'dinners_with_review_flags': sum(1 for c in p['dinners'] if camp_flag.get(c)),
+                         'dinners_with_copy_paste_flag': sum(1 for c in p['dinners'] if 'copy' in (camp_flag.get(c) or '').lower())}
         case = next((c for c in d.get('cases', []) if not c.get('is_cluster') and (
             (c.get('name') or '').lower() == name.lower()
             or (camp_host[next(iter(p['dinners']))][1] and (c.get('contact_id') or '')[:15] == camp_host[next(iter(p['dinners']))][1]))), None)
@@ -3653,6 +3701,11 @@ def write_action_files(ts_ui_data, sf_results=None, approved=None, date_str=None
         coaching_dnn = _is_coaching(case)
         hosts = case.get('cluster_hosts', []) if case.get('is_cluster') else [case]
         for h in hosts:
+            if h.get('dismissed'):
+                continue
+            if case.get('is_cluster'):                       # a cluster can be split: each member follows its own final tier (2026-11-05)
+                tier = _member_tier(case, h)
+                coaching_dnn = _member_is_coaching(case, h)
             if tier not in ('warning_dnn', 'suspension', 'deactivation') and not coaching_dnn:
                 continue
             email = (h.get('email') or '').strip()
@@ -3724,6 +3777,9 @@ if __name__ == '__main__':
         for _h in _adj['hosts']:
             _pts = sum(sg['points'] for sg in _h['add_signals'])
             print(f"  {_h['host']}: {'+' + str(_pts) + ' (' + ', '.join(sg['name'] for sg in _h['add_signals']) + ')' if _pts else 'no points added'}" + (f" | {_h['note']}" if _h['note'] else ''))
+        for _n, _m in _met.items():
+            print(f"  Descriptions for {_n}: {_m['near_identical_pairs']} near-identical pairs of {_m['consecutive_description_pairs']}, "
+                  f"copy-paste review flag on {_m['dinners_with_copy_paste_flag']} of {_m['dinners']} dinners ({_m['dinners_with_review_flags']} with any review flag)")
         for _n, _m in _met.items():
             if _m.get('report_issue'):
                 print(f"  Report issue for {_n}: {_m['report_issue']}")
