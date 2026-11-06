@@ -119,6 +119,7 @@ SIGNAL_WEIGHTS = {
 # Note: sig14 (100% PIDs) is NOT standalone -- requires at least one pairing signal
 # UPDATED 2026-10-22 (Pammie): sig1 (Shared device fingerprint, host and guest) is no longer standalone. A device or IP match shows where to
 # look, not what was found (a real family and a set of fake guests look the same on the device alone). Warning means bad or fake guests.
+RECYCLED_MIN_ADDRESSES = 3   # the lookup history counts a recycled bounced guest list only when 3+ different bounced addresses repeat (Pammie, 2026-11-05)
 MIN_GUESTS_FOR_BOUNCE = 3  # bounce signals need a dinner with at least 3 guests (2026-10-29, Pammie): a 1 or 2 guest dinner is not scored on bounces
 STANDALONE = {'sig12', 'sig21', 'sig22', 'sig23', 'sig8', 'sig25'}
 # Signals that make a case High confidence. Clearly fake guest identities (sig8) and Guest or host listed as a +1
@@ -256,7 +257,12 @@ def load_lookup_history(path):
         h['addresses'] += 1
         h['min'], h['max'] = min(h['min'], d), max(h['max'], d)
         n += 1
-    print(f"[T&S] Lookup history: {n} recycled bounced guest address(es) for {len(LOOKUP_HISTORY)} host(s)", file=sys.stderr)
+    _few = [h for h, v in LOOKUP_HISTORY.items() if v['addresses'] < RECYCLED_MIN_ADDRESSES]
+    for h in _few:
+        del LOOKUP_HISTORY[h]
+    n = sum(v['addresses'] for v in LOOKUP_HISTORY.values())
+    print(f"[T&S] Lookup history: {n} recycled bounced guest address(es) for {len(LOOKUP_HISTORY)} host(s) with {RECYCLED_MIN_ADDRESSES}+ addresses; "
+          f"{len(_few)} host(s) with fewer are not counted", file=sys.stderr)
     return n
 
 
