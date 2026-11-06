@@ -82,7 +82,7 @@ SIGNAL_WEIGHTS = {
     'sig1': 7,   # Shared device FP host+guest, top band (90%+); 75-89% weighs 6, 51-74% weighs 5 (2026-11-04). NOT standalone since 2026-10-22: scores only with a bad or fake guest signal
     'sig2': 7,   # Cross-dinner device FP match (needs pairing)
     'sig3': 5,   # Same device FP across guests, top band (90%+); 75-89% weighs 4, 51-74% weighs 3 (2026-11-04). Needs pairing
-    'sig4': 5,   # Sequential RSVP timing -- not implemented (data not in CSV)
+    'sig4': 5,   # Sequential RSVP timing, tight (2026-11-05): 5+ guests with RSVP times and 80%+ of them within 3 minutes. Needs pairing
     'sig5': 3,   # VPN use (needs pairing, 30%+ of guests from known VPN ranges)
     'sig6': 0,   # Geographic mismatch (watch flag only)
     'sig7': 2,   # Same IP across guests (needs pairing, 80%+)
@@ -119,6 +119,7 @@ SIGNAL_WEIGHTS = {
 # Note: sig14 (100% PIDs) is NOT standalone -- requires at least one pairing signal
 # UPDATED 2026-10-22 (Pammie): sig1 (Shared device fingerprint, host and guest) is no longer standalone. A device or IP match shows where to
 # look, not what was found (a real family and a set of fake guests look the same on the device alone). Warning means bad or fake guests.
+RSVP_BURST_MIN_GUESTS, RSVP_BURST_MINUTES, RSVP_BURST_SHARE = 5, 3, 0.80   # very tight on purpose: about 1% of dinners reach it (2026-11-05)
 MIN_GUESTS_FOR_BOUNCE = 3  # bounce signals need a dinner with at least 3 guests (2026-10-29, Pammie): a 1 or 2 guest dinner is not scored on bounces
 STANDALONE = {'sig12', 'sig21', 'sig22', 'sig23', 'sig8', 'sig25'}
 # Signals that make a case High confidence. Clearly fake guest identities (sig8) and Guest or host listed as a +1
@@ -474,6 +475,26 @@ def _truly_open(c):
     return (c.get('ts_status') or '') not in TS_CLOSED
 
 
+def _rsvp_burst(guests):
+    """(guests in the tightest window, guests with an RSVP time) from the report's Reservation Created column."""
+    ts = []
+    for g in guests:
+        t = (g.get('Reservation Created') or '').strip()
+        for fmt in ('%m/%d/%Y %I:%M %p', '%m/%d/%Y %H:%M'):
+            try:
+                ts.append(datetime.strptime(t, fmt))
+                break
+            except ValueError:
+                pass
+    ts.sort()
+    best = j = 0
+    for i in range(len(ts)):
+        while (ts[i] - ts[j]).total_seconds() > RSVP_BURST_MINUTES * 60:
+            j += 1
+        best = max(best, i - j + 1)
+    return best, len(ts)
+
+
 def _grant_app_date(apps):
     """The host's application date from their grant applications (Grant_Applicant__c, linked through Primary_Applicant__c) when the Contact's
     Host_Application_Date__c is blank (2026-11-04, Pammie). The created date matched Host_Application_Date__c for every host that has both.
@@ -716,6 +737,28 @@ def score_campaign(cid, camp, cross_dinner, high_volume, campaigns=None):
                         + ". Verify in Salesforce (account creation time, device) before treating as fake.",
                         f"{len(odd)}/{len(not_bounced)} non-bounced guests ({round(100*odd_pct)}%)",
                         "50%+ bounced, then 50%+ of non-bounced on unrecognized domains and ≥2 guests", met)
+
+    # ── Signal 4: Sequential RSVP timing, tight (2026-11-05, Pammie): the report carries "Reservation Created" to the minute ──
+    _rt = []
+    for g in guests:
+        _t = (g.get('Reservation Created') or '').strip()
+        for _fmt in ('%m/%d/%Y %I:%M %p', '%m/%d/%Y %H:%M'):
+            try:
+                _rt.append(datetime.strptime(_t, _fmt))
+                break
+            except ValueError:
+                pass
+    if len(_rt) >= RSVP_BURST_MIN_GUESTS:
+        _rt.sort()
+        _best = _j = 0
+        for _i in range(len(_rt)):
+            while (_rt[_i] - _rt[_j]).total_seconds() > RSVP_BURST_MINUTES * 60:
+                _j += 1
+            _best = max(_best, _i - _j + 1)
+        if _best / len(_rt) >= RSVP_BURST_SHARE:
+            add_sig('sig4',
+                    f"Sequential RSVP timing, tight: {_best} of {len(_rt)} guests RSVPed within {RSVP_BURST_MINUTES} minutes of each other",
+                    f"{_best}/{len(_rt)} guests within {RSVP_BURST_MINUTES} minutes", f"{RSVP_BURST_MIN_GUESTS}+ guests with RSVP times and {round(100*RSVP_BURST_SHARE)}%+ within {RSVP_BURST_MINUTES} minutes (needs a partner)", True)
 
     # ── Signal 14: Sequential PIDs (profiled guests only as denominator) ────────
     # 55-99% of profiled = weight 3 corroborating (sig14_low, can score standalone)
@@ -1091,6 +1134,13 @@ def score_campaign(cid, camp, cross_dinner, high_volume, campaigns=None):
                 scored[key] = sig
             else:
                 scored[key] = {**sig, 'score_contribution': 0}
+        elif key == 'sig4':
+            # RSVP timing is very tight on purpose (Pammie, 2026-11-05): it needs a bad or fake guest signal as its partner, never only a
+            # device, IP or privacy match that does not score by itself
+            if threshold_met & FAKE_GUEST_SIGNALS:
+                scored[key] = sig
+            else:
+                scored[key] = {**sig, 'score_contribution': 0}
         elif key in ('sig17', 'sig16'):
             # AI description and privacy domain need at least one guest integrity signal
             if guest_integrity_met:
@@ -1100,6 +1150,8 @@ def score_campaign(cid, camp, cross_dinner, high_volume, campaigns=None):
         else:
             # All other non-standalone signals: need at least one OTHER threshold_met signal
             companions = threshold_met - {key}
+            if 'sig4' in companions and not (threshold_met & FAKE_GUEST_SIGNALS):
+                companions = companions - {'sig4'}             # a RSVP burst that does not score cannot pair another signal
             if companions:
                 scored[key] = sig
             else:
@@ -1221,7 +1273,7 @@ SIG_NAMES = {
     'sig1': 'Shared device fingerprint host and guest',
     'sig2': 'Cross-dinner device fingerprint match',
     'sig3': 'Same device fingerprint across guests',
-    'sig4': 'Sequential RSVP timing -- tight',
+    'sig4': 'Sequential RSVP timing, tight',
     'sig5': 'VPN use across multiple guests/hosts',
     'sig6': 'Geographic mismatch',
     'sig7': 'Same IP across guests',
@@ -1658,7 +1710,7 @@ def compute_lookup_hosts(all_campaigns, scope_campaigns, high_volume, flagged15,
       gated_pid_hosts    Sequential guest Profile IDs met its threshold but did not score
       gated_bounce_hosts guest email bounces at 50 to 74% met their threshold but did not score (a pair is needed below 75%)
     Hosts already flagged (score above 0) are excluded: they get the full Pass 2."""
-    groups = {k: {} for k in ('new_hosts', 'blank_date_hosts', 'device_hosts', 'chain_hosts', 'gated_pid_hosts', 'gated_bounce_hosts')}
+    groups = {k: {} for k in ('new_hosts', 'blank_date_hosts', 'device_hosts', 'chain_hosts', 'gated_pid_hosts', 'gated_bounce_hosts', 'rsvp_burst_hosts')}
 
     def nm(h):
         return ((h.get('First Name', '') or '') + ' ' + (h.get('Last Name', '') or '')).strip()
@@ -1684,6 +1736,9 @@ def compute_lookup_hosts(all_campaigns, scope_campaigns, high_volume, flagged15,
                     if fp and fp not in high_volume}
         if any(n >= 3 for n in counts.values()) or (host_fps & set(counts)):
             groups['device_hosts'][h15] = nm(h)
+        _b, _n = _rsvp_burst(camp.get('guests', []))
+        if _n >= RSVP_BURST_MIN_GUESTS and _b / _n >= RSVP_BURST_SHARE:
+            groups['rsvp_burst_hosts'][h15] = nm(h)
     pids = {}
     for camp in all_campaigns.values():
         h = camp.get('host') or {}
@@ -1714,7 +1769,7 @@ def compute_lookup_hosts(all_campaigns, scope_campaigns, high_volume, flagged15,
         for i, n in members.items():
             reasons[i].append(g)
             names[i] = n
-    history_ids = sorted(set(groups['device_hosts']) | set(groups['gated_pid_hosts']) | set(groups['gated_bounce_hosts']))
+    history_ids = sorted(set(groups['device_hosts']) | set(groups['gated_pid_hosts']) | set(groups['gated_bounce_hosts']) | set(groups['rsvp_burst_hosts']))
     return {'history_ids': history_ids, 'device_ids': sorted(devices_in_play),
             'groups': {g: sorted(m.values()) for g, m in groups.items()},
             'counts': {g: len(m) for g, m in groups.items()},
