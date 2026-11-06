@@ -109,6 +109,7 @@ SIGNAL_WEIGHTS = {
     'sig22': 10, # Deliberate fraud (standalone, staff judgment)
     'sig23': 8,  # Deliberate identity change (standalone, staff judgment)
     'sig_addr': 2, # Same dinner address as another host this week (corroborating)
+    'sig_chain': 3, # Host Profile ID chain: 3+ hosts with Profile IDs within 2 of each other (decided 2026-10-29, built 2026-11-06, Pammie). Needs a partner: any other signal that actually scores
 }
 # Signals that qualify as High confidence when triggered at threshold.
 # sig1    = shared device FP host+guest (>50%)
@@ -1254,6 +1255,7 @@ SIG_NAMES = {
     'sig22': 'Deliberate activity to defraud the program',
     'sig23': 'Deliberate identity change',
     'sig_addr': 'Same dinner address as another host this week',
+    'sig_chain': 'Host Profile ID chain',
 }
 
 
@@ -1653,6 +1655,39 @@ def compute_outside_scope_links(all_campaigns, scope_campaigns, all_fps, high_vo
                 rec.update(_one_off(rec['campaign_id']))
             links[cid] = list(found.values())[:6]
     return links
+
+HOST_CHAIN_GAP = 2        # Host Profile ID chain: neighbouring host Profile IDs no more than this far apart
+HOST_CHAIN_MIN_HOSTS = 3  # a chain is 3 or more hosts
+
+
+def compute_host_profile_chains(all_campaigns):
+    """Host Profile ID chain (decided 2026-10-29, Pammie): hosts whose Platform Profile IDs, sorted, form a run of
+    HOST_CHAIN_MIN_HOSTS or more where every gap between neighbours is HOST_CHAIN_GAP or less. Looks at every host
+    in the report, flagged or not. Returns {host_id_15: {'size': n, 'max_gap': g, 'others': [names]}}.
+    Never prints or stores Profile ID numbers. Scoring (partner required) is done in run()."""
+    pids = {}
+    for camp in all_campaigns.values():
+        h = camp.get('host') or {}
+        h15 = (h.get('Contact ID') or '')[:15]
+        p = str(h.get('Platform Profile ID') or '').strip()
+        if h15 and p.isdigit():
+            nm = ((h.get('First Name', '') or '') + ' ' + (h.get('Last Name', '') or '')).strip()
+            pids[int(p)] = (h15, nm)
+    out = {}
+    ks = sorted(pids)
+    run_ = [ks[0]] if ks else []
+    for a in ks[1:] + [None]:
+        if a is not None and a - run_[-1] <= HOST_CHAIN_GAP:
+            run_.append(a)
+            continue
+        if len(run_) >= HOST_CHAIN_MIN_HOSTS:
+            gaps = [y - x for x, y in zip(run_, run_[1:])]
+            for x in run_:
+                out[pids[x][0]] = {'size': len(run_), 'max_gap': max(gaps),
+                                   'others': [pids[y][1] for y in run_ if y != x]}
+        run_ = [a] if a is not None else []
+    return out
+
 
 def compute_lookup_hosts(all_campaigns, scope_campaigns, high_volume, flagged15, gated_entries):
     """Hosts who get a read-only Pass 2 lookup: no score, no case, no referral and no longitudinal request (2026-11-04, Pammie).
@@ -2121,6 +2156,37 @@ def run(csv_path, lead_path=None, wednesday_mode=False):
         }
         if met:
             d['score'] += SIGNAL_WEIGHTS['sig_addr']
+            if not d.get('_nuroots_match'):
+                d['tier'] = tier_from_score(d['score'])
+
+    # Host Profile ID chain (decided 2026-10-29, built 2026-11-06, Pammie): 3 or more hosts whose Profile IDs are within 2 of
+    # each other. Weight 3, and a partner is required: the host must already have another signal that actually scores
+    # (a signal that was gated to 0 does not count, so a device-only or address-only host does not become a case).
+    # Hosts in a chain with no partner stay in the lookup-only group, as before.
+    host_chains = compute_host_profile_chains(all_campaigns)
+    for cid, d in all_scored.items():
+        _h = campaigns[cid].get('host') or {}
+        _h15 = (_h.get('Contact ID') or '')[:15]
+        info = host_chains.get(_h15)
+        if not info:
+            continue
+        partners = [k for k, v in d['scored_signals'].items() if k != 'sig_chain' and v.get('score_contribution', 0) > 0]
+        met = bool(partners)
+        others = info['others']
+        others_str = ', '.join(others[:5]) + (f" and {len(others) - 5} more" if len(others) > 5 else '')
+        d['scored_signals']['sig_chain'] = {
+            'sig_key': 'sig_chain',
+            'name': SIG_NAMES['sig_chain'],
+            'weight': SIGNAL_WEIGHTS['sig_chain'],
+            'desc': f"Host Profile IDs form a chain of {info['size']} hosts, every gap between neighbours {info['max_gap']} or less (with {others_str}). Gap of {HOST_CHAIN_GAP} or less, 3 or more hosts, needs a partner signal.",
+            'observed': f"chain of {info['size']} hosts, largest gap {info['max_gap']}",
+            'threshold': '3+ hosts, gaps of 2 or less (needs a partner)',
+            'threshold_met': True,
+            'score_contribution': SIGNAL_WEIGHTS['sig_chain'] if met else 0,
+            'triggered': met,
+        }
+        if met:
+            d['score'] += SIGNAL_WEIGHTS['sig_chain']
             if not d.get('_nuroots_match'):
                 d['tier'] = tier_from_score(d['score'])
 
