@@ -71,6 +71,8 @@ RECOGNIZED_EMAIL_DOMAINS = {
 }
 SUSPICIOUS_TLDS = {'top','cc','info','xyz','icu','site','online','shop','buzz','click','fun','rest','cyou','sbs','pw','lol'}
 HIGH_VOLUME_THRESHOLD = 8    # FP on 8+ dinners = shared infrastructure, not scored
+DEVICE_ACCOUNTS_SHARED = 20   # a device used by 20+ different accounts in the last year is shared infrastructure too (2026-11-05); counts come from Salesforce
+DEVICE_ACCOUNTS = {}          # {device id: distinct accounts in the last year}, loaded with --device-accounts
 # High-Nourishment coaching path (Abbie and Hannah, 2026-10-19; script flag added 2026-10-22): a Warning-tier host with
 # score 5+ AND $2,500+ total Nourishment received goes to the Shabbat Journey team as a coaching case, not a T&S case.
 # The script only MARKS candidates; the agent verifies against Salesforce and creates the coaching case.
@@ -258,6 +260,24 @@ def load_lookup_history(path):
     return n
 
 
+def load_device_accounts(path):
+    """Read the device account counts exactly as the connector returns them: Device_ID__c and accounts."""
+    raw = json.load(open(path))
+    if isinstance(raw, dict) and isinstance(raw.get('records'), list):
+        raw = raw['records']
+    n = 0
+    for r in raw if isinstance(raw, list) else []:
+        if isinstance(r, dict) and r.get('Device_ID__c'):
+            try:
+                DEVICE_ACCOUNTS[str(r['Device_ID__c']).strip()] = int(r.get('accounts') or r.get('expr0') or 0)
+                n += 1
+            except (TypeError, ValueError):
+                pass
+    shared = sum(1 for v in DEVICE_ACCOUNTS.values() if v >= DEVICE_ACCOUNTS_SHARED)
+    print(f"[T&S] Device account counts: {n} device(s) read, {shared} with {DEVICE_ACCOUNTS_SHARED}+ accounts treated as shared infrastructure", file=sys.stderr)
+    return n
+
+
 def parse_csv(contact_path, lead_path=None):
     """Parse a single combined CSV (or Contact + Lead CSVs) into campaigns dict.
     
@@ -277,7 +297,7 @@ def parse_csv(contact_path, lead_path=None):
         "Host Application Date","Campaign Name","FYI Flag Reason",
         "Dinner Created Device ID","Total Eligible Nourishment","Grant Application",
         "Campaign Description","Total Nourishment Received","Requested Nourishment","Notes",
-        "Email","Lead: Created Date","Mandrill Bounce Time + Date",
+        "Email","Lead: Created Date","Mandrill Bounce Time + Date","Reservation Created",
         # New device/IP fields (populated from 2026-08-21 onward; legacy RSVP fields empty from that date)
         "Device ID","IP Address Reservation","Platform ID","Profile Created Device ID",
         "Mailing Zip/Postal Code","Area","Guest Count Met?",
@@ -509,10 +529,12 @@ def build_fp_maps(campaigns):
             fp = g.get('RSVP Device Fingerprint ID', '')
             if fp:
                 all_fps[fp].add(cid)
-    high_volume = {fp for fp, cids in all_fps.items() if len(cids) >= HIGH_VOLUME_THRESHOLD}
+    high_volume = ({fp for fp, cids in all_fps.items() if len(cids) >= HIGH_VOLUME_THRESHOLD}
+                   | {fp for fp, n in DEVICE_ACCOUNTS.items() if n >= DEVICE_ACCOUNTS_SHARED})
+    _shared_acc = {fp for fp, n in DEVICE_ACCOUNTS.items() if n >= DEVICE_ACCOUNTS_SHARED}
     cross_dinner = {fp: list(cids) for fp, cids in all_fps.items()
-                    if 3 <= len(cids) < HIGH_VOLUME_THRESHOLD}
-    all_cross = {fp: list(cids) for fp, cids in all_fps.items() if len(cids) >= 2}
+                    if 3 <= len(cids) < HIGH_VOLUME_THRESHOLD and fp not in _shared_acc}
+    all_cross = {fp: list(cids) for fp, cids in all_fps.items() if len(cids) >= 2 and fp not in _shared_acc}
     return high_volume, cross_dinner, all_cross, all_fps
 
 
@@ -1641,9 +1663,14 @@ def compute_lookup_hosts(all_campaigns, scope_campaigns, high_volume, flagged15,
     def nm(h):
         return ((h.get('First Name', '') or '') + ' ' + (h.get('Last Name', '') or '')).strip()
 
+    devices_in_play = set()
     for cid, camp in scope_campaigns.items():
         h = camp.get('host')
         h15 = ((h or {}).get('Contact ID') or '')[:15]
+        if h:
+            _gc = collections.Counter(fp for fp in ((g.get('RSVP Device Fingerprint ID') or '').strip() for g in camp.get('guests', [])) if fp)
+            _hf = {fp for fp in ((h.get(k) or '').strip() for k in ('RSVP Device Fingerprint ID', 'Dinner Created Device ID', 'Profile Created Device ID')) if fp}
+            devices_in_play |= {fp for fp, n in _gc.items() if n >= 3 or fp in _hf}
         if not h or not h15 or h15 in flagged15:
             continue
         d = _report_app_date(h)
@@ -1688,7 +1715,7 @@ def compute_lookup_hosts(all_campaigns, scope_campaigns, high_volume, flagged15,
             reasons[i].append(g)
             names[i] = n
     history_ids = sorted(set(groups['device_hosts']) | set(groups['gated_pid_hosts']) | set(groups['gated_bounce_hosts']))
-    return {'history_ids': history_ids,
+    return {'history_ids': history_ids, 'device_ids': sorted(devices_in_play),
             'groups': {g: sorted(m.values()) for g, m in groups.items()},
             'counts': {g: len(m) for g, m in groups.items()},
             'union_ids': sorted(reasons), 'reasons': dict(reasons), 'names': names}
@@ -3400,6 +3427,14 @@ def pass2_queries(pass1_output, skip_lookups=False):
         out.append({'name': f'{tag}: grant applications batch {i // 40 + 1} (the application date when the Contact\'s is blank)',
                     'soql': ("SELECT Primary_Applicant__c, CreatedDate, Application_Date__c, Date_Host_Approved__c, Application_Status__c FROM Grant_Applicant__c "
                              f"WHERE Primary_Applicant__c IN ('{ids_str}') ORDER BY Primary_Applicant__c, CreatedDate LIMIT 200")})
+    dev_ids = [d for d in (pass1_output.get('lookup_hosts') or {}).get('device_ids', []) if len(d) == 32 and d not in DEVICE_ACCOUNTS]
+    dsince = (REVIEW_DATE - timedelta(days=365)).strftime('%Y-%m-%dT00:00:00Z')
+    for i in range(0, len(dev_ids), 100):
+        ids_str = "', '".join(dev_ids[i:i + 100])
+        out.append({'name': (f'{tag}: device accounts batch {i // 100 + 1} (how many different accounts used each shared device in the last year; '
+                             'save the rows exactly as returned and pass the file with --device-accounts, then rebuild)'),
+                    'soql': ("SELECT Device_ID__c, COUNT_DISTINCT(ContactId) accounts FROM CampaignMember "
+                             f"WHERE Device_ID__c IN ('{ids_str}') AND CreatedDate >= {dsince} GROUP BY Device_ID__c")})
     hist_ids = [sf_15_to_18(i) if len(i) == 15 else i for i in (pass1_output.get('lookup_hosts') or {}).get('history_ids', [])]
     since = (REVIEW_DATE - timedelta(days=365)).strftime('%Y-%m-%d')
     for i in range(0, len(hist_ids), 40):
@@ -3751,6 +3786,8 @@ def write_action_files(ts_ui_data, sf_results=None, approved=None, date_str=None
 if __name__ == '__main__':
     import os
 
+    if '--device-accounts' in sys.argv:   # account counts per device from Salesforce (2026-11-05)
+        load_device_accounts(sys.argv[sys.argv.index('--device-accounts') + 1])
     if '--lookup-history' in sys.argv:    # recycled bounced guest history for gated high-confidence hosts (2026-11-04)
         load_lookup_history(sys.argv[sys.argv.index('--lookup-history') + 1])
     if '--out-dir' in sys.argv:           # diagnostics: everything this run writes goes to DIR (2026-10-29)
