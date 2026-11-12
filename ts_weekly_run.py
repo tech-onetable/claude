@@ -3855,6 +3855,54 @@ def write_action_files(ts_ui_data, sf_results=None, approved=None, date_str=None
     return ban_rows, dnn_rows, pending_rows
 
 
+def run_state_cli(argv):
+    """Run checkpoint file (2026-11-12, Pammie). Lets a paused run resume without re-reading the instructions or redoing Pass 1.
+    Writes ts_run_state_YYYYMMDD.json in the output directory. It never touches scoring or the review JSON.
+      --run-state set PHASE [key=value ...]   mark PHASE done and store facts (values may be JSON, for example holds_done=true)
+      --run-state show                         print the resume summary: phases done, next phase, stored facts"""
+    PHASES = ['start', 'pass1', 'scoring_queries', 'pass2', 'holds', 'checkpoint', 'review_file',
+              'host_checks', 'lookup_part2', 'complete']
+    i = argv.index('--run-state')
+    args = [a for a in argv[i + 1:] if not a.startswith('--out-dir')]
+    if '--out-dir' in argv:
+        _od = argv.index('--out-dir') + 1
+        args = [a for a in args if a != argv[_od]]
+    mode = args[0] if args else 'show'
+    path = _out(f'ts_run_state_{REVIEW_DATE.strftime("%Y%m%d")}.json')
+    state = json.load(open(path)) if os.path.exists(path) else {'run_date': REVIEW_DATE.strftime('%Y-%m-%d'), 'phases_done': [], 'facts': {}}
+    if mode == 'set':
+        if len(args) < 2:
+            print('Usage: --run-state set PHASE [key=value ...]', file=sys.stderr)
+            return 1
+        phase = args[1]
+        if phase not in PHASES:
+            print(f'[T&S] Unknown phase {phase!r}. Phases: {", ".join(PHASES)}', file=sys.stderr)
+            return 1
+        if phase not in state['phases_done']:
+            state['phases_done'].append(phase)
+        for kv in args[2:]:
+            if '=' not in kv:
+                continue
+            k, v = kv.split('=', 1)
+            try:
+                v = json.loads(v)
+            except ValueError:
+                pass
+            state['facts'][k] = v
+        state['updated'] = datetime.now().strftime('%Y-%m-%d %H:%M')
+        json.dump(state, open(path, 'w'), indent=2)
+    elif mode != 'show':
+        print('Usage: --run-state set PHASE [key=value ...] | --run-state show', file=sys.stderr)
+        return 1
+    _last = max([PHASES.index(p) for p in state['phases_done'] if p in PHASES], default=-1)
+    nxt = PHASES[_last + 1] if _last + 1 < len(PHASES) else None
+    print(f"[T&S] Run state {state['run_date']}: done = {', '.join(state['phases_done']) or 'nothing yet'}; next = {nxt or 'all phases done'}")
+    for k, v in state['facts'].items():
+        print(f'    {k}: {v}')
+    print(f'[T&S] State file: {path}')
+    return 0
+
+
 if __name__ == '__main__':
     import os
 
@@ -3865,6 +3913,9 @@ if __name__ == '__main__':
     if '--out-dir' in sys.argv:           # diagnostics: everything this run writes goes to DIR (2026-10-29)
         OUT_DIR = sys.argv[sys.argv.index('--out-dir') + 1]
         print(f"[T&S] Output directory: {OUT_DIR}", file=sys.stderr)
+
+    if '--run-state' in sys.argv:         # checkpoint file for resuming a paused run (2026-11-12)
+        sys.exit(run_state_cli(sys.argv))
 
     if len(sys.argv) < 2:
         print("Usage: python3 ts_weekly_run.py <combined_csv_path> [--no-sf] [--wednesday]", file=sys.stderr)
