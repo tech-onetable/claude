@@ -70,6 +70,7 @@ RECOGNIZED_EMAIL_DOMAINS = {
     'protonmail.com','proton.me','pm.me','tutanota.com','tuta.io',  # privacy domains are scored by sig16, not here
 }
 SUSPICIOUS_TLDS = {'top','cc','info','xyz','icu','site','online','shop','buzz','click','fun','rest','cyou','sbs','pw','lol'}
+SEQ_MIN_PROFILED_GUESTS = 3      # Sequential guest Profile IDs needs 3 or more profiled guests (decided 2026-11-19, Pammie; was 2)
 CREATION_DEVICE_MIN_HOSTS = 3     # lookup-only sweep (2026-11-19, Pammie): hosts on one dinner-creation device in the report (2 if one is flagged)
 CREATION_DEVICE_SHARED_AT = 10    # hosts on one dinner-creation device in the report: shared infrastructure, not looked at
 HIGH_VOLUME_THRESHOLD = 8    # FP on 8+ dinners = shared infrastructure, not scored
@@ -739,7 +740,7 @@ def score_campaign(cid, camp, cross_dinner, high_volume, campaigns=None):
         except (ValueError, TypeError):
             pass
     profiled_n = len(pids)  # denominator = profiled guests ONLY (plus-ones excluded)
-    if profiled_n >= 2:
+    if profiled_n >= SEQ_MIN_PROFILED_GUESTS:
         ps = sorted(pids, key=lambda x: x[0])
         pid_vals = [p[0] for p in ps]
         sequential_pairs = sum(1 for i in range(len(pid_vals)-1) if pid_vals[i+1] - pid_vals[i] <= 2)
@@ -758,10 +759,15 @@ def score_campaign(cid, camp, cross_dinner, high_volume, campaigns=None):
             add_sig('sig14_watch',
                     f"Sequential guest Profile IDs (below threshold): {round(100*seq_pct)}% of {profiled_n} profiled guests sequential (gap≤2). Threshold is 55%. Does not score.",
                     f"{round(100*seq_pct)}% ({profiled_n} profiled guests)", "55%+ to score", False)
+    elif profiled_n == SEQ_MIN_PROFILED_GUESTS - 1:
+        # Too few profiled guests to read a pattern (decided 2026-11-19, Pammie): surface it unscored so the reviewer sees it was checked
+        add_sig('sig14_watch',
+                f"Sequential guest Profile IDs: only {profiled_n} profiled guests, {SEQ_MIN_PROFILED_GUESTS} or more are needed. Does not score. Plus-ones excluded from calculation.",
+                f"{profiled_n} profiled guests", f"requires {SEQ_MIN_PROFILED_GUESTS}+ profiled guests", False)
     elif profiled_n == 0:
         add_sig('sig14_none',
                 f"Sequential guest Profile IDs: no profiled guests found -- all guests may be leads/plus-ones or Profile IDs not populated.",
-                f"0 profiled guests", "requires 2+ profiled guests", False)
+                f"0 profiled guests", f"requires {SEQ_MIN_PROFILED_GUESTS}+ profiled guests", False)
 
     # ── Signal 9: Suspicious guest email domains (scores from 2026-10-18, needs pairing) ──
     # Known throwaway-mail domains (atomicmail.io, membermail.net, mailshield.org, ...) accept mail, so these
