@@ -111,6 +111,7 @@ SIGNAL_WEIGHTS = {
     'sig22': 10, # Deliberate fraud (standalone, staff judgment)
     'sig23': 8,  # Deliberate identity change (standalone, staff judgment)
     'sig_addr': 2, # Same dinner address as another host this week (corroborating)
+    'sig_cdev': 3,  # Dinner-creation device shared across hosts (decided 2026-11-19, Pammie). Needs a partner: any other signal that actually scores (not Same dinner address). Corroborating, never high confidence
     'sig_chain': 3, # Host Profile ID chain: 3+ hosts with Profile IDs within 2 of each other (decided 2026-10-29, built 2026-11-06, Pammie). Needs a partner: any other signal that actually scores
 }
 # Signals that qualify as High confidence when triggered at threshold.
@@ -1258,6 +1259,7 @@ SIG_NAMES = {
     'sig23': 'Deliberate identity change',
     'sig_addr': 'Same dinner address as another host this week',
     'sig_chain': 'Host Profile ID chain',
+    'sig_cdev': 'Dinner-creation device shared across hosts',
 }
 
 
@@ -1691,6 +1693,29 @@ def compute_host_profile_chains(all_campaigns):
     return out
 
 
+def creation_device_groups(all_campaigns, flagged15):
+    """Dinner-creation devices used by several hosts in this week's report (2026-11-19, Pammie).
+    A device qualifies at 3 to 9 hosts, or at 2 hosts when one of them is flagged. 10 or more hosts is shared infrastructure.
+    Returns {device: {host id (15): name}} for qualifying devices only. Week only: no year-long account count."""
+    def _nm(h):
+        return ((h.get('First Name', '') or '') + ' ' + (h.get('Last Name', '') or '')).strip()
+    dev = collections.defaultdict(dict)
+    for camp in all_campaigns.values():
+        h = camp.get('host') or {}
+        h15 = (h.get('Contact ID') or '')[:15]
+        fp = (camp.get('dinner_created_device_id', '') or h.get('Dinner Created Device ID', '') or '').strip()
+        if h15 and fp and fp not in ('nan', 'None'):
+            dev[fp][h15] = _nm(h)
+    out = {}
+    for fp, members in dev.items():
+        n_h = len(members)
+        if n_h >= CREATION_DEVICE_SHARED_AT:
+            continue
+        if n_h >= CREATION_DEVICE_MIN_HOSTS or (n_h >= 2 and any(i in flagged15 for i in members)):
+            out[fp] = members
+    return out
+
+
 def compute_lookup_hosts(all_campaigns, scope_campaigns, high_volume, flagged15, gated_entries):
     """Hosts who get a read-only Pass 2 lookup: no score, no case, no referral and no longitudinal request (2026-11-04, Pammie).
     A high-confidence signal that did not score for lack of a pair still triggers a look at the host. Groups:
@@ -1747,28 +1772,18 @@ def compute_lookup_hosts(all_campaigns, scope_campaigns, high_volume, flagged15,
                 groups['chain_hosts'][pids[x][0]] = pids[x][1]
         run_ = [a] if a is not None else []
     # creation_device_hosts: hosts who created dinners on the same device in this week's report.
-    _cd = collections.defaultdict(dict)   # device -> {host id (15): name}
-    for camp in all_campaigns.values():
-        h = camp.get('host') or {}
-        h15 = (h.get('Contact ID') or '')[:15]
-        fp = (camp.get('dinner_created_device_id', '') or h.get('Dinner Created Device ID', '') or '').strip()
-        if h15 and fp and fp not in ('nan', 'None'):
-            _cd[fp][h15] = nm(h)
     creation_links = {}
-    for fp, members in _cd.items():
+    for fp, members in creation_device_groups(all_campaigns, flagged15).items():
         n_h = len(members)
-        if n_h >= CREATION_DEVICE_SHARED_AT:
-            continue
         flagged_here = sorted(i for i in members if i in flagged15)
-        if n_h >= CREATION_DEVICE_MIN_HOSTS or (n_h >= 2 and flagged_here):
-            for i, name in members.items():
-                if i in flagged15:
-                    continue
-                if i in creation_links and creation_links[i]['hosts_on_device'] >= n_h:
-                    continue
-                creation_links[i] = {'hosts_on_device': n_h, 'flagged_hosts_on_device': len(flagged_here), 'device': fp[:8],
-                                     'other_hosts': sorted(v for k, v in members.items() if k != i)[:8]}
-                groups['creation_device_hosts'][i] = name
+        for i, name in members.items():
+            if i in flagged15:
+                continue
+            if i in creation_links and creation_links[i]['hosts_on_device'] >= n_h:
+                continue
+            creation_links[i] = {'hosts_on_device': n_h, 'flagged_hosts_on_device': len(flagged_here), 'device': fp[:8],
+                                 'other_hosts': sorted(v for k, v in members.items() if k != i)[:8]}
+            groups['creation_device_hosts'][i] = name
     for e in gated_entries:
         if not e.get('host_id_15') or e['host_id_15'] in flagged15:
             continue
@@ -2216,6 +2231,51 @@ def run(csv_path, lead_path=None, wednesday_mode=False):
             d['score'] += SIGNAL_WEIGHTS['sig_chain']
             if not d.get('_nuroots_match'):
                 d['tier'] = tier_from_score(d['score'])
+
+    # Dinner-creation device shared across hosts (decided 2026-11-19, Pammie). Weight 3. A partner is required: the host must already
+    # have another signal that actually scores (a signal gated to 0 does not count, and Same dinner address does not count), so a
+    # shared device alone never makes a case. Corroborating, never high confidence. Hosts with no partner stay lookup-only.
+    # The host's own device is counted once: skipped when Shared device fingerprint, host and guest already scored on it.
+    _flagged_now = {((campaigns[c].get('host') or {}).get('Contact ID') or '')[:15] for c, d in all_scored.items() if d['score'] > 0}
+    _cdev_groups = creation_device_groups(all_campaigns, _flagged_now)
+    for cid, d in all_scored.items():
+        _camp = campaigns[cid]
+        _h = _camp.get('host') or {}
+        _h15 = (_h.get('Contact ID') or '')[:15]
+        _fp = (_camp.get('dinner_created_device_id', '') or _h.get('Dinner Created Device ID', '') or '').strip()
+        _members = _cdev_groups.get(_fp)
+        if not _members or _h15 not in _members:
+            continue
+        _guest_fps = {(g.get('RSVP Device Fingerprint ID') or '').strip() for g in _camp.get('guests', [])}
+        if _fp in _guest_fps and d['scored_signals'].get('sig1', {}).get('score_contribution', 0) > 0:
+            continue
+        _partners = [k for k, v in d['scored_signals'].items() if k not in ('sig_cdev', 'sig_addr') and v.get('score_contribution', 0) > 0]
+        _met = bool(_partners)
+        _others = sorted(v for k, v in _members.items() if k != _h15)
+        _others_str = ', '.join(_others[:5]) + (f" and {len(_others) - 5} more" if len(_others) > 5 else '')
+        d['scored_signals']['sig_cdev'] = {
+            'sig_key': 'sig_cdev',
+            'name': SIG_NAMES['sig_cdev'],
+            'weight': SIGNAL_WEIGHTS['sig_cdev'],
+            'desc': f"{len(_members)} hosts created dinners on one device in this week's report (with {_others_str}). 3 to 9 hosts, or 2 when one is flagged; needs a partner signal.",
+            'observed': f"{len(_members)} hosts on one creation device this week",
+            'threshold': '3 to 9 hosts (or 2 with a flagged host), needs a partner',
+            'threshold_met': True,
+            'score_contribution': SIGNAL_WEIGHTS['sig_cdev'] if _met else 0,
+            'triggered': _met,
+        }
+        if _met:
+            d['score'] += SIGNAL_WEIGHTS['sig_cdev']
+            if not d.get('_nuroots_match'):
+                d['tier'] = tier_from_score(d['score'])
+
+    # Tier tally after the cross-host signals (the first tally runs before sig_addr, sig_chain and sig_cdev add points)
+    _s2 = {c: d for c, d in all_scored.items() if d['score'] >= 18}
+    _p2 = {c: d for c, d in all_scored.items() if 9 <= d['score'] < 18}
+    _w2 = {c: d for c, d in all_scored.items() if 1 <= d['score'] < 9}
+    if (len(_s2), len(_p2), len(_w2)) != (len(sus_cases), len(pause_cases), len(warn_cases)):
+        print(f"[T&S] Tier tally after cross-host signals: Suspension: {len(_s2)} | Nourishment Pause: {len(_p2)} | Warning: {len(_w2)}", file=sys.stderr)
+    sus_cases, pause_cases, warn_cases = _s2, _p2, _w2
 
     # Save intermediate for agent to use
     output = {
