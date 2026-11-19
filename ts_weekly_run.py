@@ -85,7 +85,7 @@ SIGNAL_WEIGHTS = {
     'sig1': 7,   # Shared device FP host+guest, top band (90%+); 75-89% weighs 6, 51-74% weighs 5 (2026-11-04). NOT standalone since 2026-10-22: scores only with a bad or fake guest signal
     'sig2': 7,   # Cross-dinner device FP match (needs pairing)
     'sig3': 5,   # Same device FP across guests, top band (90%+); 75-89% weighs 4, 51-74% weighs 3 (2026-11-04). Needs pairing
-    'sig4': 5,   # Sequential RSVP timing -- not implemented (data not in CSV)
+    'sig4': 5,   # Sequential RSVP timing, tight (2026-11-05): 5+ guests with RSVP times and 80%+ of them within 3 minutes. Needs pairing
     'sig5': 3,   # VPN use (needs pairing, 30%+ of guests from known VPN ranges)
     'sig6': 0,   # Geographic mismatch (watch flag only)
     'sig7': 2,   # Same IP across guests (needs pairing, 80%+)
@@ -124,9 +124,11 @@ SIGNAL_WEIGHTS = {
 # Note: sig14 (100% PIDs) is NOT standalone -- requires at least one pairing signal
 # UPDATED 2026-10-22 (Pammie): sig1 (Shared device fingerprint, host and guest) is no longer standalone. A device or IP match shows where to
 # look, not what was found (a real family and a set of fake guests look the same on the device alone). Warning means bad or fake guests.
+RSVP_BURST_MIN_GUESTS, RSVP_BURST_MINUTES, RSVP_BURST_SHARE = 5, 3, 0.80   # very tight on purpose: about 1% of dinners reach it (2026-11-05)
 RECYCLED_MIN_ADDRESSES = 3   # the lookup history counts a recycled bounced guest list only when 3+ different bounced addresses repeat (Pammie, 2026-11-05)
 MIN_GUESTS_FOR_BOUNCE = 3  # bounce signals need a dinner with at least 3 guests (2026-10-29, Pammie): a 1 or 2 guest dinner is not scored on bounces
 STANDALONE = {'sig12', 'sig21', 'sig22', 'sig23', 'sig8', 'sig25'}
+RSVP_BURST_PARTNERS = {'sig12', 'sig8', 'sig25'}   # Sequential RSVP timing needs a guest signal that scores on its own: bounces 75%+, clearly fake identities, guest or host listed as a +1 (2026-11-19, Pammie). Not the 50-74% bounce band, which needs a partner itself.
 # Signals that make a case High confidence. Clearly fake guest identities (sig8) and Guest or host listed as a +1
 # (sig25) score on their own (2 points, guest misuse) but are NOT high-confidence evidence (fixed 2026-10-18).
 HIGH_CONFIDENCE_STANDALONE = (STANDALONE - {'sig8', 'sig25'}) | {'sig14'}
@@ -728,6 +730,28 @@ def score_campaign(cid, camp, cross_dinner, high_volume, campaigns=None):
                         f"{len(odd)}/{len(not_bounced)} non-bounced guests ({round(100*odd_pct)}%)",
                         "50%+ bounced, then 50%+ of non-bounced on unrecognized domains and ≥2 guests", met)
 
+    # ── Signal 4: Sequential RSVP timing, tight (2026-11-05, Pammie): the report carries "Reservation Created" to the minute ──
+    _rt = []
+    for g in guests:
+        _t = (g.get('Reservation Created') or '').strip()
+        for _fmt in ('%m/%d/%Y %I:%M %p', '%m/%d/%Y %H:%M'):
+            try:
+                _rt.append(datetime.strptime(_t, _fmt))
+                break
+            except ValueError:
+                pass
+    if len(_rt) >= RSVP_BURST_MIN_GUESTS:
+        _rt.sort()
+        _best = _j = 0
+        for _i in range(len(_rt)):
+            while (_rt[_i] - _rt[_j]).total_seconds() > RSVP_BURST_MINUTES * 60:
+                _j += 1
+            _best = max(_best, _i - _j + 1)
+        if _best / len(_rt) >= RSVP_BURST_SHARE:
+            add_sig('sig4',
+                    f"Sequential RSVP timing, tight: {_best} of {len(_rt)} guests RSVPed within {RSVP_BURST_MINUTES} minutes of each other",
+                    f"{_best}/{len(_rt)} guests within {RSVP_BURST_MINUTES} minutes", f"{RSVP_BURST_MIN_GUESTS}+ guests with RSVP times and {round(100*RSVP_BURST_SHARE)}%+ within {RSVP_BURST_MINUTES} minutes (needs a partner)", True)
+
     # ── Signal 14: Sequential PIDs (profiled guests only as denominator) ────────
     # 55-99% of profiled = weight 3 corroborating (sig14_low, can score standalone)
     # 100% of profiled = weight 6 Warning-eligible standalone (sig14)
@@ -1107,6 +1131,13 @@ def score_campaign(cid, camp, cross_dinner, high_volume, campaigns=None):
                 scored[key] = sig
             else:
                 scored[key] = {**sig, 'score_contribution': 0}
+        elif key == 'sig4':
+            # RSVP timing is very tight on purpose (Pammie, 2026-11-05): it needs a bad or fake guest signal as its partner, never only a
+            # device, IP or privacy match that does not score by itself
+            if threshold_met & RSVP_BURST_PARTNERS:
+                scored[key] = sig
+            else:
+                scored[key] = {**sig, 'score_contribution': 0}
         elif key in ('sig17', 'sig16'):
             # AI description and privacy domain need at least one guest integrity signal
             if guest_integrity_met:
@@ -1116,6 +1147,8 @@ def score_campaign(cid, camp, cross_dinner, high_volume, campaigns=None):
         else:
             # All other non-standalone signals: need at least one OTHER threshold_met signal
             companions = threshold_met - {key}
+            if 'sig4' in companions and not (threshold_met & RSVP_BURST_PARTNERS):
+                companions = companions - {'sig4'}             # a RSVP burst that does not score cannot pair another signal
             if companions:
                 scored[key] = sig
             else:
@@ -1237,7 +1270,7 @@ SIG_NAMES = {
     'sig1': 'Shared device fingerprint host and guest',
     'sig2': 'Cross-dinner device fingerprint match',
     'sig3': 'Same device fingerprint across guests',
-    'sig4': 'Sequential RSVP timing -- tight',
+    'sig4': 'Sequential RSVP timing, tight',
     'sig5': 'VPN use across multiple guests/hosts',
     'sig6': 'Geographic mismatch',
     'sig7': 'Same IP across guests',
