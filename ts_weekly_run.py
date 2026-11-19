@@ -70,6 +70,8 @@ RECOGNIZED_EMAIL_DOMAINS = {
     'protonmail.com','proton.me','pm.me','tutanota.com','tuta.io',  # privacy domains are scored by sig16, not here
 }
 SUSPICIOUS_TLDS = {'top','cc','info','xyz','icu','site','online','shop','buzz','click','fun','rest','cyou','sbs','pw','lol'}
+CREATION_DEVICE_MIN_HOSTS = 3     # lookup-only sweep (2026-11-19, Pammie): hosts on one dinner-creation device in the report (2 if one is flagged)
+CREATION_DEVICE_SHARED_AT = 10    # hosts on one dinner-creation device in the report: shared infrastructure, not looked at
 HIGH_VOLUME_THRESHOLD = 8    # FP on 8+ dinners = shared infrastructure, not scored
 DEVICE_ACCOUNTS_SHARED = 20   # a device used by 20+ different accounts in the last year is shared infrastructure too (2026-11-05); counts come from Salesforce
 DEVICE_ACCOUNTS = {}          # {device id: distinct accounts in the last year}, loaded with --device-accounts
@@ -1698,8 +1700,10 @@ def compute_lookup_hosts(all_campaigns, scope_campaigns, high_volume, flagged15,
       chain_hosts        3+ hosts whose Platform Profile IDs are within 2 of each other (across every host in the report)
       gated_pid_hosts    Sequential guest Profile IDs met its threshold but did not score
       gated_bounce_hosts guest email bounces at 50 to 74% met their threshold but did not score (a pair is needed below 75%)
+      creation_device_hosts  several hosts created dinners on one device in this week's report (3 to 9 hosts, or 2 when one is flagged;
+                         10 or more hosts is shared infrastructure). Lookup only: a shared creation device never scores on its own (2026-11-19, Pammie).
     Hosts already flagged (score above 0) are excluded: they get the full Pass 2."""
-    groups = {k: {} for k in ('new_hosts', 'blank_date_hosts', 'device_hosts', 'chain_hosts', 'gated_pid_hosts', 'gated_bounce_hosts')}
+    groups = {k: {} for k in ('new_hosts', 'blank_date_hosts', 'device_hosts', 'chain_hosts', 'gated_pid_hosts', 'gated_bounce_hosts', 'creation_device_hosts')}
 
     def nm(h):
         return ((h.get('First Name', '') or '') + ' ' + (h.get('Last Name', '') or '')).strip()
@@ -1742,6 +1746,29 @@ def compute_lookup_hosts(all_campaigns, scope_campaigns, high_volume, flagged15,
             for x in run_:
                 groups['chain_hosts'][pids[x][0]] = pids[x][1]
         run_ = [a] if a is not None else []
+    # creation_device_hosts: hosts who created dinners on the same device in this week's report.
+    _cd = collections.defaultdict(dict)   # device -> {host id (15): name}
+    for camp in all_campaigns.values():
+        h = camp.get('host') or {}
+        h15 = (h.get('Contact ID') or '')[:15]
+        fp = (camp.get('dinner_created_device_id', '') or h.get('Dinner Created Device ID', '') or '').strip()
+        if h15 and fp and fp not in ('nan', 'None'):
+            _cd[fp][h15] = nm(h)
+    creation_links = {}
+    for fp, members in _cd.items():
+        n_h = len(members)
+        if n_h >= CREATION_DEVICE_SHARED_AT:
+            continue
+        flagged_here = sorted(i for i in members if i in flagged15)
+        if n_h >= CREATION_DEVICE_MIN_HOSTS or (n_h >= 2 and flagged_here):
+            for i, name in members.items():
+                if i in flagged15:
+                    continue
+                if i in creation_links and creation_links[i]['hosts_on_device'] >= n_h:
+                    continue
+                creation_links[i] = {'hosts_on_device': n_h, 'flagged_hosts_on_device': len(flagged_here), 'device': fp[:8],
+                                     'other_hosts': sorted(v for k, v in members.items() if k != i)[:8]}
+                groups['creation_device_hosts'][i] = name
     for e in gated_entries:
         if not e.get('host_id_15') or e['host_id_15'] in flagged15:
             continue
@@ -1755,11 +1782,11 @@ def compute_lookup_hosts(all_campaigns, scope_campaigns, high_volume, flagged15,
         for i, n in members.items():
             reasons[i].append(g)
             names[i] = n
-    history_ids = sorted(set(groups['device_hosts']) | set(groups['gated_pid_hosts']) | set(groups['gated_bounce_hosts']))
+    history_ids = sorted(set(groups['device_hosts']) | set(groups['gated_pid_hosts']) | set(groups['gated_bounce_hosts']) | set(groups['creation_device_hosts']))
     return {'history_ids': history_ids, 'device_ids': sorted(devices_in_play),
             'groups': {g: sorted(m.values()) for g, m in groups.items()},
             'counts': {g: len(m) for g, m in groups.items()},
-            'union_ids': sorted(reasons), 'reasons': dict(reasons), 'names': names}
+            'union_ids': sorted(reasons), 'reasons': dict(reasons), 'names': names, 'creation_device_links': creation_links}
 
 
 def run(csv_path, lead_path=None, wednesday_mode=False):
@@ -3066,7 +3093,8 @@ def build_ts_ui_data(pass1_output, sf_results, campaigns, wednesday_mode=False):
                                                 'dinner': l.get('dinner_name'), 'status': l.get('status'), 'linked_to': c.get('name')}
                                                for c in cases for l in (c.get('linked_outside_scope') or []) if (l.get('one_off_score') or 0) > 0],
             'field_alerts': pass1_output.get('field_alerts', []),
-            'lookup_hosts': {'counts': (pass1_output.get('lookup_hosts') or {}).get('counts', {}), 'hosts': (pass1_output.get('lookup_hosts') or {}).get('groups', {})},
+            'lookup_hosts': {'counts': (pass1_output.get('lookup_hosts') or {}).get('counts', {}), 'hosts': (pass1_output.get('lookup_hosts') or {}).get('groups', {}),
+                             'creation_device_links': (pass1_output.get('lookup_hosts') or {}).get('creation_device_links', {})},
             'wednesday_mode': wednesday_mode,
 
         },
