@@ -3948,8 +3948,8 @@ def run_state_cli(argv):
     Writes ts_run_state_YYYYMMDD.json in the output directory. It never touches scoring or the review JSON.
       --run-state set PHASE [key=value ...]   mark PHASE done and store facts (values may be JSON, for example holds_done=true)
       --run-state show                         print the resume summary: phases done, next phase, stored facts"""
-    PHASES = ['start', 'pass1', 'scoring_queries', 'pass2', 'holds', 'checkpoint', 'review_file',
-              'host_checks', 'lookup_part2', 'complete']
+    PHASES = ['start', 'pass1', 'scoring_queries', 'pass2', 'holds', 'checkpoint', 'host_checks',
+              'review_file', 'lookup_part2', 'complete']   # host checks run before the review file (2026-11-19, Pammie)
     i = argv.index('--run-state')
     args = [a for a in argv[i + 1:] if not a.startswith('--out-dir')]
     if '--out-dir' in argv:
